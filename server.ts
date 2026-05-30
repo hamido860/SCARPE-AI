@@ -81,6 +81,172 @@ async function startServer() {
     return urlStr;
   }
 
+  // --- Text Normalization and Dictionary Topic Matching Helpers ---
+
+  function normalizeMatchText(value: string): string {
+    if (!value) return "";
+    let text = String(value).toLowerCase().trim();
+    try {
+      if (text.includes("%")) {
+        text = decodeURIComponent(text).toLowerCase();
+      }
+    } catch (e) {}
+
+    // Remove French accents/diacritics
+    text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // Normalize Arabic letters deterministic rules
+    text = text
+      .replace(/[أإآ]/g, "ا")
+      .replace(/ة/g, "ه")
+      .replace(/ى/g, "ي")
+      .replace(/[\u064B-\u065F]/g, ""); // remove Arabic diacritics/harakat if any
+
+    // collapse space/whitespace
+    text = text.replace(/\s+/g, " ");
+    return text;
+  }
+
+  function normalizeDictionary(rawDict: any) {
+    const dict = rawDict || {};
+    const safeArray = (arr: any) => Array.isArray(arr) ? arr : [];
+
+    const mapItem = (item: any) => {
+      if (!item || typeof item !== "object") return null;
+      return {
+        id: item.id || "",
+        nameAr: item.nameAr || "",
+        nameFr: item.nameFr || "",
+        suffix: item.suffix || "",
+        keywords: safeArray(item.keywords).map((kw: any) => String(kw || "").trim()),
+        subjectId: item.subjectId || undefined
+      };
+    };
+
+    const mapDocType = (item: any) => {
+      if (!item || typeof item !== "object") return null;
+      return {
+        id: item.id || "",
+        nameAr: item.nameAr || "",
+        nameFr: item.nameFr || "",
+        suffix: item.suffix || "",
+        keywords: safeArray(item.keywords).map((kw: any) => String(kw || "").trim())
+      };
+    };
+
+    return {
+      grades: safeArray(dict.grades).map(mapItem).filter(Boolean),
+      subjects: safeArray(dict.subjects).map(mapItem).filter(Boolean),
+      topics: safeArray(dict.topics).map(mapItem).filter(Boolean),
+      allowedDocumentTypes: safeArray(dict.allowedDocumentTypes || dict.allowed_document_types || dict.documentTypes).map(mapDocType).filter(Boolean)
+    };
+  }
+
+  function parseTopicFilters(topicFilterStr: string): string[] {
+    if (!topicFilterStr) return [];
+    return Array.from(new Set(
+      topicFilterStr
+        .split(",")
+        .map(p => normalizeMatchText(p))
+        .filter(Boolean)
+    ));
+  }
+
+  function resolveTopicFiltersAgainstDictionary(topicFilterStr: string, dictionary: any) {
+    const normDict = normalizeDictionary(dictionary);
+    const rawFilters = topicFilterStr ? topicFilterStr.split(",").map(f => f.trim()).filter(Boolean) : [];
+    const parsedFilters = parseTopicFilters(topicFilterStr);
+
+    const matchedTopics: any[] = [];
+    const matchedFilterSet = new Set<string>();
+    const expandedSet = new Set<string>();
+
+    for (const f of parsedFilters) {
+      for (const topic of normDict.topics) {
+        const normId = normalizeMatchText(topic.id);
+        const normNameAr = normalizeMatchText(topic.nameAr);
+        const normNameFr = normalizeMatchText(topic.nameFr);
+        const normSuffix = normalizeMatchText(topic.suffix);
+
+        let matchType: "id" | "nameAr" | "nameFr" | "suffix" | "keyword" | null = null;
+
+        if (f === normId || normId.includes(f) || f.includes(normId)) {
+          matchType = "id";
+        } else if (f === normNameAr || normNameAr.includes(f) || f.includes(normNameAr)) {
+          matchType = "nameAr";
+        } else if (f === normNameFr || normNameFr.includes(f) || f.includes(normNameFr)) {
+          matchType = "nameFr";
+        } else if (f === normSuffix || normSuffix.includes(f) || f.includes(normSuffix)) {
+          matchType = "suffix";
+        } else {
+          for (const kw of topic.keywords) {
+            const normKw = normalizeMatchText(kw);
+            if (f === normKw || normKw.includes(f) || f.includes(normKw)) {
+              matchType = "keyword";
+              break;
+            }
+          }
+        }
+
+        if (matchType) {
+          matchedFilterSet.add(f);
+
+          matchedTopics.push({
+            filter: f,
+            topicId: topic.id,
+            topicNameAr: topic.nameAr,
+            topicNameFr: topic.nameFr,
+            subjectId: topic.subjectId,
+            matchedBy: matchType
+          });
+
+          expandedSet.add(f);
+          if (topic.id) expandedSet.add(topic.id);
+          if (topic.nameAr) expandedSet.add(topic.nameAr);
+          if (topic.nameFr) expandedSet.add(topic.nameFr);
+          if (topic.suffix) expandedSet.add(topic.suffix);
+          for (const kw of topic.keywords) {
+            if (kw) expandedSet.add(kw);
+          }
+
+          if (topic.subjectId) {
+            const parentSub = normDict.subjects.find((s: any) => s.id === topic.subjectId);
+            if (parentSub) {
+              if (parentSub.nameAr) expandedSet.add(parentSub.nameAr);
+              if (parentSub.nameFr) expandedSet.add(parentSub.nameFr);
+              if (parentSub.suffix) expandedSet.add(parentSub.suffix);
+              for (const kw of parentSub.keywords) {
+                if (kw) expandedSet.add(kw);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const unmatchedFiltersSet = new Set<string>();
+    for (const rawF of rawFilters) {
+      const normF = normalizeMatchText(rawF);
+      if (!matchedFilterSet.has(normF)) {
+        unmatchedFiltersSet.add(rawF);
+      }
+    }
+
+    const unmatchedFilters = Array.from(unmatchedFiltersSet);
+    const expandedKeywords = Array.from(expandedSet).map(s => s.trim()).filter(Boolean);
+
+    console.log(`[TopicFilters] Raw filters: ${JSON.stringify(rawFilters)}`);
+    console.log(`[TopicFilters] Matched topics: ${JSON.stringify(matchedTopics)}`);
+    console.log(`[TopicFilters] Unmatched filters: ${JSON.stringify(unmatchedFilters)}`);
+
+    return {
+      rawFilters,
+      matchedTopics,
+      unmatchedFilters,
+      expandedKeywords
+    };
+  }
+
   // --- RAG / Vector Store Implementation ---
   
   interface VectorDocument {
@@ -901,12 +1067,26 @@ Answer:`;
   // POST Route for Gemini-powered reference classification
   app.post("/api/classify", async (req, res) => {
     try {
-      const { title, url, text } = req.body;
+      const { title, url, text, topicFilter } = req.body;
       if (!title && !url) {
         return res.status(400).json({ error: "Title or URL is required for classification" });
       }
 
-      const activeDict = await getActiveDictionary();
+      const activeDict = normalizeDictionary(await getActiveDictionary());
+
+      let resolvedTopicFilters = null;
+      let allowedTopicIds: string[] = [];
+      if (topicFilter && topicFilter.trim().length > 0) {
+        resolvedTopicFilters = resolveTopicFiltersAgainstDictionary(topicFilter, activeDict);
+        allowedTopicIds = resolvedTopicFilters.matchedTopics.map((t: any) => t.topicId);
+      }
+
+      let topicFilterConstraint = "";
+      if (allowedTopicIds.length > 0) {
+        topicFilterConstraint = `\n
+CRITICAL CONSTRAINT: The user has applied specific Topic Filters which matched these specific dictionary Topic IDs: ${JSON.stringify(allowedTopicIds)}.
+You MUST ONLY choose a "topicId" from this set: ${JSON.stringify(allowedTopicIds)}. If the document matches none of these, set "topicId" to null and "isMatch" to false. Do not select any topicId outside this list.`;
+      }
 
       const prompt = `You are a highly precise Moroccan school educational crawler & metadata classifier.
 Analyze the following document's details:
@@ -915,7 +1095,8 @@ URL: "${url || ""}"
 Snippet from content / text: "${(text || "").substring(0, 1000)}"
 
 YOUR TASK:
-Classify this document structure strictly using the Provided Reference Classification Dictionary.
+Classify this document structure strictly using the Provided Reference Classification Dictionary.${topicFilterConstraint}
+
 You MUST select EXACTLY ONE Grade ID, Subject ID, Topic ID, and Document Type ID only if they exist in the dictionary and correspond to the document context.
 If the document does not match any subject or topic in our reference dictionary, or looks entirely unrelated to secondary school math/physics/svt, set "isMatch" to false.
 
@@ -948,7 +1129,86 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       const resultText = response.text || "{}";
       const classification = JSON.parse(resultText);
 
-      res.json(classification);
+      let gradeId = classification.gradeId || null;
+      let subjectId = classification.subjectId || null;
+      let topicId = classification.topicId || null;
+      let documentTypeId = classification.documentTypeId || null;
+      let isMatch = !!classification.isMatch;
+      let reason = classification.reason || "";
+      let cleanTitle = classification.cleanTitle || title || "";
+      let renamePattern = classification.renamePattern || title || "";
+
+      let validationFailed = false;
+      let validationReason = "";
+
+      if (gradeId !== null) {
+        const exists = activeDict.grades.some((g: any) => g.id === gradeId);
+        if (!exists) {
+          validationFailed = true;
+          validationReason = `Grade ID "${gradeId}" does not exist in dictionary.`;
+        }
+      }
+
+      if (subjectId !== null) {
+        const exists = activeDict.subjects.some((s: any) => s.id === subjectId);
+        if (!exists) {
+          validationFailed = true;
+          validationReason = `Subject ID "${subjectId}" does not exist in dictionary.`;
+        }
+      }
+
+      if (topicId !== null) {
+        const matchedTopic = activeDict.topics.find((t: any) => t.id === topicId);
+        if (!matchedTopic) {
+          validationFailed = true;
+          validationReason = `Topic ID "${topicId}" does not exist in dictionary.`;
+        } else {
+          if (subjectId !== null && matchedTopic.subjectId && matchedTopic.subjectId !== subjectId) {
+            validationFailed = true;
+            validationReason = `Topic ID "${topicId}" subjectId "${matchedTopic.subjectId}" mismatch with selected subjectId "${subjectId}".`;
+          }
+        }
+      }
+
+      if (documentTypeId !== null) {
+        const exists = activeDict.allowedDocumentTypes.some((d: any) => d.id === documentTypeId);
+        if (!exists) {
+          validationFailed = true;
+          validationReason = `Document Type ID "${documentTypeId}" does not exist in allowedDocumentTypes.`;
+        }
+      }
+
+      if (topicFilter && topicFilter.trim().length > 0) {
+        if (topicId !== null && !allowedTopicIds.includes(topicId)) {
+          validationFailed = true;
+          validationReason = `Classifier selected topic "${topicId}" outside Topic Filters / Supabase dictionary match.`;
+        }
+      }
+
+      if (validationFailed) {
+        console.warn(`[Classify Validation Failed] ${validationReason}`);
+        return res.json({
+          gradeId: null,
+          subjectId: null,
+          topicId: null,
+          documentTypeId: null,
+          isMatch: false,
+          reason: "Rejected: classification did not match Supabase dictionary constraints",
+          cleanTitle: title,
+          renamePattern: title
+        });
+      }
+
+      res.json({
+        gradeId,
+        subjectId,
+        topicId,
+        documentTypeId,
+        isMatch,
+        reason,
+        cleanTitle,
+        renamePattern
+      });
     } catch (error: any) {
       console.error("[Classification Error]", error);
       res.status(500).json({ error: error.message || "Failed to classify document" });
@@ -1087,6 +1347,27 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     console.log(`[Crawler] Starting PDF crawl on: ${resolvedStartUrl} (originally: ${url}, max pages: ${maxPages}, max depth: ${maxDepth})`);
     
     try {
+      const activeDict = normalizeDictionary(await getActiveDictionary());
+      console.log(`[Dictionary] Loaded active dictionary: ${activeDict.grades.length} grades, ${activeDict.subjects.length} subjects, ${activeDict.topics.length} topics`);
+
+      let resolvedTopicFilters = null;
+      let expandedFilterTerms: string[] = [];
+
+      if (topicFilter && topicFilter.trim().length > 0) {
+        resolvedTopicFilters = resolveTopicFiltersAgainstDictionary(topicFilter, activeDict);
+        if (resolvedTopicFilters.matchedTopics.length === 0) {
+          console.log(`[Crawler] Rejected because none of the filters in "${topicFilter}" matched dictionary topics.`);
+          return res.json({
+            crawled: 0,
+            pdfs: [],
+            rejected: true,
+            reason: "No Topic Filters matched Supabase dictionary topics",
+            unmatchedFilters: resolvedTopicFilters.unmatchedFilters
+          });
+        }
+        expandedFilterTerms = resolvedTopicFilters.expandedKeywords.map(normalizeMatchText);
+      }
+
       const startUrlObj = new URL(resolvedStartUrl);
       const baseUrl = startUrlObj.origin;
       const domain = startUrlObj.hostname;
@@ -1120,19 +1401,18 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
           const contentType = (response.headers['content-type'] || '').toLowerCase();
           
           const checkTopicFilter = (u: string, linkText: string = "") => {
-            if (!topicFilter) return true;
-            const filterStr = topicFilter.toLowerCase();
-            const decodedUrl = decodeURIComponent(u).toLowerCase();
-            const textStr = linkText.toLowerCase();
+            if (!topicFilter || topicFilter.trim().length === 0) return true;
+            if (expandedFilterTerms.length === 0) return false;
             
-            const keywords = filterStr.split(',').map((s: string) => s.trim()).filter(Boolean);
-            if (keywords.length === 0) return true;
+            const normUrl = normalizeMatchText(u);
+            const normText = normalizeMatchText(linkText);
             
-            for (const keyword of keywords) {
-              if (decodedUrl.includes(keyword) || textStr.includes(keyword)) {
+            for (const term of expandedFilterTerms) {
+              if (normUrl.includes(term) || normText.includes(term)) {
                 return true;
               }
             }
+            console.log(`[Crawler] Rejected by dictionary topic filter: URL: "${u}" text: "${linkText}"`);
             return false;
           };
 
@@ -1212,9 +1492,20 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       
       console.log(`[Crawler] Finished. Crawled ${pagesCrawled} pages, found ${foundPdfs.size} PDFs.`);
       
+      let topicFilterReport = null;
+      if (topicFilter && topicFilter.trim().length > 0 && resolvedTopicFilters) {
+        topicFilterReport = {
+          rawFilters: resolvedTopicFilters.rawFilters,
+          matchedTopics: resolvedTopicFilters.matchedTopics,
+          unmatchedFilters: resolvedTopicFilters.unmatchedFilters,
+          expandedKeywords: resolvedTopicFilters.expandedKeywords
+        };
+      }
+
       res.json({
         crawled: pagesCrawled,
-        pdfs: Array.from(foundPdfs)
+        pdfs: Array.from(foundPdfs),
+        topicFilterReport
       });
       
     } catch (error: any) {
@@ -1226,7 +1517,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
   // API Route for PDF Discovery & Filtering (Search API / Pasted URLs)
   app.post("/api/discover-pdfs", async (req, res) => {
     try {
-      const { query, pastedUrls } = req.body;
+      const { query, pastedUrls, topicFilter } = req.body;
       let urlsToProcess: string[] = [];
 
       if (pastedUrls && Array.isArray(pastedUrls)) {
@@ -1262,6 +1553,20 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
 
       // De-duplicate, resolve redirect trails, and normalize URLs
       urlsToProcess = Array.from(new Set(urlsToProcess.map(u => resolveUrl(u.trim()))));
+
+      // Resolve topic filter against dictionary
+      const activeDict = normalizeDictionary(await getActiveDictionary());
+      let resolvedTopicFilters = null;
+      let topicFilterMatched = false;
+      let expandedFilterTerms: string[] = [];
+
+      if (topicFilter && topicFilter.trim().length > 0) {
+        resolvedTopicFilters = resolveTopicFiltersAgainstDictionary(topicFilter, activeDict);
+        if (resolvedTopicFilters.matchedTopics.length > 0) {
+          topicFilterMatched = true;
+          expandedFilterTerms = resolvedTopicFilters.expandedKeywords.map(normalizeMatchText);
+        }
+      }
 
       const results = urlsToProcess.map(urlStr => {
         try {
@@ -1300,18 +1605,61 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
           let accepted = false;
           let reason = "";
 
-          if (isDirectPdf) {
-            accepted = true;
-            reason = "Direct PDF document link detected";
-          } else if (isNoisy) {
-            accepted = false;
-            reason = "Rejected: Noisy domain (social utility or search engine)";
-          } else if (isEduPage) {
-            accepted = true;
-            reason = "Accepted: Educational domain or URL path parameter suggestive of academic documents";
+          // Apply strict user request matching rules
+          if (topicFilter && topicFilter.trim().length > 0) {
+            if (!topicFilterMatched) {
+              accepted = false;
+              reason = "Rejected: topic filters do not match Supabase dictionary";
+            } else {
+              // Filters matched, check if URL matches any expanded keyword
+              const normUrl = normalizeMatchText(urlStr);
+              let matchedTerm = false;
+              for (const term of expandedFilterTerms) {
+                if (normUrl.includes(term)) {
+                  matchedTerm = true;
+                  break;
+                }
+              }
+
+              if (!matchedTerm) {
+                accepted = false;
+                reason = "Rejected: URL does not match any of the resolved topic keywords";
+              } else {
+                // If it matched, apply typical acceptance logic
+                if (isDirectPdf) {
+                  accepted = true;
+                  reason = "Direct PDF document link detected";
+                } else if (isNoisy) {
+                  accepted = false;
+                  reason = "Rejected: Noisy domain (social utility or search engine)";
+                } else if (isEduPage) {
+                  accepted = true;
+                  reason = "Accepted: Educational domain or URL path parameter suggestive of academic documents";
+                } else {
+                  accepted = true;
+                  reason = "Accepted: Link likely contains educational indexes or PDF downloads";
+                }
+              }
+            }
           } else {
-            accepted = true;
-            reason = "Accepted: Link likely contains educational indexes or PDF downloads";
+            // No topic filter applied
+            if (isDirectPdf) {
+              accepted = true;
+              reason = "Direct PDF document link detected";
+            } else if (isNoisy) {
+              accepted = false;
+              reason = "Rejected: Noisy domain (social utility or search engine)";
+            } else if (isEduPage) {
+              accepted = true;
+              reason = "Accepted: Educational domain or URL path parameter suggestive of academic documents";
+            } else {
+              accepted = true;
+              reason = "Accepted: Link likely contains educational indexes or PDF downloads";
+            }
+          }
+
+          if (!accepted && topicFilter && topicFilterMatched) {
+            console.log(`[Crawler] Rejected by dictionary topic filter: URL: "${urlStr}"`);
           }
 
           return {
@@ -1330,7 +1678,17 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         }
       });
 
-      res.json({ results });
+      let topicFilterReport = null;
+      if (topicFilter && topicFilter.trim().length > 0 && resolvedTopicFilters) {
+        topicFilterReport = {
+          rawFilters: resolvedTopicFilters.rawFilters,
+          matchedTopics: resolvedTopicFilters.matchedTopics,
+          unmatchedFilters: resolvedTopicFilters.unmatchedFilters,
+          expandedKeywords: resolvedTopicFilters.expandedKeywords
+        };
+      }
+
+      res.json({ results, topicFilterReport });
     } catch (err: any) {
       console.error("[Discover Error]", err);
       res.status(500).json({ error: err.message || "Failed during PDF discovery" });

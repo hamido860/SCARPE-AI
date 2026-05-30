@@ -144,7 +144,7 @@ export default function WorkstationDashboard() {
     toast.info("Discovery engine active. Fetching and filtering target PDFs...");
 
     try {
-      const payload: any = {};
+      const payload: any = { topicFilter };
       if (activeDiscoverTab === "query") {
         payload.query = discoverQuery;
       } else {
@@ -356,7 +356,8 @@ export default function WorkstationDashboard() {
       const classifyRes = await axios.post("/api/classify", {
         title: item.originalName,
         url: item.url,
-        text: textSnippet
+        text: textSnippet,
+        topicFilter
       });
 
       const resData = classifyRes.data;
