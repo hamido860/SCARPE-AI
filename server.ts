@@ -13,10 +13,11 @@ import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import fs from "fs";
+import crypto from "crypto";
 
 import JSZip from "jszip";
 import { GoogleGenAI } from "@google/genai";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 // Initialize Supabase Client (if environment variables are present)
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -46,6 +47,41 @@ const nvidia = new OpenAI({
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  const LOCAL_OUTPUT_DIR = process.env.LOCAL_OUTPUT_DIR || path.join(process.cwd(), "scarpe-output");
+  
+  // Create directory structures
+  [
+    "",
+    "downloads",
+    "text",
+    "ocr",
+    "clean-pdfs",
+    "dataset",
+    "reports"
+  ].forEach(sub => {
+    const fullPath = path.join(LOCAL_OUTPUT_DIR, sub);
+    if (!fs.existsSync(fullPath)) {
+      fs.mkdirSync(fullPath, { recursive: true });
+    }
+  });
+
+  function updateReport(reportName: string, entry: any) {
+    const reportPath = path.join(LOCAL_OUTPUT_DIR, "reports", reportName);
+    let activeData: any[] = [];
+    if (fs.existsSync(reportPath)) {
+      try {
+        activeData = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+      } catch (e) {
+        activeData = [];
+      }
+    }
+    activeData.push({
+      ...entry,
+      timestamp: new Date().toISOString()
+    });
+    fs.writeFileSync(reportPath, JSON.stringify(activeData, null, 2));
+  }
 
   app.use(express.json());
 
@@ -102,9 +138,307 @@ async function startServer() {
       .replace(/ى/g, "ي")
       .replace(/[\u064B-\u065F]/g, ""); // remove Arabic diacritics/harakat if any
 
+    // replace separators _, -, ., /, %, + with spaces
+    text = text.replace(/[_\-\.\/%\+]/g, " ");
+
     // collapse space/whitespace
     text = text.replace(/\s+/g, " ");
-    return text;
+    return text.trim();
+  }
+
+  function isValidUrlSource(urlStr: string): { valid: boolean; reason?: string } {
+    if (!urlStr) {
+      return { valid: false, reason: "Malformed or unsupported source URL" };
+    }
+    try {
+      const parsed = new URL(urlStr);
+      const host = parsed.hostname.toLowerCase();
+      if (!host.includes(".")) {
+        return { valid: false, reason: "Malformed or unsupported source URL" };
+      }
+      const parts = host.split(".");
+      const blacklistedParts = ["cours", "maroc", "college"];
+      
+      const domainSLD = parts[parts.length - 2];
+      if (blacklistedParts.includes(host) || blacklistedParts.includes(domainSLD)) {
+        return { valid: false, reason: "Malformed or unsupported source URL" };
+      }
+      return { valid: true };
+    } catch (e) {
+      return { valid: false, reason: "Malformed or unsupported source URL" };
+    }
+  }
+
+  function getSafeTitleFromFilename(filename: string): string {
+    if (!filename) return "unnamed";
+    let name = filename.replace(/\.[^/.]+$/, "");
+    name = name.replace(/[_\-\.\/%\+]/g, " ");
+    name = name.replace(/\s+/g, "_");
+    return name || "unnamed";
+  }
+
+  function predetectDocumentType(title: string, url: string, allowedDocTypes: any[]): string | null {
+    const combinedStr = normalizeMatchText(`${title} ${url}`);
+    
+    if (combinedStr.includes("cours") || combinedStr.includes("lesson") || combinedStr.includes("lecon") || combinedStr.includes("dars") || combinedStr.includes("درس") || combinedStr.includes("شرح") || combinedStr.includes("ملخص")) {
+      return "cours";
+    }
+    if (combinedStr.includes("exercice") || combinedStr.includes("exercise") || combinedStr.includes("exercices") || combinedStr.includes("td") || combinedStr.includes("tp") || combinedStr.includes("serie") || combinedStr.includes("سلسلة") || combinedStr.includes("تمارين")) {
+      return "exercice";
+    }
+    if (combinedStr.includes("corriger") || combinedStr.includes("corrige") || combinedStr.includes("correction") || combinedStr.includes("solution") || combinedStr.includes("حل") || combinedStr.includes("حلول")) {
+      return "correction";
+    }
+    if (combinedStr.includes("forod") || combinedStr.includes("devoir") || combinedStr.includes("controle") || combinedStr.includes("فرض") || combinedStr.includes("frod") || combinedStr.includes("exam") || combinedStr.includes("examen") || combinedStr.includes("test") || combinedStr.includes("امتحان") || combinedStr.includes("فروض")) {
+      return "exam_compilation";
+    }
+    if (combinedStr.includes("jodada") || combinedStr.includes("جذاذة") || combinedStr.includes("جذاذات")) {
+      return "jadhatha";
+    }
+    if (combinedStr.includes("bilan") || combinedStr.includes("revision") || combinedStr.includes("resume") || combinedStr.includes("summary")) {
+      return "summary_or_revision";
+    }
+    return null;
+  }
+
+  function buildDictionaryIndex(dictionary: any) {
+    const norm = normalizeDictionary(dictionary);
+    const gradesById: Record<string, any> = {};
+    const subjectsById: Record<string, any> = {};
+    const topicsById: Record<string, any> = {};
+    const docTypesById: Record<string, any> = {};
+
+    const gradeSearchEntries: any[] = [];
+    const subjectSearchEntries: any[] = [];
+    const topicSearchEntries: any[] = [];
+    const docTypeSearchEntries: any[] = [];
+
+    const addSearchEntry = (list: any[], item: any, sourceField: string, val: string, isKeyword: boolean) => {
+      const normVal = normalizeMatchText(val);
+      if (!normVal) return;
+      list.push({
+        id: item.id,
+        item,
+        field: sourceField,
+        normVal,
+        isKeyword
+      });
+    };
+
+    norm.grades.forEach((g: any) => {
+      gradesById[g.id] = g;
+      addSearchEntry(gradeSearchEntries, g, "id", g.id, false);
+      addSearchEntry(gradeSearchEntries, g, "nameAr", g.nameAr, false);
+      addSearchEntry(gradeSearchEntries, g, "nameFr", g.nameFr, false);
+      addSearchEntry(gradeSearchEntries, g, "suffix", g.suffix, false);
+      if (Array.isArray(g.keywords)) {
+        g.keywords.forEach((kw: string) => addSearchEntry(gradeSearchEntries, g, "keyword", kw, true));
+      }
+    });
+
+    norm.subjects.forEach((s: any) => {
+      subjectsById[s.id] = s;
+      addSearchEntry(subjectSearchEntries, s, "id", s.id, false);
+      addSearchEntry(subjectSearchEntries, s, "nameAr", s.nameAr, false);
+      addSearchEntry(subjectSearchEntries, s, "nameFr", s.nameFr, false);
+      addSearchEntry(subjectSearchEntries, s, "suffix", s.suffix, false);
+      if (Array.isArray(s.keywords)) {
+        s.keywords.forEach((kw: string) => addSearchEntry(subjectSearchEntries, s, "keyword", kw, true));
+      }
+    });
+
+    norm.topics.forEach((t: any) => {
+      topicsById[t.id] = t;
+      addSearchEntry(topicSearchEntries, t, "id", t.id, false);
+      addSearchEntry(topicSearchEntries, t, "nameAr", t.nameAr, false);
+      addSearchEntry(topicSearchEntries, t, "nameFr", t.nameFr, false);
+      addSearchEntry(topicSearchEntries, t, "suffix", t.suffix, false);
+      if (Array.isArray(t.keywords)) {
+        t.keywords.forEach((kw: string) => addSearchEntry(topicSearchEntries, t, "keyword", kw, true));
+      }
+    });
+
+    norm.allowedDocumentTypes.forEach((d: any) => {
+      docTypesById[d.id] = d;
+      addSearchEntry(docTypeSearchEntries, d, "id", d.id, false);
+      addSearchEntry(docTypeSearchEntries, d, "nameAr", d.nameAr, false);
+      addSearchEntry(docTypeSearchEntries, d, "nameFr", d.nameFr, false);
+      addSearchEntry(docTypeSearchEntries, d, "suffix", d.suffix, false);
+      if (Array.isArray(d.keywords)) {
+        d.keywords.forEach((kw: string) => addSearchEntry(docTypeSearchEntries, d, "keyword", kw, true));
+      }
+    });
+
+    return {
+      gradesById,
+      subjectsById,
+      topicsById,
+      docTypesById,
+      gradeSearchEntries,
+      subjectSearchEntries,
+      topicSearchEntries,
+      docTypeSearchEntries
+    };
+  }
+
+  function matchAgainstDictionary(params: {
+    title: string;
+    url: string;
+    text: string;
+    topicFilter?: string;
+    dictionary: any;
+  }) {
+    const { title, url, text, topicFilter, dictionary } = params;
+    const index = buildDictionaryIndex(dictionary);
+    const normFilenameUrl = normalizeMatchText(`${title || ""} ${url || ""}`);
+    const normText = normalizeMatchText(text || "");
+
+    const matchedTermsSet = new Set<string>();
+    const matchedFieldsSet = new Set<string>();
+
+    const scoreMap = (searchEntries: any[], typeLabel: string) => {
+      const scores: Record<string, number> = {};
+      for (const entry of searchEntries) {
+        const val = entry.normVal;
+        if (!val || val.length <= 1) continue;
+        
+        let matchPlace: "filename" | "text" | null = null;
+        let isMatch = false;
+
+        if (val.length <= 2) {
+          const escaped = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`\\b${escaped}\\b`, "i");
+          if (regex.test(normFilenameUrl)) {
+            matchPlace = "filename";
+            isMatch = true;
+          } else if (regex.test(normText)) {
+            matchPlace = "text";
+            isMatch = true;
+          }
+        } else {
+          if (normFilenameUrl.includes(val)) {
+            matchPlace = "filename";
+            isMatch = true;
+          } else if (normText.includes(val)) {
+            matchPlace = "text";
+            isMatch = true;
+          }
+        }
+
+        if (isMatch && matchPlace) {
+          let pts = 0;
+          if (matchPlace === "filename") {
+            pts = entry.isKeyword ? 20 : 40;
+          } else {
+            pts = entry.isKeyword ? 10 : 25;
+          }
+          scores[entry.id] = (scores[entry.id] || 0) + pts;
+          matchedTermsSet.add(entry.normVal);
+          matchedFieldsSet.add(`${typeLabel}.${entry.field}`);
+        }
+      }
+      return scores;
+    };
+
+    const gradeScores = scoreMap(index.gradeSearchEntries, "grade");
+    const subjectScores = scoreMap(index.subjectSearchEntries, "subject");
+    const topicScores = scoreMap(index.topicSearchEntries, "topic");
+    const docTypeScores = scoreMap(index.docTypeSearchEntries, "documentType");
+
+    // Add cross-relation scoring bonuses
+    const bestGradeId = Object.keys(gradeScores).reduce((a, b) => gradeScores[a] > gradeScores[b] ? a : b, "");
+    if (bestGradeId) {
+      gradeScores[bestGradeId] += 10;
+    }
+
+    const bestSubjectId = Object.keys(subjectScores).reduce((a, b) => subjectScores[a] > subjectScores[b] ? a : b, "");
+    if (bestSubjectId) {
+      subjectScores[bestSubjectId] += 10;
+    }
+
+    // Topic subjectId relation bonus
+    if (bestSubjectId) {
+      Object.keys(topicScores).forEach(tId => {
+        const topic = index.topicsById[tId];
+        if (topic && topic.subjectId === bestSubjectId) {
+          topicScores[tId] += 15;
+        }
+      });
+    }
+
+    const bestDocTypeId = Object.keys(docTypeScores).reduce((a, b) => docTypeScores[a] > docTypeScores[b] ? a : b, "");
+    if (bestDocTypeId) {
+      docTypeScores[bestDocTypeId] += 10;
+    }
+
+    // Limit topicId selections based on topicFilter if provided
+    let filteredTopicScores = { ...topicScores };
+    let activeFilterReport: any = null;
+    let allowedTopicIds: string[] = [];
+
+    if (topicFilter && topicFilter.trim().length > 0) {
+      const resolved = resolveTopicFiltersAgainstDictionary(topicFilter, dictionary);
+      allowedTopicIds = resolved.matchedTopics.map((m: any) => m.topicId);
+      
+      activeFilterReport = {
+        rawFilters: topicFilter,
+        matchedTopics: resolved.matchedTopics,
+        unmatchedFilters: resolved.unmatchedFilters,
+        expandedKeywords: resolved.expandedKeywords
+      };
+
+      const temp: Record<string, number> = {};
+      allowedTopicIds.forEach(tId => {
+        if (topicScores[tId] !== undefined) {
+          temp[tId] = topicScores[tId];
+        } else {
+          temp[tId] = 5;
+        }
+      });
+      filteredTopicScores = temp;
+    }
+
+    const finalGradeId = Object.keys(gradeScores).reduce((a, b) => gradeScores[a] > gradeScores[b] ? a : b, null as any);
+    const finalSubjectId = Object.keys(subjectScores).reduce((a, b) => subjectScores[a] > subjectScores[b] ? a : b, null as any);
+    const finalTopicId = Object.keys(filteredTopicScores).reduce((a, b) => filteredTopicScores[a] > filteredTopicScores[b] ? a : b, null as any);
+    const finalDocTypeId = Object.keys(docTypeScores).reduce((a, b) => docTypeScores[a] > docTypeScores[b] ? a : b, null as any);
+
+    const isMatched = !!(finalGradeId && finalSubjectId && finalTopicId && finalDocTypeId);
+
+    return {
+      gradeId: finalGradeId,
+      subjectId: finalSubjectId,
+      topicId: finalTopicId,
+      documentTypeId: finalDocTypeId,
+      isMatch: isMatched,
+      matchedGrades: finalGradeId ? [index.gradesById[finalGradeId]] : [],
+      matchedSubjects: finalSubjectId ? [index.subjectsById[finalSubjectId]] : [],
+      matchedTopics: finalTopicId ? [index.topicsById[finalTopicId]] : [],
+      matchedDocTypes: finalDocTypeId ? [index.docTypesById[finalDocTypeId]] : [],
+      matchedTerms: Array.from(matchedTermsSet),
+      matchedFields: Array.from(matchedFieldsSet),
+      topicFilterReport: activeFilterReport,
+      allowedTopicIds
+    };
+  }
+
+  function safeJsonParseJsonObject(text: string): any {
+    if (!text) return null;
+    try {
+      return JSON.parse(text.trim());
+    } catch (e) {
+      try {
+        let cleaned = text.trim();
+        if (cleaned.includes("```")) {
+          const matches = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (matches && matches[1]) {
+            cleaned = matches[1];
+            return JSON.parse(cleaned.trim());
+          }
+        }
+      } catch (e2) {}
+      return null;
+    }
   }
 
   function normalizeDictionary(rawDict: any) {
@@ -1066,27 +1400,126 @@ Answer:`;
 
   // POST Route for Gemini-powered reference classification
   app.post("/api/classify", async (req, res) => {
+    const { title, url, text, topicFilter } = req.body;
+    
+    // Fallback names
+    const safeTitleFromFilename = getSafeTitleFromFilename(title || url || "unnamed");
+    const fallbackRenamePattern = `needs-review__${safeTitleFromFilename}.pdf`;
+
+    // Dynamic logging for debugging
+    console.log(`[Classify API] Initiated for title: "${title || ""}", url: "${url || ""}"`);
+
+    // Dynamic default report structure
+    let topicFilterReport: any = null;
+    let allowedTopicIds: string[] = [];
+    let resolvedTopicFilters: any = null;
+
     try {
-      const { title, url, text, topicFilter } = req.body;
       if (!title && !url) {
-        return res.status(400).json({ error: "Title or URL is required for classification" });
+        return res.json({
+          gradeId: null,
+          subjectId: null,
+          topicId: null,
+          documentTypeId: null,
+          isMatch: false,
+          needsReview: true,
+          status: "needs_review",
+          reason: "Title or URL is required for classification",
+          cleanTitle: "unnamed",
+          renamePattern: "needs-review__unnamed.pdf",
+          confidenceScore: 0,
+          matchedTerms: [],
+          matchedFields: []
+        });
       }
 
+      // Task 8: Check for malformed URL rejection
+      if (url) {
+        const urlValidation = isValidUrlSource(url);
+        if (!urlValidation.valid) {
+          console.warn(`[Classify API] Rejected URL: ${url} - ${urlValidation.reason}`);
+          return res.json({
+            gradeId: null,
+            subjectId: null,
+            topicId: null,
+            documentTypeId: null,
+            isMatch: false,
+            needsReview: true,
+            status: "needs_review",
+            reason: urlValidation.reason || "Malformed or unsupported source URL",
+            cleanTitle: safeTitleFromFilename,
+            renamePattern: fallbackRenamePattern,
+            confidenceScore: 0,
+            matchedTerms: [],
+            matchedFields: [],
+            topicFilterReport
+          });
+        }
+      }
+
+      // Load active dictionary
       const activeDict = normalizeDictionary(await getActiveDictionary());
 
-      let resolvedTopicFilters = null;
-      let allowedTopicIds: string[] = [];
+      // Task 3: Perform deterministic dictionary matching before Gemini
+      const matchDict = matchAgainstDictionary({ title, url, text, topicFilter, dictionary: activeDict });
+      console.log(`[Classify API] Deterministic dictionary match results:`, {
+        matchedGrades: matchDict.matchedGrades.map(g => g.id),
+        matchedSubjects: matchDict.matchedSubjects.map(s => s.id),
+        matchedTopics: matchDict.matchedTopics.map(t => t.id),
+        matchedDocTypes: matchDict.matchedDocTypes.map(d => d.id)
+      });
+
+      // Task 9: Detect document type before AI using filename/url
+      const predetectedDocType = predetectDocumentType(title, url, activeDict.allowedDocumentTypes);
+      console.log(`[Classify API] Predetected document type: ${predetectedDocType}`);
+
+      // Task 4: Fix topic filter logic
       if (topicFilter && topicFilter.trim().length > 0) {
         resolvedTopicFilters = resolveTopicFiltersAgainstDictionary(topicFilter, activeDict);
         allowedTopicIds = resolvedTopicFilters.matchedTopics.map((t: any) => t.topicId);
+        
+        topicFilterReport = {
+          rawFilters: topicFilter,
+          matchedTopics: resolvedTopicFilters.matchedTopics,
+          unmatchedFilters: resolvedTopicFilters.unmatchedFilters,
+          expandedKeywords: resolvedTopicFilters.expandedKeywords
+        };
+
+        if (allowedTopicIds.length === 0) {
+          console.warn(`[Classify API] Topic filter "${topicFilter}" has no dictionary matches.`);
+          return res.json({
+            gradeId: null,
+            subjectId: null,
+            topicId: null,
+            documentTypeId: null,
+            isMatch: false,
+            needsReview: true,
+            status: "needs_review",
+            reason: "Topic filter did not match Supabase dictionary topics",
+            cleanTitle: safeTitleFromFilename,
+            renamePattern: fallbackRenamePattern,
+            confidenceScore: 0,
+            matchedTerms: matchDict.matchedTerms,
+            matchedFields: matchDict.matchedFields,
+            topicFilterReport
+          });
+        }
       }
 
+      // Build specific AI hint constraints
       let topicFilterConstraint = "";
       if (allowedTopicIds.length > 0) {
         topicFilterConstraint = `\n
 CRITICAL CONSTRAINT: The user has applied specific Topic Filters which matched these specific dictionary Topic IDs: ${JSON.stringify(allowedTopicIds)}.
 You MUST ONLY choose a "topicId" from this set: ${JSON.stringify(allowedTopicIds)}. If the document matches none of these, set "topicId" to null and "isMatch" to false. Do not select any topicId outside this list.`;
       }
+
+      // Pre-classification context to assist Gemini with match findings
+      const matchingContextHint = `\nDETERMINISTIC ANALYSIS HINTS:
+- Matching Grades in Dictionary: ${JSON.stringify(matchDict.matchedGrades.map(g => g.id))}
+- Matching Subjects in Dictionary: ${JSON.stringify(matchDict.matchedSubjects.map(s => s.id))}
+- Matching Topics in Dictionary: ${JSON.stringify(matchDict.matchedTopics.map(t => t.id))}
+- Predetected Document Type: ${predetectedDocType ? `"${predetectedDocType}"` : "null"}`;
 
       const prompt = `You are a highly precise Moroccan school educational crawler & metadata classifier.
 Analyze the following document's details:
@@ -1095,7 +1528,7 @@ URL: "${url || ""}"
 Snippet from content / text: "${(text || "").substring(0, 1000)}"
 
 YOUR TASK:
-Classify this document structure strictly using the Provided Reference Classification Dictionary.${topicFilterConstraint}
+Classify this document structure strictly using the Provided Reference Classification Dictionary.${topicFilterConstraint}${matchingContextHint}
 
 You MUST select EXACTLY ONE Grade ID, Subject ID, Topic ID, and Document Type ID only if they exist in the dictionary and correspond to the document context.
 If the document does not match any subject or topic in our reference dictionary, or looks entirely unrelated to secondary school math/physics/svt, set "isMatch" to false.
@@ -1113,11 +1546,12 @@ Return a JSON object containing:
 6. "reason": (string) Brief 1-sentence analytical justification.
 7. "cleanTitle": (string) A beautiful, cleaned human-readable version of the title, removing website footprints (like "talamidi", "talamidi.com", "moutamadris", "PDF", timestamps, or spam suffixes). Keep it short (2-4 words, e.g., "Equations_Et_Inequations").
 8. "renamePattern": (string) Suggested systematic file name using suffixes in format: "<Grade_Suffix>_<Subject_Suffix>_<Topic_Suffix>_<DocType_Suffix>_<CleanTitle>.pdf"
-Example: "1AC_MATH_EQ_EX_Equations_Et_Inequations.pdf" (using the suffixes listed in the dictionary). If not matched, this can be the original name.
+Example: "1AC_MATH_EQ_EX_Equations_Et_Inequations.pdf" (using the suffixes listed in the dictionary). If not matched, this can be original name.
+9. "confidenceScore": (number, 0 to 1) Classifier confidence level in this match.
 
 Make sure to respond strictly with valid JSON. Do not include any markdown block fences or conversational text outside of the JSON representation.`;
 
-      // Use gemini-3.5-flash as specified for text tasks
+      // Call Gemini dynamically
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: prompt,
@@ -1127,7 +1561,28 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       });
 
       const resultText = response.text || "{}";
-      const classification = JSON.parse(resultText);
+
+      // Task 2: Robust safe JSON parse for Gemini
+      const classification = safeJsonParseJsonObject(resultText);
+      if (!classification) {
+        console.warn("[Classify API] Gemini returned invalid JSON:", resultText);
+        return res.json({
+          gradeId: null,
+          subjectId: null,
+          topicId: null,
+          documentTypeId: null,
+          isMatch: false,
+          needsReview: true,
+          status: "needs_review",
+          reason: "AI returned invalid JSON; manual review required",
+          cleanTitle: safeTitleFromFilename,
+          renamePattern: fallbackRenamePattern,
+          confidenceScore: 0,
+          matchedTerms: matchDict.matchedTerms,
+          matchedFields: matchDict.matchedFields,
+          topicFilterReport
+        });
+      }
 
       let gradeId = classification.gradeId || null;
       let subjectId = classification.subjectId || null;
@@ -1137,7 +1592,9 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       let reason = classification.reason || "";
       let cleanTitle = classification.cleanTitle || title || "";
       let renamePattern = classification.renamePattern || title || "";
+      let confidenceScore = typeof classification.confidenceScore === "number" ? classification.confidenceScore : (isMatch ? 0.8 : 0);
 
+      // Task 12: Do deterministic validation after Gemini
       let validationFailed = false;
       let validationReason = "";
 
@@ -1170,6 +1627,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         }
       }
 
+      // Check predetected or selected doc type
       if (documentTypeId !== null) {
         const exists = activeDict.allowedDocumentTypes.some((d: any) => d.id === documentTypeId);
         if (!exists) {
@@ -1185,6 +1643,10 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         }
       }
 
+      // If documentTypeId is null or mismatched but everything else is valid, mark needsReview instead of total failure
+      let needsReview = !isMatch || validationFailed;
+      let status = isMatch && !validationFailed ? "classified" : "needs_review";
+
       if (validationFailed) {
         console.warn(`[Classify Validation Failed] ${validationReason}`);
         return res.json({
@@ -1193,25 +1655,55 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
           topicId: null,
           documentTypeId: null,
           isMatch: false,
-          reason: "Rejected: classification did not match Supabase dictionary constraints",
-          cleanTitle: title,
-          renamePattern: title
+          needsReview: true,
+          status: "needs_review",
+          reason: validationReason,
+          cleanTitle: safeTitleFromFilename,
+          renamePattern: fallbackRenamePattern,
+          confidenceScore: 0,
+          matchedTerms: matchDict.matchedTerms,
+          matchedFields: matchDict.matchedFields,
+          topicFilterReport
         });
       }
 
-      res.json({
+      // Return normal successful HTTP 200 representation with all reporting parameters
+      return res.json({
         gradeId,
         subjectId,
         topicId,
         documentTypeId,
         isMatch,
-        reason,
+        needsReview,
+        status,
+        reason: reason || "Successfully matching Supabase reference parameters",
         cleanTitle,
-        renamePattern
+        renamePattern,
+        confidenceScore,
+        matchedTerms: matchDict.matchedTerms,
+        matchedFields: matchDict.matchedFields,
+        topicFilterReport
       });
+
     } catch (error: any) {
-      console.error("[Classification Error]", error);
-      res.status(500).json({ error: error.message || "Failed to classify document" });
+      // Task 1: Global fail-safe wrapping. Never throw 500 unless extreme server crash.
+      console.error("[Classification Fail-Safe Handled]", error);
+      return res.json({
+        gradeId: null,
+        subjectId: null,
+        topicId: null,
+        documentTypeId: null,
+        isMatch: false,
+        needsReview: true,
+        status: "needs_review",
+        reason: error.message || "Failed to parse/classify document pipeline fully",
+        cleanTitle: safeTitleFromFilename,
+        renamePattern: fallbackRenamePattern,
+        confidenceScore: 0,
+        matchedTerms: [],
+        matchedFields: [],
+        topicFilterReport
+      });
     }
   });
 
@@ -1295,6 +1787,995 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     } catch (error: any) {
       console.error("[Parser Error]", error);
       res.status(500).json({ error: error.message || "Failed to parse PDF text content" });
+    }
+  });
+
+  // --- LOCAL-FIRST CURRICULUM PIPELINE SUPPORT AND HELPER PROCEDURES ---
+
+  function cleanExtractedText(text: string): string {
+    if (!text) return "";
+    let cleaned = text;
+    const patternsToRemove = [
+      /تم تحميل هذا الملف من موقع/g,
+      /موقع تلاميذي/g,
+      /talamidi\.com/gi,
+      /www\.talamidi\.com/gi,
+      /Cours, Exercices, Examens corrigés/gi,
+      /الموقع التربوي تلاميذي/g,
+      /Talamidi/gi,
+      /Moutamadris/gi,
+      /moutamadris\.ma/gi
+    ];
+    patternsToRemove.forEach(pat => {
+      cleaned = cleaned.replace(pat, "");
+    });
+
+    cleaned = cleaned.replace(/[ \t]+/g, " ");
+    cleaned = cleaned.replace(/\n\s*\n/g, "\n\n");
+    return cleaned.trim();
+  }
+
+  async function createCleanPdfCopy(params: {
+    hash: string;
+    grade_label: string;
+    grade_slug: string;
+    subject_label: string;
+    subject_slug: string;
+    topic_label: string;
+    topic_slug: string;
+    document_type_label: string;
+    document_type_slug: string;
+  }) {
+    const originalPath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${params.hash}.original.pdf`);
+    if (!fs.existsSync(originalPath)) {
+      throw new Error("Original PDF file not found locally");
+    }
+
+    const pdfBytes = fs.readFileSync(originalPath);
+    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const pages = pdfDoc.getPages();
+
+    if (pages.length > 0) {
+      const firstPage = pages[0];
+      const { width, height } = firstPage.getSize();
+      
+      const safeMargin = height > 200 && width > 200;
+      
+      if (safeMargin) {
+        const fontSize = 8;
+        const opacity = 0.35;
+        const color = rgb(0.5, 0.5, 0.5);
+
+        // Stamp - Top-left
+        firstPage.drawText("Levelspace", {
+          x: 30,
+          y: height - 20,
+          size: fontSize,
+          font: font,
+          color: color,
+          opacity: opacity
+        });
+
+        // Stamp - Top-right
+        const rightLines = [
+          `Grade: ${params.grade_label}`,
+          `Subject: ${params.subject_label}`,
+          `Topic: ${params.topic_label}`,
+          `Type: ${params.document_type_label}`
+        ];
+
+        rightLines.forEach((line, index) => {
+          firstPage.drawText(line, {
+            x: width - 200,
+            y: height - 20 - (index * 10),
+            size: fontSize,
+            font: font,
+            color: color,
+            opacity: opacity
+          });
+        });
+      }
+    }
+
+    const cleanBytes = await pdfDoc.save();
+    const shortHash = params.hash.substring(0, 8);
+    const cleanName = `${params.grade_slug}__${params.subject_slug}__${params.topic_slug}__${params.document_type_slug}__${shortHash}.pdf`;
+    const cleanPath = path.join(LOCAL_OUTPUT_DIR, "clean-pdfs", cleanName);
+    
+    fs.writeFileSync(cleanPath, cleanBytes);
+    return { cleanPath, cleanName };
+  }
+
+  function saveDatasetRow(row: any) {
+    const hash = row.hash;
+    const jsonPath = path.join(LOCAL_OUTPUT_DIR, "dataset", `${hash}.json`);
+    fs.writeFileSync(jsonPath, JSON.stringify(row, null, 2));
+
+    const jsonLine = JSON.stringify(row) + "\n";
+    const jsonlPath = path.join(LOCAL_OUTPUT_DIR, "dataset", "index.jsonl");
+    fs.appendFileSync(jsonlPath, jsonLine);
+  }
+
+  // --- WORKSTATION PIPELINE ENDPOINTS ---
+
+  app.post("/api/pipeline/parse", async (req, res) => {
+    const { url, title, topicFilter } = req.body;
+    const safeTitle = getSafeTitleFromFilename(title || url || "unnamed");
+    const fallbackName = `needs-review__${safeTitle}.pdf`;
+
+    try {
+      if (!url) {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      const urlCheck = isValidUrlSource(url);
+      if (!urlCheck.valid) {
+        updateReport("rejection-report.json", { url, reason: urlCheck.reason, title });
+        return res.json({
+          status: "rejected",
+          reason: urlCheck.reason || "Malformed or unsupported source URL",
+          cleanTitle: safeTitle,
+          renamePattern: fallbackName,
+          needsReview: true,
+          isMatch: false
+        });
+      }
+
+      let pdfBytes: Buffer;
+      try {
+        const response = await axios.get(url, {
+          responseType: "arraybuffer",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          timeout: 20000
+        });
+        pdfBytes = Buffer.from(response.data);
+      } catch (dlErr: any) {
+        updateReport("rejection-report.json", { url, reason: `Download failed: ${dlErr.message}`, title });
+        return res.json({
+          status: "failed",
+          reason: `Download failed: ${dlErr.message}`,
+          cleanTitle: safeTitle,
+          renamePattern: fallbackName,
+          needsReview: true,
+          isMatch: false
+        });
+      }
+
+      const hash = crypto.createHash("sha256").update(pdfBytes).digest("hex");
+      
+      const originalPath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${hash}.original.pdf`);
+      let isDuplicate = fs.existsSync(originalPath);
+      if (!isDuplicate) {
+        fs.writeFileSync(originalPath, pdfBytes);
+      }
+
+      let rawText = "";
+      let extractionStatus: any = "text_extracted";
+      let errorOccurred = false;
+      let errorMsg = "";
+
+      try {
+        const parsed = await pdf(pdfBytes);
+        rawText = parsed.text || "";
+      } catch (parseErr: any) {
+        errorOccurred = true;
+        errorMsg = parseErr.message;
+        extractionStatus = "extract_failed";
+      }
+
+      const textLen = rawText.trim().length;
+      let textQualityScore = 0;
+
+      if (textLen > 0) {
+        const words = rawText.trim().split(/\s+/).filter(Boolean);
+        const wordCount = words.length;
+        const avgWordLen = textLen / (wordCount || 1);
+        if (wordCount >= 20 && avgWordLen >= 3 && avgWordLen <= 12) {
+          textQualityScore = Math.min(100, Math.round(40 + Math.min(60, wordCount / 5)));
+        } else {
+          textQualityScore = Math.max(10, Math.round(Math.min(50, wordCount * 2)));
+        }
+      }
+
+      let needsOcr = false;
+      let ocrStatus: any = "not_needed";
+
+      if (errorOccurred) {
+        needsOcr = true;
+        ocrStatus = "needed";
+        extractionStatus = "extract_failed";
+      } else if (textLen < 100) {
+        needsOcr = true;
+        ocrStatus = "needed";
+        extractionStatus = "needs_ocr";
+      } else if (textLen >= 300 && textQualityScore >= 60) {
+        needsOcr = false;
+        ocrStatus = "not_needed";
+        extractionStatus = "text_extracted";
+      } else {
+        needsOcr = false;
+        ocrStatus = "not_needed";
+        extractionStatus = "text_extracted";
+      }
+
+      const originalTextPath = path.join(LOCAL_OUTPUT_DIR, "text", `${hash}.original.txt`);
+      fs.writeFileSync(originalTextPath, rawText);
+
+      updateReport("extraction-report.json", {
+        hash,
+        url,
+        title,
+        textLen,
+        textQualityScore,
+        needsOcr,
+        isDuplicate,
+        extractionStatus
+      });
+
+      res.json({
+        success: true,
+        hash,
+        isDuplicate,
+        textSnippet: rawText.substring(0, 800),
+        textLength: textLen,
+        textQualityScore,
+        needsOcr,
+        ocrStatus,
+        extractionStatus,
+        originalFilename: path.basename(url || "unnamed.pdf")
+      });
+
+    } catch (err: any) {
+      console.error("[Pipeline Parse Fatal Error]", err);
+      res.json({
+        success: false,
+        error: err.message || "Failed to process parse pipeline stepping"
+      });
+    }
+  });
+
+  // --- OCR QUEUE STATE & ENGINES ---
+  interface OcrQueueItem {
+    jobId: string;
+    pdfHash: string;
+    originalName: string;
+    url: string;
+    status: "queued" | "running" | "waiting_delay" | "rate_limited" | "retrying" | "done" | "failed" | "paused";
+    currentPage: number;
+    totalPages: number;
+    completedPages: number[];
+    failedPages: number[];
+    retryCount: number;
+    delayCountdown: number;
+    estimatedRemainingPages: number;
+    quotaUsedToday: number;
+    errorMessage?: string;
+    updatedAt: string;
+  }
+
+  let queuedOcrItems: OcrQueueItem[] = [];
+  let ocrConfig = {
+    concurrency: parseInt(process.env.OCR_CONCURRENCY || "1"),
+    delayBetweenPagesMs: parseInt(process.env.OCR_DELAY_BETWEEN_PAGES_MS || "8000"),
+    delayBetweenPdfsMs: parseInt(process.env.OCR_DELAY_BETWEEN_PDFS_MS || "30000"),
+    maxPagesPerPdf: parseInt(process.env.OCR_MAX_PAGES_PER_PDF || "30"),
+    maxPdfsPerBatch: parseInt(process.env.OCR_MAX_PDFS_PER_BATCH || "5"),
+    maxRetries: parseInt(process.env.OCR_MAX_RETRIES || "3"),
+    backoffMultiplier: parseInt(process.env.OCR_BACKOFF_MULTIPLIER || "2"),
+    dailyPageLimit: parseInt(process.env.OCR_DAILY_PAGE_LIMIT || "100"),
+    isPaused: false
+  };
+  let quotaUsedTodayCounter = 0;
+  let activeWorkerCount = 0;
+  let masterQueueTimer: NodeJS.Timeout | null = null;
+
+  function loadOcrProgress() {
+    const progressPath = path.join(LOCAL_OUTPUT_DIR, "reports", "ocr-progress.json");
+    if (fs.existsSync(progressPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(progressPath, "utf8"));
+        if (Array.isArray(data)) {
+          queuedOcrItems = data;
+        } else if (typeof data === "object") {
+          queuedOcrItems = Object.values(data);
+        }
+      } catch (e) {
+        console.error("Error loading OCR progress:", e);
+      }
+    }
+    updateQuotaUsedToday();
+  }
+
+  function updateQuotaUsedToday() {
+    const todayStr = new Date().toISOString().substring(0, 10);
+    let count = 0;
+    queuedOcrItems.forEach(item => {
+      if (item.updatedAt && item.updatedAt.substring(0, 10) === todayStr) {
+        count += (item.completedPages || []).length;
+      }
+    });
+    quotaUsedTodayCounter = count;
+  }
+
+  function saveOcrProgressLocally(itemToSave?: OcrQueueItem) {
+    const progressPath = path.join(LOCAL_OUTPUT_DIR, "reports", "ocr-progress.json");
+    const absolutePathAlt = "/scarpe-output/reports/ocr-progress.json";
+
+    if (itemToSave) {
+      const idx = queuedOcrItems.findIndex(i => i.pdfHash === itemToSave.pdfHash);
+      if (idx !== -1) {
+        queuedOcrItems[idx] = itemToSave;
+      } else {
+        queuedOcrItems.push(itemToSave);
+      }
+    }
+
+    updateQuotaUsedToday();
+
+    const fileData = JSON.stringify(queuedOcrItems, null, 2);
+    try {
+      fs.writeFileSync(progressPath, fileData);
+    } catch (err) {
+      console.error(`Failed writing to ${progressPath}:`, err);
+    }
+
+    try {
+      const dir = path.dirname(absolutePathAlt);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(absolutePathAlt, fileData);
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  async function runOcrJob(item: OcrQueueItem) {
+    item.status = "running";
+    item.updatedAt = new Date().toISOString();
+    saveOcrProgressLocally(item);
+
+    const originalPath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${item.pdfHash}.original.pdf`);
+    if (!fs.existsSync(originalPath)) {
+      item.status = "failed";
+      item.errorMessage = "Original PDF not found locally.";
+      saveOcrProgressLocally(item);
+      return;
+    }
+
+    try {
+      const pdfBytes = fs.readFileSync(originalPath);
+      let srcDoc;
+      try {
+        srcDoc = await PDFDocument.load(pdfBytes);
+      } catch {
+        item.status = "failed";
+        item.errorMessage = "Invalid PDF file bytes.";
+        saveOcrProgressLocally(item);
+        return;
+      }
+
+      const realPages = srcDoc.getPageCount();
+      item.totalPages = Math.min(realPages, ocrConfig.maxPagesPerPdf);
+      item.estimatedRemainingPages = item.totalPages - (item.currentPage || 0);
+      saveOcrProgressLocally(item);
+
+      for (let pNum = 1; pNum <= item.totalPages; pNum++) {
+        if (ocrConfig.isPaused || (item.status as string) === "paused" || (item.status as string) === "failed") {
+          break;
+        }
+
+        if (item.completedPages.includes(pNum)) {
+          continue;
+        }
+
+        updateQuotaUsedToday();
+        if (quotaUsedTodayCounter >= ocrConfig.dailyPageLimit) {
+          item.status = "paused";
+          item.errorMessage = `Daily page limit reached (${ocrConfig.dailyPageLimit}). Queue paused.`;
+          saveOcrProgressLocally(item);
+          ocrConfig.isPaused = true;
+          break;
+        }
+
+        // Delay BEFORE OCR page
+        item.status = "waiting_delay";
+        let countdown = Math.ceil(ocrConfig.delayBetweenPagesMs / 1000);
+        while (countdown > 0) {
+          if (ocrConfig.isPaused || (item.status as string) === "paused" || (item.status as string) === "failed") {
+            break;
+          }
+          item.delayCountdown = countdown;
+          saveOcrProgressLocally(item);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          countdown--;
+        }
+        item.delayCountdown = 0;
+        if (ocrConfig.isPaused || (item.status as string) === "paused" || (item.status as string) === "failed") {
+          break;
+        }
+
+        item.status = "running";
+        saveOcrProgressLocally(item);
+
+        let pageBytes: Buffer;
+        try {
+          const subDoc = await PDFDocument.create();
+          const [copiedPage] = await subDoc.copyPages(srcDoc, [pNum - 1]);
+          subDoc.addPage(copiedPage);
+          const pageSaved = await subDoc.save();
+          pageBytes = Buffer.from(pageSaved);
+        } catch (err: any) {
+          item.failedPages.push(pNum);
+          item.errorMessage = `Failed to extract page ${pNum}: ${err.message}`;
+          saveOcrProgressLocally(item);
+          continue;
+        }
+
+        let attempt = 1;
+        let success = false;
+        let pageText = "";
+
+        while (attempt <= ocrConfig.maxRetries) {
+          try {
+            console.log(`[OCR Queue] Sending PDF page ${pNum}/${item.totalPages} for hash ${item.pdfHash} (Attempt ${attempt})`);
+            const response = await ai.models.generateContent({
+              model: "gemini-3.5-flash",
+              contents: [
+                {
+                  inlineData: {
+                    mimeType: "application/pdf",
+                    data: pageBytes.toString("base64")
+                  }
+                },
+                `Extract all text from page ${pNum} using vision-native OCR. Return the plain text exactly as shown, preserving educational contents, exercises, formulas, Arabic and French headings, layout structures. Return text segment only.`
+              ]
+            });
+            pageText = response.text || "";
+            success = true;
+            break;
+          } catch (err: any) {
+            const errMsg = err.message || "";
+            const isRateLimit = errMsg.includes("429") || 
+                               errMsg.toLowerCase().includes("quota exceeded") || 
+                               errMsg.toLowerCase().includes("rate limit") || 
+                               errMsg.toLowerCase().includes("resource exhausted") || 
+                               errMsg.toLowerCase().includes("too many requests");
+
+            if (isRateLimit && attempt < ocrConfig.maxRetries) {
+              item.status = "rate_limited";
+              item.retryCount = attempt;
+              saveOcrProgressLocally(item);
+
+              let waitSecs = Math.ceil((15000 * Math.pow(ocrConfig.backoffMultiplier, attempt)) / 1000);
+              item.errorMessage = `Rate limited. Backing off for ${waitSecs}s.`;
+              console.warn(`[OCR Queue] Rate limit hit on page ${pNum}. Retrying in ${waitSecs}s...`);
+
+              let rateCountdown = waitSecs;
+              while (rateCountdown > 0) {
+                if (ocrConfig.isPaused || (item.status as string) === "paused" || (item.status as string) === "failed") break;
+                item.delayCountdown = rateCountdown;
+                saveOcrProgressLocally(item);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                rateCountdown--;
+              }
+              item.delayCountdown = 0;
+              if (ocrConfig.isPaused || (item.status as string) === "paused" || (item.status as string) === "failed") {
+                break;
+              }
+              item.status = "retrying";
+              saveOcrProgressLocally(item);
+              attempt++;
+            } else {
+              // Unrecoverable non-429 error or ran out of retries
+              item.status = "failed";
+              item.errorMessage = isRateLimit 
+                ? "OCR paused because quota/rate limit was reached. Partial progress was saved." 
+                : `Page ${pNum} failed: ` + (err.message || "Unknown API error");
+              ocrConfig.isPaused = isRateLimit ? true : ocrConfig.isPaused;
+              saveOcrProgressLocally(item);
+              break;
+            }
+          }
+        }
+
+        if (!success) {
+          break;
+        }
+
+        const pageTextPath = path.join(LOCAL_OUTPUT_DIR, "ocr", `${item.pdfHash}.page_${pNum}.txt`);
+        fs.writeFileSync(pageTextPath, pageText);
+
+        if (!item.completedPages.includes(pNum)) {
+          item.completedPages.push(pNum);
+        }
+        item.currentPage = pNum;
+        item.estimatedRemainingPages = item.totalPages - pNum;
+        item.updatedAt = new Date().toISOString();
+
+        let assembledText = "";
+        for (let pCheck = 1; pCheck <= item.totalPages; pCheck++) {
+          const pPath = path.join(LOCAL_OUTPUT_DIR, "ocr", `${item.pdfHash}.page_${pCheck}.txt`);
+          if (fs.existsSync(pPath)) {
+            assembledText += `--- PAGE ${pCheck} ---\n` + fs.readFileSync(pPath, "utf8") + "\n\n";
+          }
+        }
+        fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "ocr", `${item.pdfHash}.ocr.txt`), assembledText);
+        fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "text", `${item.pdfHash}.clean.txt`), cleanExtractedText(assembledText));
+
+        saveOcrProgressLocally(item);
+      }
+
+      if (item.completedPages.length === item.totalPages) {
+        item.status = "done";
+        item.errorMessage = undefined;
+        item.delayCountdown = 0;
+        item.estimatedRemainingPages = 0;
+        saveOcrProgressLocally(item);
+
+        updateReport("ocr-report.json", {
+          hash: item.pdfHash,
+          rawOcrLen: item.totalPages * 500,
+          cleanLen: item.totalPages * 400
+        });
+
+        const hasMore = queuedOcrItems.some(i => i.status === "queued" || i.status === "retrying");
+        if (hasMore) {
+          console.log(`[OCR Queue] PDF completed. Starting cross-PDF wait of ${ocrConfig.delayBetweenPdfsMs}ms...`);
+          let pdfCountdown = Math.ceil(ocrConfig.delayBetweenPdfsMs / 1000);
+          
+          const nextJob = queuedOcrItems.find(i => i.status === "queued" || i.status === "retrying");
+          if (nextJob) {
+            nextJob.status = "waiting_delay";
+            saveOcrProgressLocally(nextJob);
+            
+            while (pdfCountdown > 0) {
+              if (ocrConfig.isPaused || (nextJob.status as string) === "paused" || (nextJob.status as string) === "failed") {
+                break;
+              }
+              nextJob.delayCountdown = pdfCountdown;
+              saveOcrProgressLocally(nextJob);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              pdfCountdown--;
+            }
+            nextJob.delayCountdown = 0;
+            if ((nextJob.status as string) === "waiting_delay") {
+              nextJob.status = "queued";
+            }
+            saveOcrProgressLocally(nextJob);
+          }
+        }
+      } else {
+        if ((item.status as string) !== "failed" && (item.status as string) !== "paused" && (item.status as string) !== "rate_limited") {
+          item.status = "paused";
+          saveOcrProgressLocally(item);
+        }
+      }
+
+    } catch (fatalErr: any) {
+      console.error("[OCR Queue Worker] Fatal Exception:", fatalErr);
+      item.status = "failed";
+      item.errorMessage = "Fatal: " + fatalErr.message;
+      saveOcrProgressLocally(item);
+    }
+  }
+
+  function startOcrQueueWorker() {
+    if (masterQueueTimer) return;
+    loadOcrProgress();
+
+    masterQueueTimer = setInterval(async () => {
+      if (ocrConfig.isPaused) return;
+      if (activeWorkerCount >= ocrConfig.concurrency) return;
+
+      const nextItem = queuedOcrItems.find(item => item.status === "queued" || item.status === "retrying");
+      if (!nextItem) return;
+
+      activeWorkerCount++;
+      try {
+        await runOcrJob(nextItem);
+      } catch (err) {
+        console.error("[OCR Worker Exception]", err);
+      } finally {
+        activeWorkerCount--;
+      }
+    }, 1000);
+  }
+
+  startOcrQueueWorker();
+
+  app.post("/api/pipeline/ocr", async (req, res) => {
+    const { hash } = req.body;
+    if (!hash) {
+      return res.status(400).json({ error: "Hash parameter is required" });
+    }
+
+    try {
+      const originalPath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${hash}.original.pdf`);
+      if (!fs.existsSync(originalPath)) {
+        return res.status(404).json({ error: "Original PDF not found locally to OCR" });
+      }
+
+      let job = queuedOcrItems.find(j => j.pdfHash === hash);
+      if (!job) {
+        job = {
+          jobId: "ocr_" + crypto.randomBytes(4).toString("hex"),
+          pdfHash: hash,
+          originalName: "PDF " + hash.substring(0, 8),
+          url: "",
+          status: "queued",
+          currentPage: 0,
+          totalPages: 0,
+          completedPages: [],
+          failedPages: [],
+          retryCount: 0,
+          delayCountdown: 0,
+          estimatedRemainingPages: 0,
+          quotaUsedToday: 0,
+          updatedAt: new Date().toISOString()
+        };
+        saveOcrProgressLocally(job);
+      } else {
+        job.status = "queued";
+        job.errorMessage = undefined;
+        saveOcrProgressLocally(job);
+      }
+
+      ocrConfig.isPaused = false;
+      
+      let waitCounter = 0;
+      while (job.status !== "done" && job.status !== "failed" && waitCounter < 8) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        waitCounter++;
+        const refreshed = queuedOcrItems.find(j => j.pdfHash === hash);
+        if (refreshed) job = refreshed;
+      }
+
+      const cleanPath = path.join(LOCAL_OUTPUT_DIR, "text", `${hash}.clean.txt`);
+      const snippet = fs.existsSync(cleanPath) ? fs.readFileSync(cleanPath, "utf8").substring(0, 1000) : "";
+
+      res.json({
+        success: job.status === "done" || snippet.length > 0,
+        ocrTextSnippet: snippet,
+        ocrTextLength: snippet.length,
+        status: job.status === "done" ? "ocr_done" : job.status,
+        message: job.errorMessage
+      });
+
+    } catch (err: any) {
+      console.error("[OCR API Route Compat Error]", err);
+      res.json({
+        success: false,
+        error: err.message || "Failed to process single-hash compat OCR"
+      });
+    }
+  });
+
+  app.get("/api/pipeline/ocr/status", (req, res) => {
+    updateQuotaUsedToday();
+    res.json({
+      success: true,
+      queue: queuedOcrItems,
+      config: ocrConfig,
+      quotaUsedToday: quotaUsedTodayCounter
+    });
+  });
+
+  app.post("/api/pipeline/ocr/config", (req, res) => {
+    const {
+      concurrency,
+      delayBetweenPagesMs,
+      delayBetweenPdfsMs,
+      maxPagesPerPdf,
+      maxPdfsPerBatch,
+      maxRetries,
+      backoffMultiplier,
+      dailyPageLimit,
+      isPaused
+    } = req.body;
+
+    if (concurrency !== undefined) ocrConfig.concurrency = Number(concurrency);
+    if (delayBetweenPagesMs !== undefined) ocrConfig.delayBetweenPagesMs = Number(delayBetweenPagesMs);
+    if (delayBetweenPdfsMs !== undefined) ocrConfig.delayBetweenPdfsMs = Number(delayBetweenPdfsMs);
+    if (maxPagesPerPdf !== undefined) ocrConfig.maxPagesPerPdf = Number(maxPagesPerPdf);
+    if (maxPdfsPerBatch !== undefined) ocrConfig.maxPdfsPerBatch = Number(maxPdfsPerBatch);
+    if (maxRetries !== undefined) ocrConfig.maxRetries = Number(maxRetries);
+    if (backoffMultiplier !== undefined) ocrConfig.backoffMultiplier = Number(backoffMultiplier);
+    if (dailyPageLimit !== undefined) ocrConfig.dailyPageLimit = Number(dailyPageLimit);
+    if (isPaused !== undefined) ocrConfig.isPaused = Boolean(isPaused);
+
+    res.json({ success: true, config: ocrConfig });
+  });
+
+  app.post("/api/pipeline/ocr/enqueue", (req, res) => {
+    const { items } = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: "items array of shape { hash, title?, url? } is required" });
+    }
+
+    const enqueuedList: string[] = [];
+    items.forEach(it => {
+      let existing = queuedOcrItems.find(item => item.pdfHash === it.hash);
+      if (existing) {
+        existing.status = "queued";
+        existing.errorMessage = undefined;
+        if (it.title) existing.originalName = it.title;
+        if (it.url) existing.url = it.url;
+        existing.retryCount = 0;
+        existing.updatedAt = new Date().toISOString();
+        saveOcrProgressLocally(existing);
+      } else {
+        existing = {
+          jobId: "ocr_" + crypto.randomBytes(4).toString("hex"),
+          pdfHash: it.hash,
+          originalName: it.title || "PDF " + it.hash.substring(0, 8),
+          url: it.url || "",
+          status: "queued",
+          currentPage: 0,
+          totalPages: 0,
+          completedPages: [],
+          failedPages: [],
+          retryCount: 0,
+          delayCountdown: 0,
+          estimatedRemainingPages: 0,
+          quotaUsedToday: 0,
+          updatedAt: new Date().toISOString()
+        };
+        saveOcrProgressLocally(existing);
+      }
+      enqueuedList.push(existing.pdfHash);
+    });
+
+    ocrConfig.isPaused = false;
+    res.json({ success: true, count: items.length, enqueued: enqueuedList });
+  });
+
+  app.post("/api/pipeline/ocr/pause", (req, res) => {
+    ocrConfig.isPaused = true;
+    queuedOcrItems.forEach(item => {
+      if (item.status === "running" || item.status === "waiting_delay" || item.status === "retrying" || item.status === "queued" || item.status === "rate_limited") {
+        item.status = "paused";
+        item.delayCountdown = 0;
+        saveOcrProgressLocally(item);
+      }
+    });
+    res.json({ success: true, config: ocrConfig });
+  });
+
+  app.post("/api/pipeline/ocr/resume", (req, res) => {
+    ocrConfig.isPaused = false;
+    queuedOcrItems.forEach(item => {
+      if (item.status === "paused") {
+        item.status = "queued";
+        saveOcrProgressLocally(item);
+      }
+    });
+    res.json({ success: true, config: ocrConfig });
+  });
+
+  app.post("/api/pipeline/ocr/stop", (req, res) => {
+    queuedOcrItems.forEach(item => {
+      if (item.status === "queued" || item.status === "running" || item.status === "waiting_delay" || item.status === "rate_limited" || item.status === "retrying") {
+        item.status = "paused";
+        item.delayCountdown = 0;
+        item.errorMessage = "Stopped by user batch actions.";
+        saveOcrProgressLocally(item);
+      }
+    });
+    ocrConfig.isPaused = true;
+    res.json({ success: true, config: ocrConfig });
+  });
+
+  app.post("/api/pipeline/clean-copy", async (req, res) => {
+    const {
+      hash,
+      gradeId,
+      subjectId,
+      topicId,
+      documentTypeId,
+      title,
+      url,
+      text
+    } = req.body;
+
+    if (!hash || !gradeId || !subjectId || !topicId || !documentTypeId) {
+      return res.status(400).json({ error: "All classification inputs (hash, gradeId, subjectId, topicId, documentTypeId) are required" });
+    }
+
+    try {
+      const activeDict = normalizeDictionary(await getActiveDictionary());
+      const grade = activeDict.grades.find((g: any) => g.id === gradeId);
+      const subject = activeDict.subjects.find((s: any) => s.id === subjectId);
+      const topic = activeDict.topics.find((t: any) => t.id === topicId);
+      const docType = activeDict.allowedDocumentTypes.find((d: any) => d.id === documentTypeId);
+
+      if (!grade || !subject || !topic || !docType) {
+        return res.status(400).json({ error: "One or more of selected metadata keys are missing from reference" });
+      }
+
+      const { cleanPath, cleanName } = await createCleanPdfCopy({
+        hash,
+        grade_label: grade.nameFr || grade.id,
+        grade_slug: grade.suffix || grade.id,
+        subject_label: subject.nameFr || subject.id,
+        subject_slug: subject.suffix || subject.id,
+        topic_label: topic.nameFr || topic.id,
+        topic_slug: topic.suffix || topic.id,
+        document_type_label: docType.nameFr || docType.id,
+        document_type_slug: docType.suffix || docType.id
+      });
+
+      const cleanedTextContent = cleanExtractedText(text || "");
+
+      const shortHash = hash.substring(0, 8);
+      const datasetId = `${grade.suffix || grade.id}_${subject.suffix || subject.id}_${topic.suffix || topic.id}_${docType.suffix || docType.id}_${shortHash}`.toUpperCase();
+
+      const datasetRow = {
+        "$schema": "../../schemas/curriculum_asset_v1.schema.json",
+        "id": datasetId,
+        "hash": hash,
+        "original_url": url || "",
+        "classification": {
+          "grade": gradeId,
+          "subject": subjectId,
+          "topic": topicId,
+          "document_type": documentTypeId
+        },
+        "metadata": {
+          "title_arabic": topic.nameAr || "",
+          "title_french": topic.nameFr || "",
+          "text_source": fs.existsSync(path.join(LOCAL_OUTPUT_DIR, "ocr", `${hash}.ocr.txt`)) ? "ocr_text" : "searchable_text",
+          "original_filename": path.basename(url || "unnamed.pdf"),
+          "cleaned_filename": cleanName,
+          "num_pages": 1,
+          "has_solutions": documentTypeId === "correction"
+        },
+        "content": {
+          "raw_text_extracted": text || "",
+          "cleaned_text": cleanedTextContent
+        }
+      };
+
+      try {
+        const originalFilePath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${hash}.original.pdf`);
+        if (fs.existsSync(originalFilePath)) {
+          const originalBytes = fs.readFileSync(originalFilePath);
+          const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
+          datasetRow.metadata.num_pages = pdfDoc.getPageCount();
+        }
+      } catch (pageErr) {
+        console.warn("[Clean Copy Page Count Warn]", pageErr);
+      }
+
+      saveDatasetRow(datasetRow);
+
+      updateReport("clean-copy-report.json", {
+        hash,
+        cleanName,
+        datasetId,
+        stampApplied: "Top-Left (Levelspace) & Top-Right parameters"
+      });
+
+      updateReport("dataset-report.json", {
+        datasetId,
+        hash,
+        cleanName,
+        gradeId,
+        subjectId,
+        topicId,
+        documentTypeId
+      });
+
+      res.json({
+        success: true,
+        cleanName,
+        cleanPath,
+        datasetId,
+        datasetRow
+      });
+
+    } catch (err: any) {
+      console.error("[Clean Copy Pipeline Error]", err);
+      res.status(500).json({ error: err.message || "Failed to generate clean PDF copy" });
+    }
+  });
+
+  app.get("/api/pipeline/reports", async (req, res) => {
+    try {
+      const downloadsDir = path.join(LOCAL_OUTPUT_DIR, "downloads");
+      const cleanPdfsDir = path.join(LOCAL_OUTPUT_DIR, "clean-pdfs");
+      const datasetDir = path.join(LOCAL_OUTPUT_DIR, "dataset");
+      const reportsDir = path.join(LOCAL_OUTPUT_DIR, "reports");
+
+      const countFiles = (dir: string, suffix: string) => {
+        if (!fs.existsSync(dir)) return 0;
+        return fs.readdirSync(dir).filter(f => f.endsWith(suffix)).length;
+      };
+
+      const originalCount = countFiles(downloadsDir, ".original.pdf");
+      const cleanCount = countFiles(cleanPdfsDir, ".pdf");
+      const datasetCount = countFiles(datasetDir, ".json");
+
+      const loadReportFile = (name: string) => {
+        const p = path.join(reportsDir, name);
+        if (fs.existsSync(p)) {
+          try {
+            return JSON.parse(fs.readFileSync(p, "utf8"));
+          } catch (e) {
+            return [];
+          }
+        }
+        return [];
+      };
+
+      res.json({
+        stats: {
+          originalDownloads: originalCount,
+          cleanCopies: cleanCount,
+          datasetRows: datasetCount,
+          localRoot: LOCAL_OUTPUT_DIR
+        },
+        reports: {
+          crawl: loadReportFile("crawl-report.json"),
+          extraction: loadReportFile("extraction-report.json"),
+          ocr: loadReportFile("ocr-report.json"),
+          classification: loadReportFile("classification-report.json"),
+          cleanCopy: loadReportFile("clean-copy-report.json"),
+          rejection: loadReportFile("rejection-report.json"),
+          dataset: loadReportFile("dataset-report.json")
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to aggregate statistics" });
+    }
+  });
+
+  app.get("/api/pipeline/clean-text/:hash", (req, res) => {
+    const { hash } = req.params;
+    const cleanPath = path.join(LOCAL_OUTPUT_DIR, "text", `${hash}.clean.txt`);
+    const originalPath = path.join(LOCAL_OUTPUT_DIR, "text", `${hash}.original.txt`);
+
+    if (fs.existsSync(cleanPath)) {
+      return res.send(fs.readFileSync(cleanPath, "utf8"));
+    } else if (fs.existsSync(originalPath)) {
+      return res.send(fs.readFileSync(originalPath, "utf8"));
+    } else {
+      return res.status(404).send("No extracted text found for this file.");
+    }
+  });
+
+  app.get("/api/pipeline/download-clean/:hash", (req, res) => {
+    const { hash } = req.params;
+    const cleanPdfsDir = path.join(LOCAL_OUTPUT_DIR, "clean-pdfs");
+    if (!fs.existsSync(cleanPdfsDir)) {
+      return res.status(404).send("Clean output directory not found.");
+    }
+
+    const files = fs.readdirSync(cleanPdfsDir);
+    const matchedFile = files.find(f => f.endsWith(`${hash.substring(0, 8)}.pdf`) || f.includes(hash));
+
+    if (matchedFile) {
+      const fullPath = path.join(cleanPdfsDir, matchedFile);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=${matchedFile}`);
+      return res.send(fs.readFileSync(fullPath));
+    } else {
+      return res.status(404).send("Clean PDF file copy not generated yet.");
+    }
+  });
+
+  app.get("/api/pipeline/export-jsonl", (req, res) => {
+    const jsonlPath = path.join(LOCAL_OUTPUT_DIR, "dataset", "index.jsonl");
+    if (fs.existsSync(jsonlPath)) {
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Disposition", "attachment; filename=normalized_dataset.jsonl");
+      return res.send(fs.readFileSync(jsonlPath, "utf8"));
+    } else {
+      return res.status(404).send("No dataset rows created yet.");
     }
   });
 
@@ -1570,6 +3051,16 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
 
       const results = urlsToProcess.map(urlStr => {
         try {
+          const validationInfo = isValidUrlSource(urlStr);
+          if (!validationInfo.valid) {
+            return {
+              url: urlStr,
+              isDirectPdf: false,
+              accepted: false,
+              reason: `Rejected: ${validationInfo.reason || "Malformed or unsupported source URL"}`
+            };
+          }
+
           const parsed = new URL(urlStr);
           const pathname = parsed.pathname.toLowerCase();
           const hostname = parsed.hostname.toLowerCase();

@@ -5,7 +5,7 @@ import {
   Loader2, Sparkles, AlertTriangle, Merge, Share2, 
   ArrowRight, ExternalLink, RefreshCw, Layers, Check, 
   ChevronRight, ChevronDown, CheckSquare, Square, Save, 
-  FileJson, Plus, FileDown, FolderArchive
+  FileJson, Plus, FileDown, FolderArchive, Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,15 @@ interface Dictionary {
 interface StagedPdf {
   url: string;
   originalName: string;
-  status: "pending" | "classifying" | "classified" | "rejected" | "failed";
+  status: "pending" | "classifying" | "classified" | "rejected" | "failed" | "needs_review";
+  
+  hash?: string;
+  extractionStatus?: "pending" | "text_extracted" | "needs_ocr" | "ocr_done" | "extract_failed";
+  ocrStatus?: "not_needed" | "needed" | "queued" | "running" | "done" | "failed";
+  pdfTextType?: string;
+  textQualityScore?: number;
+  textLength?: number;
+
   gradeId: string | null;
   subjectId: string | null;
   topicId: string | null;
@@ -50,6 +58,15 @@ interface StagedPdf {
   reason: string | null;
   rawText: string | null;
   isMatch: boolean;
+
+  confidenceScore?: number;
+  matchedTerms?: string[];
+  matchedFields?: string[];
+
+  cleanCopyStatus?: "pending" | "building" | "success" | "failed";
+  datasetRowStatus?: "pending" | "saving" | "success" | "failed";
+  cleanFilename?: string;
+  datasetId?: string;
 }
 
 export default function WorkstationDashboard() {
@@ -57,7 +74,7 @@ export default function WorkstationDashboard() {
   const [crawlUrl, setCrawlUrl] = useState("https://talamidi.com/%D8%AF%D8%B1%D9%88%D8%B3-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6%D9%8A%D8%A7%D8%AA-%D9%84%D9%84%D8%B3%D9%86%D8%A9-%D8%A7%D9%84%D8%A7%D9%88%D9%84%D9%89-%D8%A7%D8%B9%D8%AF%D8%A7%D8%AF%D9%8A/");
   const [maxPages, setMaxPages] = useState(30);
   const [maxDepth, setMaxDepth] = useState(2);
-  const [topicFilter, setTopicFilter] = useState("exercice, math"); // User custom crawling topic filter
+  const [topicFilter, setTopicFilter] = useState(""); // User custom crawling topic filter
   
   const [isCrawling, setIsCrawling] = useState(false);
   const [crawledPdfs, setCrawledPdfs] = useState<string[]>([]);
@@ -104,10 +121,140 @@ export default function WorkstationDashboard() {
   const [newSubject, setNewSubject] = useState({ id: "", nameAr: "", nameFr: "", suffix: "", keywords: "" });
   const [newTopic, setNewTopic] = useState({ id: "", nameAr: "", nameFr: "", suffix: "", subjectId: "", keywords: "" });
 
+  const [pipelineStats, setPipelineStats] = useState({
+    originalDownloads: 0,
+    cleanCopies: 0,
+    datasetRows: 0,
+    localRoot: ""
+  });
+
+  // --- OCR async queue frontend states ---
+  const [ocrQueue, setOcrQueue] = useState<any[]>([]);
+  const [ocrConfig, setOcrConfig] = useState<any>({
+    concurrency: 1,
+    delayBetweenPagesMs: 8000,
+    delayBetweenPdfsMs: 30000,
+    maxPagesPerPdf: 30,
+    maxPdfsPerBatch: 5,
+    maxRetries: 3,
+    backoffMultiplier: 2,
+    dailyPageLimit: 100,
+    isPaused: false
+  });
+  const [ocrQuotaUsedToday, setOcrQuotaUsedToday] = useState<number>(0);
+  const [showOcrConfigPanel, setShowOcrConfigPanel] = useState<boolean>(true);
+
+  // Poll OCR async queue status
+  useEffect(() => {
+    const fetchOcrStatus = async () => {
+      try {
+        const res = await axios.get("/api/pipeline/ocr/status");
+        if (res.data && res.data.success) {
+          setOcrQueue(res.data.queue || []);
+          setOcrConfig(res.data.config || {});
+          setOcrQuotaUsedToday(res.data.quotaUsedToday || 0);
+        }
+      } catch (err) {
+        console.warn("Error polling OCR queue status:", err);
+      }
+    };
+
+    fetchOcrStatus(); // immediate
+    const ocrTimer = setInterval(fetchOcrStatus, 2000);
+    return () => clearInterval(ocrTimer);
+  }, []);
+
+  const handlePauseOcrQueue = async () => {
+    try {
+      const res = await axios.post("/api/pipeline/ocr/pause");
+      if (res.data && res.data.config) {
+        setOcrConfig(res.data.config);
+        setOcrQueue(res.data.queue || ocrQueue);
+        toast.info("OCR queue processing paused.");
+      }
+    } catch (err: any) {
+      toast.error("Failed to pause OCR queue: " + err.message);
+    }
+  };
+
+  const handleResumeOcrQueue = async () => {
+    try {
+      const res = await axios.post("/api/pipeline/ocr/resume");
+      if (res.data && res.data.config) {
+        setOcrConfig(res.data.config);
+        setOcrQueue(res.data.queue || ocrQueue);
+        toast.success("OCR queue processing resumed.");
+      }
+    } catch (err: any) {
+      toast.error("Failed to resume OCR queue: " + err.message);
+    }
+  };
+
+  const handleStopOcrQueueBatch = async () => {
+    try {
+      const res = await axios.post("/api/pipeline/ocr/stop");
+      if (res.data) {
+        toast.warning("Stopped OCR batch queue.");
+      }
+    } catch (err: any) {
+      toast.error("Failed to stop OCR queue: " + err.message);
+    }
+  };
+
+  const handleUpdateOcrConfig = async (updatedFields: any) => {
+    try {
+      const newConfig = { ...ocrConfig, ...updatedFields };
+      const res = await axios.post("/api/pipeline/ocr/config", newConfig);
+      if (res.data && res.data.config) {
+        setOcrConfig(res.data.config);
+        toast.success("OCR queue settings updated.");
+      }
+    } catch (err: any) {
+      toast.error("Failed to update OCR settings: " + err.message);
+    }
+  };
+
+  const handleApplyOcrModePreset = async (preset: "safe" | "balanced" | "fast") => {
+    let fields = {};
+    if (preset === "safe") {
+      fields = {
+        concurrency: 1,
+        delayBetweenPagesMs: 8000,
+        delayBetweenPdfsMs: 30000
+      };
+    } else if (preset === "balanced") {
+      fields = {
+        concurrency: 1,
+        delayBetweenPagesMs: 4000,
+        delayBetweenPdfsMs: 15000
+      };
+    } else if (preset === "fast") {
+      fields = {
+        concurrency: 2,
+        delayBetweenPagesMs: 2000,
+        delayBetweenPdfsMs: 5000
+      };
+    }
+    await handleUpdateOcrConfig(fields);
+    toast.success(`Applied OCR ${preset.toUpperCase()} preset mode successfully!`);
+  };
+
+  const fetchPipelineStats = async () => {
+    try {
+      const res = await axios.get("/api/pipeline/reports");
+      if (res.data && res.data.stats) {
+        setPipelineStats(res.data.stats);
+      }
+    } catch (e) {
+      console.warn("Could not fetch local reports stats:", e);
+    }
+  };
+
   // Initial loading
   useEffect(() => {
     fetchActiveDictionary();
     loadLocalStagedPdfs();
+    fetchPipelineStats();
   }, []);
 
   // Save staged files to localStorage to act as durable local-first persistence
@@ -334,58 +481,325 @@ export default function WorkstationDashboard() {
     toast.success(`Staged ${newItems.length} new PDFs into the Classification Workspace!`);
   };
 
-  // Perform Gemini AI classification step
-  const handleClassifySingle = async (index: number) => {
+  // Perform Local Workstation Pipeline process step
+  const handlePipelineProcessSingle = async (index: number) => {
     const item = stagedPdfs[index];
     if (!item) return;
 
-    // Set item status to classifying
-    setStagedPdfs(prev => prev.map((p, i) => i === index ? { ...p, status: "classifying" } : p));
+    setStagedPdfs(prev => prev.map((p, i) => i === index ? { ...p, status: "classifying", extractionStatus: "pending" } : p));
+    toast.info(`Downloading & extracting: ${item.originalName}`);
 
     try {
-      // 1. Fetch direct indexable PDF text on server-side safely
-      let textSnippet = "";
-      try {
-        const parseRes = await axios.post("/api/parse-pdf", { url: item.url });
-        textSnippet = parseRes.data.text || "";
-      } catch (parseErr) {
-        console.warn(`Could not extract full text from PDF ${item.url}. Relying on title/meta instead.`);
-      }
-
-      // 2. Classify strictly against reference dictionary using server-side Gemini 3.5 Flash
-      const classifyRes = await axios.post("/api/classify", {
-        title: item.originalName,
+      // Step 1: Download & Parse
+      const parseRes = await axios.post("/api/pipeline/parse", {
         url: item.url,
-        text: textSnippet,
+        title: item.originalName,
         topicFilter
       });
 
-      const resData = classifyRes.data;
+      const pData = parseRes.data;
+      if (!pData.success && pData.status === "rejected") {
+        setStagedPdfs(prev => prev.map((p, i) => i === index ? {
+          ...p,
+          status: "rejected",
+          reason: pData.reason
+        } : p));
+        toast.error(`URL Rejected: ${pData.reason}`);
+        return;
+      }
 
+      if (!pData.success && pData.status === "failed") {
+        setStagedPdfs(prev => prev.map((p, i) => i === index ? {
+          ...p,
+          status: "failed",
+          reason: pData.reason
+        } : p));
+        toast.error(`Download failed: ${pData.reason}`);
+        return;
+      }
+
+      // Update with extraction details
       setStagedPdfs(prev => prev.map((p, i) => i === index ? {
         ...p,
-        status: resData.isMatch ? "classified" : "rejected",
-        gradeId: resData.gradeId,
-        subjectId: resData.subjectId,
-        topicId: resData.topicId,
-        documentTypeId: resData.documentTypeId,
-        cleanTitle: resData.cleanTitle,
-        renamePattern: resData.renamePattern,
-        reason: resData.reason,
-        isMatch: !!resData.isMatch,
-        rawText: textSnippet
+        hash: pData.hash,
+        rawText: pData.textSnippet,
+        textLength: pData.textLength,
+        textQualityScore: pData.textQualityScore,
+        needsOcr: pData.needsOcr,
+        ocrStatus: pData.ocrStatus,
+        extractionStatus: pData.extractionStatus,
+        pdfTextType: pData.pdfTextType
       } : p));
 
-      toast.success(`Classified: ${resData.cleanTitle || item.originalName}`);
-    } catch (e: any) {
-      console.error(e);
+      // Step 2: Classify strictly against reference dictionary
+      toast.info(`Classifying metadata: ${item.originalName}`);
+      const classifyRes = await axios.post("/api/classify", {
+        title: item.originalName,
+        url: item.url,
+        text: pData.textSnippet || "",
+        topicFilter
+      });
+
+      const cData = classifyRes.data;
+      
+      setStagedPdfs(prev => prev.map((p, i) => {
+        if (i !== index) return p;
+        let finalStatus: any = "rejected";
+        if (cData.isMatch) {
+          finalStatus = "classified";
+        } else if (cData.needsReview) {
+          finalStatus = "needs_review";
+        }
+        return {
+          ...p,
+          status: finalStatus,
+          gradeId: cData.gradeId,
+          subjectId: cData.subjectId,
+          topicId: cData.topicId,
+          documentTypeId: cData.documentTypeId,
+          cleanTitle: cData.cleanTitle,
+          renamePattern: cData.renamePattern,
+          reason: cData.reason,
+          isMatch: !!cData.isMatch,
+          confidenceScore: cData.confidenceScore,
+          matchedTerms: cData.matchedTerms,
+          matchedFields: cData.matchedFields
+        };
+      }));
+
+      toast.success(`Pipeline success: ${cData.cleanTitle || item.originalName}`);
+      fetchPipelineStats(); // refresh counts
+    } catch (err: any) {
+      console.error(err);
       setStagedPdfs(prev => prev.map((p, i) => i === index ? {
         ...p,
         status: "failed",
-        reason: e.message || "Unknown error during pipeline"
+        reason: err.message || "Failed at pipeline parse/classify"
       } : p));
-      toast.error(`Auto classification failed for: ${item.originalName}`);
+      toast.error(`Processing error: ${err.message}`);
     }
+  };
+
+  const handleClassifySingle = async (index: number) => {
+    await handlePipelineProcessSingle(index);
+  };
+
+  const handleRunOcr = async (index: number) => {
+    const item = stagedPdfs[index];
+    if (!item || !item.hash) {
+      toast.error("Please run baseline extraction/parse first to compute file hash!");
+      return;
+    }
+
+    setStagedPdfs(prev => prev.map((p, i) => i === index ? { ...p, ocrStatus: "running" } : p));
+    toast.info(`Running Gemini OCR vision analysis on: ${item.originalName}`);
+
+    try {
+      const res = await axios.post("/api/pipeline/ocr", { hash: item.hash });
+      const data = res.data;
+      if (data.success) {
+        setStagedPdfs(prev => prev.map((p, i) => i === index ? {
+          ...p,
+          ocrStatus: "done",
+          extractionStatus: "ocr_done",
+          rawText: data.ocrTextSnippet,
+          textLength: data.ocrTextLength,
+          textQualityScore: 100
+        } : p));
+        toast.success("OCR completed successfully!");
+        fetchPipelineStats();
+      } else {
+        throw new Error(data.error || "OCR failed");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setStagedPdfs(prev => prev.map((p, i) => i === index ? { ...p, ocrStatus: "failed" } : p));
+      toast.error(`OCR failed: ${err.message}`);
+    }
+  };
+
+  const handleBuildCleanCopy = async (index: number) => {
+    const item = stagedPdfs[index];
+    if (!item || !item.hash) {
+      toast.error("Process the file structure and obtain a valid file hash first!");
+      return;
+    }
+    if (!item.gradeId || !item.subjectId || !item.topicId || !item.documentTypeId) {
+      toast.error("Classification metadata (Grade, Subject, Topic, Type) must be set before copy building!");
+      return;
+    }
+
+    setStagedPdfs(prev => prev.map((p, i) => i === index ? { ...p, cleanCopyStatus: "building", datasetRowStatus: "saving" } : p));
+    toast.info(`Generating clean stamped PDF & dataset row: ${item.originalName}`);
+
+    try {
+      const res = await axios.post("/api/pipeline/clean-copy", {
+        hash: item.hash,
+        gradeId: item.gradeId,
+        subjectId: item.subjectId,
+        topicId: item.topicId,
+        documentTypeId: item.documentTypeId,
+        title: item.cleanTitle || item.originalName,
+        url: item.url,
+        text: item.rawText || ""
+      });
+
+      const data = res.data;
+      if (data.success) {
+        setStagedPdfs(prev => prev.map((p, i) => i === index ? {
+          ...p,
+          cleanCopyStatus: "success",
+          datasetRowStatus: "success",
+          cleanFilename: data.cleanName,
+          datasetId: data.datasetId
+        } : p));
+        toast.success(`Generated: ${data.cleanName}`);
+        fetchPipelineStats();
+      } else {
+        throw new Error(data.error || "Clean copy failure");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setStagedPdfs(prev => prev.map((p, i) => i === index ? { ...p, cleanCopyStatus: "failed", datasetRowStatus: "failed" } : p));
+      toast.error(`Clean copy failed: ${err.message}`);
+    }
+  };
+
+  const handleBuildCleanCopiesForSelected = async () => {
+    const selectedIndices: number[] = [];
+    stagedPdfs.forEach((p, idx) => {
+      if (selectedForCombine.includes(p.url)) {
+        selectedIndices.push(idx);
+      }
+    });
+
+    if (selectedIndices.length === 0) {
+      toast.warning("Select at least one staged PDF first.");
+      return;
+    }
+
+    toast.info(`Starting clean copies compilation for ${selectedIndices.length} selected items.`);
+    for (const idx of selectedIndices) {
+      const item = stagedPdfs[idx];
+      if (item.status === "classified" || item.status === "needs_review") {
+        await handleBuildCleanCopy(idx);
+      }
+    }
+    toast.success("Finished building clean copies for selected files!");
+  };
+
+  const handleDownloadCleanPdf = (hash?: string) => {
+    if (!hash) {
+      toast.error("File hash is required to locate the clean copy download.");
+      return;
+    }
+    window.open(`/api/pipeline/download-clean/${hash}`, "_blank");
+  };
+
+  const handleOpenCleanText = (hash?: string) => {
+    if (!hash) {
+      toast.error("File hash is required to locate the clean text copy.");
+      return;
+    }
+    window.open(`/api/pipeline/clean-text/${hash}`, "_blank");
+  };
+
+  const handleExportDatasetJsonl = () => {
+    window.open("/api/pipeline/export-jsonl", "_blank");
+  };
+
+  const handleExportReport = async () => {
+    try {
+      const res = await axios.get("/api/pipeline/reports");
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `workstation_pipeline_report_${Date.now()}.json`;
+      link.click();
+      toast.success("Auditing pipeline report exported!");
+    } catch (e: any) {
+      toast.error(`Report export failed: ${e.message}`);
+    }
+  };
+
+  const handleBulkSelect = (type: "all" | "classified" | "needs_review" | "ocr_needed" | "clear") => {
+    if (type === "clear") {
+      setSelectedForCombine([]);
+      toast.info("Cleared all selections.");
+      return;
+    }
+
+    let targetUrls: string[] = [];
+    if (type === "all") {
+      targetUrls = stagedPdfs.map(p => p.url);
+      toast.info(`Selected all ${targetUrls.length} staged PDFs.`);
+    } else if (type === "classified") {
+      targetUrls = stagedPdfs.filter(p => p.status === "classified").map(p => p.url);
+      toast.info(`Selected ${targetUrls.length} Classified PDFs.`);
+    } else if (type === "needs_review") {
+      targetUrls = stagedPdfs.filter(p => p.status === "needs_review").map(p => p.url);
+      toast.info(`Selected ${targetUrls.length} Needs Review PDFs.`);
+    } else if (type === "ocr_needed") {
+      targetUrls = stagedPdfs.filter(p => p.extractionStatus === "needs_ocr" || p.ocrStatus === "needed").map(p => p.url);
+      toast.info(`Selected ${targetUrls.length} OCR Needed PDFs.`);
+    }
+
+    setSelectedForCombine(targetUrls);
+  };
+
+  const handleRunOcrForSelected = async () => {
+    if (selectedForCombine.length === 0) {
+      toast.warning("Select at least one staged PDF first.");
+      return;
+    }
+
+    const matchedFiles = stagedPdfs.filter(p => selectedForCombine.includes(p.url));
+    const itemsToOcr = matchedFiles.filter(p => p.hash && (p.extractionStatus === "needs_ocr" || p.ocrStatus === "needed"));
+    const cleanFilesCount = matchedFiles.length - itemsToOcr.length;
+
+    if (itemsToOcr.length === 0) {
+      toast.warning(`Skipped all ${matchedFiles.length} selected files because they are clean-text PDFs or don't have valid hashes yet. (Only needs-OCR PDFs enter the queue).`);
+      return;
+    }
+
+    toast.info(`Sending ${itemsToOcr.length} qualified OCR-needed files to the Controlled Queue. (Skipped ${cleanFilesCount} clean-text files).`);
+
+    try {
+      const response = await fetch("/api/pipeline/ocr/enqueue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: itemsToOcr.map(p => ({
+            hash: p.hash,
+            title: p.cleanTitle || p.originalName || "PDF " + p.hash.substring(0, 8),
+            url: p.url
+          }))
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`Successfully enqueued ${itemsToOcr.length} files to OCR async controlled queue! Check status in the panel below.`);
+      } else {
+        toast.error("Failed to enqueue OCR jobs: " + (data.error || "Unknown error"));
+      }
+    } catch (err: any) {
+      toast.error("Network error enqueuing OCR jobs: " + err.message);
+    }
+  };
+
+  const handleExportSelected = () => {
+    const activeSelected = stagedPdfs.filter(p => selectedForCombine.includes(p.url));
+    if (activeSelected.length === 0) {
+      toast.warning("Select at least one staged PDF first.");
+      return;
+    }
+    const dataStr = JSON.stringify(activeSelected, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `selected_workstation_export_${Date.now()}.json`;
+    link.click();
+    toast.success("Successfully exported selected staged PDFs records!");
   };
 
   const handleClassifyAllPending = async () => {
@@ -395,7 +809,7 @@ export default function WorkstationDashboard() {
     try {
       for (let i = 0; i < stagedPdfs.length; i++) {
         if (stagedPdfs[i].status === "pending" || stagedPdfs[i].status === "failed") {
-          await handleClassifySingle(i);
+          await handlePipelineProcessSingle(i);
         }
       }
       toast.success("Classification pipeline execution finished!");
@@ -426,6 +840,10 @@ export default function WorkstationDashboard() {
 
   // Merge selected classified PDFs
   const handleMergeSelected = async (urlsToMerge: string[] = selectedForCombine, outputFilename: string = customMergeName) => {
+    if (urlsToMerge.length === 0) {
+      toast.warning("Select at least one staged PDF first.");
+      return;
+    }
     if (urlsToMerge.length < 2) {
       toast.error("Please choose at least 2 classified PDFs to combine/merge.");
       return;
@@ -452,6 +870,10 @@ export default function WorkstationDashboard() {
 
   // Download all files in a single systematically named zip
   const handleZipDownloadSelected = async () => {
+    if (selectedForCombine.length === 0) {
+      toast.warning("Select at least one staged PDF first.");
+      return;
+    }
     const activeSelected = stagedPdfs.filter(p => selectedForCombine.includes(p.url) && p.status === "classified");
     if (activeSelected.length === 0) {
       toast.error("No classified, checked items available to archive.");
@@ -985,6 +1407,225 @@ export default function WorkstationDashboard() {
 
           <CardContent className="p-4 flex flex-col flex-1 overflow-hidden space-y-4">
             
+            {/* Local Pipeline Directory Stats Dashboard */}
+            <div className="grid grid-cols-3 gap-2 bg-neutral-900 text-[#E4E3E0] p-2.5 font-mono text-[9px] shrink-0 border border-neutral-950">
+              <div className="space-y-0.5 border-r border-neutral-800">
+                <span className="opacity-60 block text-[8px] uppercase">Downloads</span>
+                <span className="text-sm font-bold text-blue-450">{pipelineStats.originalDownloads} Files</span>
+              </div>
+              <div className="space-y-0.5 border-r border-neutral-800 px-2">
+                <span className="opacity-60 block text-[8px] uppercase">Clean PDFs</span>
+                <span className="text-sm font-bold text-emerald-400">{pipelineStats.cleanCopies} PDFs</span>
+              </div>
+              <div className="space-y-0.5 px-2">
+                <span className="opacity-60 block text-[8px] uppercase">Dataset Rows</span>
+                <span className="text-sm font-bold text-purple-400">{pipelineStats.datasetRows} Rows</span>
+              </div>
+            </div>
+
+            {/* 🔄 OCR Async Queue Control & Settings Panel */}
+            <div className="border border-neutral-300 bg-white text-zinc-900 shrink-0">
+              <div 
+                onClick={() => setShowOcrConfigPanel(!showOcrConfigPanel)}
+                className="bg-neutral-100 p-2 border-b border-neutral-200 flex justify-between items-center cursor-pointer select-none font-mono text-[10px]"
+              >
+                <div className="flex items-center gap-1.5 font-bold text-neutral-800">
+                  <Play className="w-3 h-3 text-emerald-600 fill-emerald-600 bg-transparent rotate-95" />
+                  <span>🔄 OCR BATCH QUEUE & CONTROL PANEL</span>
+                  <Badge variant="outline" className={`py-0 h-4 rounded-none text-[8px] font-bold ${ocrConfig.isPaused ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-emerald-400 bg-emerald-50 text-emerald-850'}`}>
+                    {ocrConfig.isPaused ? "PAUSED" : "ACTIVE / RUNNING"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] text-[#141414]/65">Quota today: <strong>{ocrQuotaUsedToday}</strong> / {ocrConfig.dailyPageLimit} pages</span>
+                  <span className="text-[10px] text-neutral-500">{showOcrConfigPanel ? "▲ Collapse" : "▼ Expand Settings"}</span>
+                </div>
+              </div>
+
+              {showOcrConfigPanel && (
+                <div className="p-3 bg-neutral-50/50 space-y-3 font-mono text-[9.5px] border-b border-neutral-200">
+                  <div className="bg-amber-50 border border-amber-200/50 p-2 text-[8.5px] text-amber-800 leading-normal mb-1">
+                    ⚠️ <span className="font-bold">OCR may consume API quota. Use slow mode for large batches.</span> Clean-text PDFs are skipped automatically during queue enqueuing.
+                  </div>
+
+                  {/* Mode presets */}
+                  <div className="grid grid-cols-4 gap-2 items-center">
+                    <span className="font-bold text-neutral-600">PRESET MODES:</span>
+                    <button 
+                      onClick={() => handleApplyOcrModePreset("safe")}
+                      className="bg-white hover:bg-neutral-100 border border-neutral-300 py-0.5 px-1 font-semibold text-[8px] sm:text-[9px] rounded-none shadow-sm transition-all"
+                      title="1 PDF, 1 page / 8s page delay, 30s PDF delay"
+                    >
+                      🛡️ Safe Mode (Default)
+                    </button>
+                    <button 
+                      onClick={() => handleApplyOcrModePreset("balanced")}
+                      className="bg-white hover:bg-neutral-100 border border-neutral-300 py-0.5 px-1 font-semibold text-[8px] sm:text-[9px] rounded-none shadow-sm transition-all"
+                      title="1 PDF, 1 page / 4s page delay, 15s PDF delay"
+                    >
+                      ⚖️ Balanced Mode
+                    </button>
+                    <button 
+                      onClick={() => handleApplyOcrModePreset("fast")}
+                      className="bg-white hover:bg-neutral-100 border border-neutral-300 py-0.5 px-1 font-semibold text-[8px] sm:text-[9px] rounded-none shadow-sm transition-all text-red-750 border-red-200 hover:bg-red-50/10"
+                      title="2 PDFs, Multithreaded / 2s page delay, 5s PDF delay"
+                    >
+                      🚀 Fast mode (Quota risk)
+                    </button>
+                  </div>
+
+                  {/* Settings Grid inputs */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-2 pt-2 border-t border-dashed border-neutral-200">
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">Concurrency</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.concurrency || 1} 
+                        min={1} 
+                        max={5}
+                        onChange={e => handleUpdateOcrConfig({ concurrency: parseInt(e.target.value) || 1 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">Page Delay (ms)</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.delayBetweenPagesMs || 8000} 
+                        step={100}
+                        onChange={e => handleUpdateOcrConfig({ delayBetweenPagesMs: parseInt(e.target.value) || 8000 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">PDF Delay (ms)</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.delayBetweenPdfsMs || 30000} 
+                        step={100}
+                        onChange={e => handleUpdateOcrConfig({ delayBetweenPdfsMs: parseInt(e.target.value) || 30000 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">Max Pages/PDF</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.maxPagesPerPdf || 30} 
+                        min={1}
+                        onChange={e => handleUpdateOcrConfig({ maxPagesPerPdf: parseInt(e.target.value) || 30 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">Max PDFs/Batch</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.maxPdfsPerBatch || 5} 
+                        min={1}
+                        onChange={e => handleUpdateOcrConfig({ maxPdfsPerBatch: parseInt(e.target.value) || 5 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">Daily Page limit</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.dailyPageLimit || 100} 
+                        min={1}
+                        onChange={e => handleUpdateOcrConfig({ dailyPageLimit: parseInt(e.target.value) || 100 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">Max Retries</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.maxRetries || 3} 
+                        min={0}
+                        onChange={e => handleUpdateOcrConfig({ maxRetries: parseInt(e.target.value) || 3 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] text-neutral-500 font-bold uppercase mb-0.5">Backoff Factor</label>
+                      <input 
+                        type="number" 
+                        value={ocrConfig.backoffMultiplier || 2} 
+                        min={1}
+                        onChange={e => handleUpdateOcrConfig({ backoffMultiplier: parseFloat(e.target.value) || 2 })}
+                        className="w-full h-5 border border-neutral-300 bg-white px-1 font-mono text-[9px] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div className="flex gap-2 justify-end pt-2 border-t border-dashed border-neutral-200">
+                    <button 
+                      onClick={handleResumeOcrQueue}
+                      disabled={!ocrConfig.isPaused}
+                      className="bg-emerald-650 hover:bg-emerald-700 text-white py-1 px-3 shadow-none text-[8.5px] font-bold select-none disabled:opacity-40 rounded-none uppercase"
+                    >
+                      ▶️ Resume OCR Queue
+                    </button>
+                    <button 
+                      onClick={handlePauseOcrQueue}
+                      disabled={ocrConfig.isPaused}
+                      className="bg-amber-600 hover:bg-amber-700 text-white py-1 px-3 shadow-none text-[8.5px] font-bold select-none disabled:opacity-40 rounded-none uppercase"
+                    >
+                      ⏸️ Pause OCR Queue
+                    </button>
+                    <button 
+                      onClick={handleStopOcrQueueBatch}
+                      className="bg-rose-750 hover:bg-rose-800 text-white py-1 px-3 shadow-none text-[8.5px] font-bold select-none rounded-none uppercase"
+                    >
+                      🛑 Stop / Clear Queue
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Active list display */}
+              {ocrQueue.length > 0 && (
+                <div className="max-h-[140px] overflow-y-auto p-2 border-t border-neutral-200 bg-white font-mono text-[8px]">
+                  <div className="font-bold text-neutral-700 uppercase pb-1 flex justify-between items-center text-[8.5px]">
+                    <span>🎯 ACTIVE QUEUE MONITORED JOBS ({ocrQueue.length})</span>
+                    <span className="text-[7.5px] text-neutral-500">Processed sequentially bottom to top</span>
+                  </div>
+                  <div className="space-y-1">
+                    {ocrQueue.map((qi: any) => {
+                      const qColors: Record<string, string> = {
+                        queued: "text-blue-650 font-semibold",
+                        running: "text-emerald-750 font-bold",
+                        waiting_delay: "text-amber-650 font-medium",
+                        rate_limited: "text-rose-600 font-black animate-pulse",
+                        retrying: "text-orange-650 font-medium",
+                        done: "text-neutral-500 font-semibold",
+                        failed: "text-red-700 font-bold",
+                        paused: "text-zinc-500 font-bold"
+                      };
+                      return (
+                        <div key={qi.id || qi.pdfHash} className="flex justify-between items-center border border-dashed border-neutral-200 p-1 bg-neutral-50/50">
+                          <span className="truncate max-w-[240px]" title={qi.title}>• {qi.title}</span>
+                          <div className="flex gap-2 items-center">
+                            <span className={qColors[qi.status] || ""}>[{qi.status.toUpperCase()}]</span>
+                            <span>Page {qi.currentPage || 0}/{qi.totalPages || "?"}</span>
+                            {qi.delayCountdown > 0 && (
+                              <span className="bg-amber-200/50 text-amber-900 px-0.5 font-bold">⏳ {qi.delayCountdown}s</span>
+                            )}
+                            {qi.retryCount > 0 && (
+                              <span>Attempt {qi.retryCount}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Pipeline Controls & Filters */}
             <div className="bg-neutral-50 border border-neutral-200 p-2 text-xs flex flex-wrap gap-2 justify-between items-center select-none shrink-0">
               <div className="flex flex-wrap gap-2">
@@ -997,6 +1638,7 @@ export default function WorkstationDashboard() {
                   <option value="pending">Pending</option>
                   <option value="classifying">Classifying</option>
                   <option value="classified">Classified</option>
+                  <option value="needs_review">Needs Review</option>
                   <option value="rejected">Rejected</option>
                   <option value="failed">Failed</option>
                 </select>
@@ -1025,6 +1667,15 @@ export default function WorkstationDashboard() {
                     <><Sparkles className="w-3 h-3 mr-1" /> Classify pending</>
                   )}
                 </Button>
+
+                <Button 
+                  onClick={handleBuildCleanCopiesForSelected}
+                  disabled={selectedForCombine.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[9px] font-mono h-6 px-1.5 rounded-none"
+                  title={selectedForCombine.length === 0 ? "Select one or more PDFs first." : "Build clean stamped PDFs and JSON dataset rows for selected files"}
+                >
+                  <FolderArchive className="w-3 h-3 mr-1 bg-transparent" /> Build Copies
+                </Button>
                 
                 <Button 
                   variant="outline"
@@ -1039,47 +1690,215 @@ export default function WorkstationDashboard() {
               </div>
             </div>
 
+            {/* Selection Status & Empty warning message */}
+            {stagedPdfs.length > 0 && selectedForCombine.length === 0 && (
+              <div id="selection-warning-banner" className="bg-amber-100/60 border border-amber-300 text-amber-800 p-2 text-[10px] font-mono leading-relaxed select-none shrink-0 mb-1">
+                ⚠️ <span className="font-bold">PDFs are staged, but none are selected.</span> Use the checkbox beside each PDF or click Select All.
+              </div>
+            )}
+
+            {/* Bulk Selection Toolbar */}
+            {stagedPdfs.length > 0 && (
+              <div className="bg-neutral-100 border border-neutral-300 p-2 text-[9.5px] font-mono select-none space-y-1.5 shrink-0 mb-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-neutral-700 uppercase tracking-tight">Bulk Staging Selection:</span>
+                  <Badge variant="outline" className="border-blue-500 text-blue-600 bg-blue-50/50 font-bold font-mono py-0 h-4 rounded-none text-[9px]">
+                    {selectedForCombine.length === 0 ? "0 selected" : `${selectedForCombine.length} selected`}
+                  </Badge>
+                </div>
+                
+                {/* Buttons: Select All, Select Classified, Select Needs Review, Select OCR Needed, Clear Selection */}
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    onClick={() => handleBulkSelect("all")}
+                    className="bg-white hover:bg-neutral-200 px-1.5 py-0.5 border border-neutral-300 text-[8px] transition-colors font-mono"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => handleBulkSelect("classified")}
+                    className="bg-white hover:bg-neutral-200 px-1.5 py-0.5 border border-neutral-300 text-[8px] transition-colors font-mono"
+                  >
+                    Select Classified
+                  </button>
+                  <button
+                    onClick={() => handleBulkSelect("needs_review")}
+                    className="bg-white hover:bg-neutral-200 px-1.5 py-0.5 border border-neutral-300 text-[8px] transition-colors font-mono"
+                  >
+                    Select Needs Review
+                  </button>
+                  <button
+                    onClick={() => handleBulkSelect("ocr_needed")}
+                    className="bg-white hover:bg-neutral-200 px-1.5 py-0.5 border border-neutral-300 text-[8px] transition-colors font-mono"
+                  >
+                    Select OCR Needed
+                  </button>
+                  <button
+                    onClick={() => handleBulkSelect("clear")}
+                    className="bg-white hover:bg-neutral-200 px-1.5 py-0.5 border border-neutral-300 text-[8px] text-red-650 transition-colors font-bold font-mono"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+
+                {/* Bulk actions list */}
+                <div className="flex flex-wrap gap-1 pt-1.5 border-t border-dashed border-neutral-300">
+                  <Button
+                    onClick={handleBuildCleanCopiesForSelected}
+                    disabled={selectedForCombine.length === 0}
+                    title={selectedForCombine.length === 0 ? "Select one or more PDFs first." : "Build clean stamped PDFs and JSON dataset rows for selected files"}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-[8px] font-mono h-[20px] px-1.5 rounded-none shadow-none"
+                  >
+                    Build Clean Copies for Selected
+                  </Button>
+
+                  <Button
+                    onClick={handleRunOcrForSelected}
+                    disabled={selectedForCombine.length === 0}
+                    title={selectedForCombine.length === 0 ? "Select one or more PDFs first." : "Run Gemini OCR fallback on selected files"}
+                    className="bg-neutral-900 hover:bg-neutral-800 disabled:opacity-40 text-[#E4E3E0] text-[8px] font-mono h-[20px] px-1.5 rounded-none shadow-none"
+                  >
+                    Run OCR for Selected
+                  </Button>
+
+                  <Button
+                    onClick={() => handleMergeSelected()}
+                    disabled={selectedForCombine.length === 0}
+                    title={selectedForCombine.length === 0 ? "Select one or more PDFs first." : "Combine selected classified documents together"}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-[8px] font-mono h-[20px] px-1.5 rounded-none shadow-none"
+                  >
+                    Merge Selected
+                  </Button>
+
+                  <Button
+                    onClick={handleExportSelected}
+                    disabled={selectedForCombine.length === 0}
+                    title={selectedForCombine.length === 0 ? "Select one or more PDFs first." : "Export metadata JSON of selected elements"}
+                    className="bg-[#141414] hover:bg-neutral-800 disabled:opacity-40 text-white text-[8px] font-mono h-[20px] px-1.5 rounded-none shadow-none"
+                  >
+                    Export Selected
+                  </Button>
+
+                  <Button
+                    onClick={handleZipDownloadSelected}
+                    disabled={selectedForCombine.length === 0}
+                    title={selectedForCombine.length === 0 ? "Select one or more PDFs first." : "Download systematically named archives of selected files"}
+                    className="bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-[8px] font-mono h-[20px] px-1.5 rounded-none shadow-none"
+                  >
+                    Download ZIP Selected
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Interactive list of staged PDFs */}
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
               <ScrollArea className="flex-grow border border-neutral-200 min-h-0 bg-neutral-50/20 p-2">
-                {filteredStaged.length === 0 ? (
+                {stagedPdfs.length === 0 ? (
                   <div className="h-[250px] flex flex-col items-center justify-center text-center p-6">
                     <Layers className="w-10 h-10 opacity-20 text-neutral-400 mb-2" />
-                    <p className="text-[10px] font-serif italic text-neutral-400">Classification staging area is empty.</p>
-                    <p className="text-[8px] font-mono mt-1 text-neutral-400">Select and stage crawler results from Column 1.</p>
+                    <p className="text-[11px] font-mono font-bold text-amber-600 mb-1">Staging Area Empty</p>
+                    <p className="text-[10.5px] font-serif italic text-neutral-500">No PDFs staged yet. Crawl or discover PDFs first.</p>
+                  </div>
+                ) : filteredStaged.length === 0 ? (
+                  <div className="h-[250px] flex flex-col items-center justify-center text-center p-6">
+                    <Layers className="w-10 h-10 opacity-20 text-neutral-400 mb-2" />
+                    <p className="text-[10px] font-serif italic text-neutral-400">No staged PDFs match active filters.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {filteredStaged.map((item, idx) => {
                       const realIndex = stagedPdfs.findIndex(p => p.url === item.url);
                       const isInspected = activeInspectedIndex === realIndex;
+                      const isStagedChecked = selectedForCombine.includes(item.url);
                       
                       // Status Badge classes
                       let badgeColor = "bg-gray-100 text-gray-800";
                       if (item.status === "classifying") badgeColor = "bg-blue-100 text-blue-800 animate-pulse";
                       else if (item.status === "classified") badgeColor = "bg-emerald-100 text-emerald-800 border border-emerald-200";
+                      else if (item.status === "needs_review") badgeColor = "bg-amber-100 text-amber-850 border border-amber-200";
                       else if (item.status === "rejected") badgeColor = "bg-red-50 text-red-700 border border-red-100";
                       else if (item.status === "failed") badgeColor = "bg-red-100 text-red-800";
-
+ 
                       return (
                         <div 
                           key={idx} 
-                          className={`border p-3 transition-all ${
+                          className={`border p-3 transition-all flex gap-3 ${
                             item.status === "rejected" ? "border-red-200 bg-red-50/10" : 
+                            item.status === "needs_review" ? "border-amber-200 bg-amber-50/10" :
                             isInspected ? "border-[#141414] bg-neutral-50/50" : "border-neutral-200 bg-white"
                           }`}
                         >
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="truncate flex-1">
-                              <span className="text-[8px] font-mono text-zinc-400 truncate block">ORIGINAL: {item.originalName}</span>
-                              <div className="font-bold text-[11px] text-zinc-900 truncate mt-0.5 leading-snug">
-                                {item.cleanTitle || item.originalName}
-                              </div>
-                            </div>
-                            <Badge className={`${badgeColor} rounded-none text-[8px] font-mono px-1 h-4 shrink-0 shadow-none`}>
-                              {item.status.toUpperCase()}
-                            </Badge>
+                          {/* Checkbox */}
+                          <div className="pt-0.5 shrink-0 flex items-start">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedForCombine(prev => 
+                                  isStagedChecked ? prev.filter(u => u !== item.url) : [...prev, item.url]
+                                );
+                              }}
+                              className="text-neutral-500 hover:text-neutral-900 transition-colors focus:outline-none"
+                              title="Select this document"
+                            >
+                              {isStagedChecked ? (
+                                <CheckSquare className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <Square className="w-4 h-4 text-neutral-400" />
+                              )}
+                            </button>
                           </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="truncate flex-1">
+                                <span className="text-[8px] font-mono text-zinc-400 truncate block">ORIGINAL: {item.originalName}</span>
+                                <div className="font-bold text-[11px] text-zinc-900 truncate mt-0.5 leading-snug">
+                                  {item.cleanTitle || item.originalName}
+                                </div>
+                                {(() => {
+                                  const qItem = ocrQueue.find(qi => qi.pdfHash === item.hash);
+                                  if (!qItem) return null;
+                                  const statusColors: Record<string, string> = {
+                                    queued: "bg-blue-50 text-blue-800 border-blue-200/50",
+                                    running: "bg-emerald-50 text-emerald-850 border-emerald-200/50 animate-pulse",
+                                    waiting_delay: "bg-amber-50 text-amber-800 border-amber-200/50",
+                                    rate_limited: "bg-red-50 text-red-800 border-red-200/50 font-bold",
+                                    retrying: "bg-orange-50 text-orange-800 border-orange-200/50",
+                                    done: "bg-neutral-50 text-neutral-650 border-neutral-200/50",
+                                    failed: "bg-rose-50 text-rose-800 border-rose-200/50",
+                                    paused: "bg-zinc-50 text-zinc-800 border-zinc-200/50"
+                                  };
+                                  return (
+                                    <div className={`mt-1.5 flex flex-wrap items-center gap-1 p-1 border text-[8px] font-mono rounded-none ${statusColors[qItem.status] || "bg-neutral-50"}`}>
+                                      <span className="font-bold uppercase">OCR Queue: {qItem.status}</span>
+                                      <span>•</span>
+                                      <span>Page {qItem.currentPage || 0}/{qItem.totalPages || "?"}</span>
+                                      {qItem.delayCountdown > 0 && (
+                                        <>
+                                          <span>•</span>
+                                          <span className="font-bold text-amber-700">⏳ {qItem.delayCountdown}s delay</span>
+                                        </>
+                                      )}
+                                      {qItem.retryCount > 0 && (
+                                        <>
+                                          <span>•</span>
+                                          <span>Attempt {qItem.retryCount}</span>
+                                        </>
+                                      )}
+                                      {qItem.errorMessage && (
+                                        <div className="w-full text-[7.5px] text-red-600 mt-1 uppercase truncate" title={qItem.errorMessage}>
+                                          Error: {qItem.errorMessage}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                              <Badge className={`${badgeColor} rounded-none text-[8px] font-mono px-1 h-4 shrink-0 shadow-none`}>
+                                {item.status.toUpperCase()}
+                              </Badge>
+                            </div>
 
                           {/* Classification Properties (Manual Overrides & Values representation) */}
                           <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-dashed border-neutral-100 select-none">
@@ -1177,13 +1996,13 @@ export default function WorkstationDashboard() {
                               </div>
                             </div>
 
-                            <div className="flex gap-1.5">
+                            <div className="flex gap-1.5 align-middle">
                               <Button
-                                onClick={() => handleClassifySingle(realIndex)}
+                                onClick={() => handlePipelineProcessSingle(realIndex)}
                                 disabled={item.status === "classifying"}
                                 className="bg-[#141414] text-[#E4E3E0] hover:bg-neutral-800 text-[9px] font-mono h-6 px-2.5 rounded-none"
                               >
-                                {item.status === "classifying" ? "Indexing..." : "Classify File"}
+                                {item.status === "classifying" ? "Processing..." : "Process Pipeline"}
                               </Button>
 
                               <button 
@@ -1197,13 +2016,112 @@ export default function WorkstationDashboard() {
 
                           {/* Inspection panel */}
                           {isInspected && (
-                            <div className="mt-3 p-2.5 border-t border-dashed border-neutral-200 bg-neutral-100/50 text-[10px] space-y-2 max-h-[160px] overflow-y-auto leading-relaxed">
-                              <div className="font-bold font-mono text-[9px] uppercase tracking-wider text-neutral-500 block">Extracted Text Content Snippet:</div>
-                              <pre className="font-sans text-neutral-700 whitespace-pre-wrap select-all font-mono text-[8.5px] bg-white p-2 border border-neutral-200">
-                                {item.rawText || "No text segment extracted yet. Click Classify File to fetch text content."}
+                            <div className="mt-3 p-3 border border-neutral-200 bg-neutral-100/50 space-y-3 max-h-[300px] overflow-y-auto leading-relaxed">
+                              {/* Layout of Pipeline parameters */}
+                              <div className="grid grid-cols-2 gap-3 text-[10px] font-mono border-b border-dashed border-neutral-200 pb-2 bg-white/50 p-2">
+                                <div>
+                                  <span className="opacity-60 block text-[8px]">SHA-256 HASH</span>
+                                  <span className="font-bold text-neutral-800 break-all select-all">{item.hash || "NOT COMPUTED"}</span>
+                                </div>
+                                <div className="truncate">
+                                  <span className="opacity-60 block text-[8px]">SOURCE URL</span>
+                                  <span className="font-bold text-zinc-650 truncate block select-all" title={item.url}>{item.url}</span>
+                                </div>
+                                <div>
+                                  <span className="opacity-60 block text-[8px]">TEXT EXTRACTION</span>
+                                  <span className="font-bold text-neutral-800 capitalize">{item.extractionStatus || "PENDING"}</span>
+                                </div>
+                                <div>
+                                  <span className="opacity-60 block text-[8px]">TEXT QUALITY SCORE</span>
+                                  <span className="font-bold text-neutral-800">
+                                    {item.textQualityScore !== undefined ? `${item.textQualityScore}/100` : "PENDING"}
+                                    {item.textQualityScore !== undefined && item.textQualityScore < 65 && " (WEAK/LOW)"}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="opacity-60 block text-[8px]">OCR Fallback DIGITIZATION</span>
+                                  <span className="font-bold text-neutral-800 capitalize">{item.ocrStatus || "PENDING"}</span>
+                                </div>
+                                <div>
+                                  <span className="opacity-60 block text-[8px]">CLEAN COPY EXPORT</span>
+                                  <span className="font-bold text-neutral-800 capitalize">{item.cleanCopyStatus || "PENDING"}</span>
+                                </div>
+                                <div className="col-span-2">
+                                  <span className="opacity-60 block text-[8px]">CLEAN FILENAME</span>
+                                  <span className="font-bold text-zinc-700 block truncate text-[9px] select-all">{item.cleanFilename || "NOT GENERATED"}</span>
+                                </div>
+                              </div>
+
+                              {item.confidenceScore !== undefined && (
+                                <div className="text-[10px] font-mono bg-white p-2 border border-neutral-200 grid grid-cols-2 gap-2">
+                                  <div>
+                                    <span className="opacity-65 block text-[8px]">CONFIDENCE SCORE</span>
+                                    <span className="font-bold text-neutral-800">{(item.confidenceScore * 100).toFixed(0)}%</span>
+                                  </div>
+                                  <div>
+                                    <span className="opacity-65 block text-[8px]">MATCHED REF TERMS</span>
+                                    <span className="font-bold text-zinc-700 truncate block text-[9px]" title={item.matchedTerms?.join(", ")}>
+                                      {item.matchedTerms && item.matchedTerms.length > 0 ? item.matchedTerms.join(", ") : "(None)"}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Interactive controllers */}
+                              <div className="flex flex-wrap gap-2 select-none border-b border-neutral-200 pb-2">
+                                <Button
+                                  onClick={() => handlePipelineProcessSingle(realIndex)}
+                                  className="bg-blue-650 hover:bg-blue-700 text-white font-mono text-[9px] h-6 px-2 rounded-none shadow-none"
+                                >
+                                  Process & Classify Pipeline
+                                </Button>
+
+                                <Button
+                                  onClick={() => handleRunOcr(realIndex)}
+                                  disabled={!item.hash || item.ocrStatus === "running"}
+                                  className="bg-[#141414] hover:bg-neutral-800 text-[#E4E3E0] font-mono text-[9px] h-6 px-2 rounded-none shadow-none"
+                                >
+                                  {item.ocrStatus === "running" ? "Running Gemini OCR..." : "Run OCR fallback"}
+                                </Button>
+
+                                <Button
+                                  onClick={() => handleBuildCleanCopy(realIndex)}
+                                  disabled={!item.hash || !item.gradeId || !item.subjectId || !item.topicId || !item.documentTypeId}
+                                  className="bg-emerald-600 hover:bg-emerald-700 font-mono text-white text-[9px] h-6 px-2 rounded-none shadow-none"
+                                >
+                                  Build Clean Copy & Row
+                                </Button>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2 select-none">
+                                {item.hash && (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => handleOpenCleanText(item.hash)}
+                                      className="border-neutral-300 hover:bg-neutral-50 font-mono text-[9px] h-6 px-2 rounded-none"
+                                    >
+                                      Open Clean Text
+                                    </Button>
+
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => handleDownloadCleanPdf(item.hash)}
+                                      className="border-neutral-300 hover:bg-neutral-50 font-mono text-[9px] h-6 px-2 rounded-none"
+                                    >
+                                      Download Clean PDF
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+
+                              <div className="font-bold font-mono text-[9px] uppercase tracking-wider text-neutral-500 block pt-1">Active text buffer snippet:</div>
+                              <pre className="font-mono text-neutral-700 whitespace-pre-wrap select-all text-[8.5px] bg-white p-2 border border-neutral-200 max-h-[120px] overflow-y-auto">
+                                {item.rawText || "No text parsed yet. Select 'Process Pipeline' or 'Run OCR' to fetch."}
                               </pre>
                             </div>
                           )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1211,14 +2129,20 @@ export default function WorkstationDashboard() {
                 )}
               </ScrollArea>
               
-              {/* Export classification report button */}
+              {/* Exporters and Reports block */}
               {stagedPdfs.length > 0 && (
-                <div className="pt-3 shrink-0 select-none">
+                <div className="pt-3 shrink-0 select-none flex gap-2">
                   <Button
-                    onClick={handleExportJsonReport}
-                    className="w-full bg-[#141414] hover:bg-neutral-800 text-white font-mono rounded-none text-[10px] uppercase h-9"
+                    onClick={handleExportDatasetJsonl}
+                    className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-mono rounded-none text-[8.5px] tracking-tight uppercase h-9 shadow-none"
                   >
-                    <FileJson className="w-3.5 h-3.5 mr-1.5" /> Export classification workstation report (JSON/CSV)
+                    <FileDown className="w-3.5 h-3.5 mr-1" /> Export Dataset JSONL
+                  </Button>
+                  <Button
+                    onClick={handleExportReport}
+                    className="flex-1 bg-[#141414] hover:bg-neutral-800 text-white font-mono rounded-none text-[8.5px] tracking-tight uppercase h-9 shadow-none"
+                  >
+                    <FileJson className="w-3.5 h-3.5 mr-1" /> Export Audit Report (JSON)
                   </Button>
                 </div>
               )}
