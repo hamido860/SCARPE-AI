@@ -90,3 +90,15 @@ create policy "Enable all access for service role on scrape_sessions" on scrape_
 create policy "Enable all access for service role on scraped_content" on scraped_content for all using (true) with check (true);
 create policy "Enable all access for service role on extracted_links" on extracted_links for all using (true) with check (true);
 create policy "Enable all access for service role on content_embeddings" on content_embeddings for all using (true) with check (true);
+
+-- Dictionaries for reference classification (Read-only reference)
+create table if not exists classification_dictionary (
+    id text primary key, -- e.g. "active_dictionary"
+    data jsonb not null default '{}'::jsonb,
+    updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS and insert policies
+alter table classification_dictionary enable row level security;
+create policy "Enable all access for service role on classification_dictionary" on classification_dictionary for all using (true) with check (true);
+create policy "Enable read access for all on classification_dictionary" on classification_dictionary for select using (true);

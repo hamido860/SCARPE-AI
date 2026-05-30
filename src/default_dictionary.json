@@ -1,0 +1,180 @@
+{
+  "grades": [
+    {
+      "id": "1ere_annee_college",
+      "nameAr": "السنة الأولى إعدادي",
+      "nameFr": "1ère Année Collège",
+      "suffix": "1AC",
+      "keywords": ["1ac", "1ere annee", "الأولى إعدادي", "الاولى اعدادي", "1ère echelle", "premiere annee college"]
+    },
+    {
+      "id": "2eme_annee_college",
+      "nameAr": "السنة الثانية إعدادي",
+      "nameFr": "2ème Année Collège",
+      "suffix": "2AC",
+      "keywords": ["2ac", "2eme annee", "الثانية إعدادي", "الثانية اعدادي", "deuxieme annee college"]
+    },
+    {
+      "id": "3eme_annee_college",
+      "nameAr": "السنة الثالثة إعدادي",
+      "nameFr": "3ème Année Collège",
+      "suffix": "3AC",
+      "keywords": ["3ac", "3eme annee", "الثالثة إعدادي", "الثالثة اعدادي", "troisieme annee college"]
+    },
+    {
+      "id": "tronc_commun",
+      "nameAr": "الجذع المشترك",
+      "nameFr": "Tronc Commun",
+      "suffix": "TC",
+      "keywords": ["tc", "tronc commun", "الجذع المشترك", "جذع مشترك", "tcs"]
+    },
+    {
+      "id": "1ere_bac",
+      "nameAr": "السنة الأولى باكالوريا",
+      "nameFr": "1ère Bac",
+      "suffix": "1BAC",
+      "keywords": ["1bac", "1ere bac", "الأولى بكالوريا", "الاولى باك", "اولى باك"]
+    },
+    {
+      "id": "2eme_bac",
+      "nameAr": "السنة الثانية باكالوريا",
+      "nameFr": "2ème Bac",
+      "suffix": "2BAC",
+      "keywords": ["2bac", "2eme bac", "الثانية بكالوريا", "الثانية باك", "تانية باك", "بكلوريا"]
+    }
+  ],
+  "subjects": [
+    {
+      "id": "math",
+      "nameAr": "الرياضيات",
+      "nameFr": "Mathématiques",
+      "suffix": "MATH",
+      "keywords": ["math", "maths", "mathématiques", "الرياضيات", "رياضيات", "mathematiques"]
+    },
+    {
+      "id": "pc",
+      "nameAr": "الفيزياء والكيمياء",
+      "nameFr": "Physique Chimie",
+      "suffix": "PC",
+      "keywords": ["pc", "physique", "chimie", "الفيزياء", "الكيمياء", "فيزياء"]
+    },
+    {
+      "id": "svt",
+      "nameAr": "علوم الحياة والأرض",
+      "nameFr": "SVT",
+      "suffix": "SVT",
+      "keywords": ["svt", "life", "earth", "علوم الحياة والأرض", "الحياة والأرض", "علوم الحياه"]
+    },
+    {
+      "id": "french",
+      "nameAr": "اللغة الفرنسية",
+      "nameFr": "Français",
+      "suffix": "FR",
+      "keywords": ["français", "francais", "french", "الفرنسية", "فرنسية"]
+    }
+  ],
+  "topics": [
+    {
+      "id": "equations",
+      "nameAr": "المعادلات والمتراجحات",
+      "nameFr": "Équations et Inéquations",
+      "suffix": "EQ",
+      "subjectId": "math",
+      "keywords": ["equation", "équations", "inequations", "المعادلات", "متراجحات", "المتراجحات", "معادلات"]
+    },
+    {
+      "id": "symmetry",
+      "nameAr": "التماثل المحوري",
+      "nameFr": "Symétrie Axiale",
+      "suffix": "SYM",
+      "subjectId": "math",
+      "keywords": ["symetrie", "axiale", "التماثل المحوري", "تماثل محوري", "التماثل"]
+    },
+    {
+      "id": "statistics",
+      "nameAr": "الإحصاء",
+      "nameFr": "Statistiques",
+      "suffix": "STAT",
+      "subjectId": "math",
+      "keywords": ["statistiques", "statistics", "الإحصاء", "احصاء", "الاحصاء"]
+    },
+    {
+      "id": "functions",
+      "nameAr": "الدوال",
+      "nameFr": "Fonctions",
+      "suffix": "FUNC",
+      "subjectId": "math",
+      "keywords": ["fonction", "fonctions", "الدوال", "دوال linéaires", "خطية", "تألفية"]
+    },
+    {
+      "id": "vectors",
+      "nameAr": "المتجهات والإزاحة",
+      "nameFr": "Vecteurs et Translation",
+      "suffix": "VECT",
+      "subjectId": "math",
+      "keywords": ["vecteur", "translation", "المتجهات", "الازاحة", "الإزاحة", "متجهات"]
+    },
+    {
+      "id": "geometry",
+      "nameAr": "الهندسة",
+      "nameFr": "Géométrie",
+      "suffix": "GEOM",
+      "subjectId": "math",
+      "keywords": ["geometrie", "pythagore", "thales", "ثاليس", "فيتاغورس", "triangle", "مثلث"]
+    },
+    {
+      "id": "numbers",
+      "nameAr": "الأعداد والتناسبية",
+      "nameFr": "Nombres et Proportionnalité",
+      "suffix": "NUM",
+      "subjectId": "math",
+      "keywords": ["fraction", "proportionnalite", "puissances", "الأعداد", "قوى", "تناسبية", "جذور مربعة"]
+    },
+    {
+      "id": "electricity",
+      "nameAr": "الكهرباء",
+      "nameFr": "Électricité",
+      "suffix": "ELEC",
+      "subjectId": "pc",
+      "keywords": ["electricite", "tension", "courant", "الكهرباء", "كهربائي", "التيار"]
+    },
+    {
+      "id": "mac",
+      "nameAr": "المادة والبيئة",
+      "nameFr": "Matière et Environnement",
+      "suffix": "MAT",
+      "subjectId": "pc",
+      "keywords": ["matiere", "atomes", "combustion", "المادة", "البيئة", "الاحتراقات", "الذرات", "الجزيئات"]
+    }
+  ],
+  "allowedDocumentTypes": [
+    {
+      "id": "cours",
+      "nameAr": "درس",
+      "nameFr": "Cours / Leçon",
+      "suffix": "CRS",
+      "keywords": ["cours", "lesson", "lecon", "dars", "درس", "شرح", "ملخص"]
+    },
+    {
+      "id": "exercice",
+      "nameAr": "تمارين",
+      "nameFr": "Série d'Exercices",
+      "suffix": "EX",
+      "keywords": ["exercice", "exercise", "exercices", "td", "tp", "serie", "correction", "solution", "تمارين", "فرض منزلي", "سلسلة تمارين", "حلول"]
+    },
+    {
+      "id": "summary_or_revision",
+      "nameAr": "ملخصات",
+      "nameFr": "Résumé / Fiche de révision",
+      "suffix": "SUM",
+      "keywords": ["summary", "resume", "revision", "fiche", "ملخصات", "ملخص"]
+    },
+    {
+      "id": "exam_compilation",
+      "nameAr": "فروض وامتحانات",
+      "nameFr": "Devoir / Examen",
+      "suffix": "EXM",
+      "keywords": ["exam", "examen", "devoir", "test", "فروض", "فرض", "امتحان", "الامتحان", "contrôle", "controle"]
+    }
+  ]
+}

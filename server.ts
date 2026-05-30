@@ -12,13 +12,26 @@ import { Readability } from "@mozilla/readability";
 import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+import fs from "fs";
 
 import JSZip from "jszip";
+import { GoogleGenAI } from "@google/genai";
+import { PDFDocument } from "pdf-lib";
 
 // Initialize Supabase Client (if environment variables are present)
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+// Initialize Google GenAI
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 const pdf = (pdfParse as any).default || pdfParse;
@@ -811,26 +824,217 @@ Answer:`;
     }
   }
 
-  app.post("/api/notebook/artifact", async (req, res) => {
+  // --- Classification Dictionary & Workspace API Endpoints ---
+  
+  const DEFAULT_DICTIONARY_PATH = path.join(process.cwd(), "src", "default_dictionary.json");
+
+  // Load the current active reference dictionary
+  async function getActiveDictionary() {
+    // 1. Try Supabase dictionary tables
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("classification_dictionary")
+          .select("data")
+          .eq("id", "active_dictionary")
+          .single();
+        if (data && data.data && !error) {
+          return data.data;
+        }
+      } catch (e) {
+        console.warn("[Dictionary] Supabase table load failed, falling back to local file:", e);
+      }
+    }
+
+    // 2. Fallback to local default_dictionary.json
     try {
-      const { text, type } = req.body;
-      if (!text) return res.status(400).json({ error: "Text is required" });
+      if (fs.existsSync(DEFAULT_DICTIONARY_PATH)) {
+        const content = fs.readFileSync(DEFAULT_DICTIONARY_PATH, "utf-8");
+        return JSON.parse(content);
+      }
+    } catch (e) {
+      console.error("[Dictionary] Failed to read local default_dictionary.json:", e);
+    }
 
-      let prompt = "";
-      if (type === "faq") prompt = "Generate a comprehensive FAQ (Frequently Asked Questions) based on the following content. Use Markdown formatting.";
-      else if (type === "study_guide") prompt = "Generate a Study Guide with key terms, core concepts, and 5 practice quiz questions based on the following content. Use Markdown formatting.";
-      else if (type === "briefing") prompt = "Generate an Executive Briefing Document summarizing the core issues, key takeaways, and important entities from the following content. Use Markdown formatting.";
-      else return res.status(400).json({ error: "Invalid artifact type" });
+    // 3. Absolute failsafe inline representation
+    return { grades: [], subjects: [], topics: [], allowedDocumentTypes: [] };
+  }
 
-      const response = await nvidia.chat.completions.create({
-        model: 'meta/llama-3.1-70b-instruct',
-        messages: [{ role: 'user', content: `${prompt}\n\nContent:\n${text}` }]
+  // GET Route to load active dictionary
+  app.get("/api/dictionary", async (req, res) => {
+    try {
+      const dict = await getActiveDictionary();
+      res.json(dict);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to load dictionary" });
+    }
+  });
+
+  // POST Route to save / sync dictionary
+  app.post("/api/dictionary", async (req, res) => {
+    try {
+      const dictionaryData = req.body;
+      
+      // Save locally first
+      fs.writeFileSync(DEFAULT_DICTIONARY_PATH, JSON.stringify(dictionaryData, null, 2), "utf-8");
+
+      // Save/upsert to Supabase if configured
+      if (supabase) {
+        try {
+          await supabase.from("classification_dictionary").upsert({
+            id: "active_dictionary",
+            data: dictionaryData,
+            updated_at: new Date().toISOString()
+          });
+        } catch (e) {
+          console.warn("[Dictionary] Sync with Supabase classification_dictionary table failed:", e);
+        }
+      }
+
+      res.json({ success: true, message: "Dictionary updated successfully locally" });
+    } catch (error: any) {
+      console.error("[Dictionary Save Error]", error);
+      res.status(500).json({ error: error.message || "Failed to save dictionary" });
+    }
+  });
+
+  // POST Route for Gemini-powered reference classification
+  app.post("/api/classify", async (req, res) => {
+    try {
+      const { title, url, text } = req.body;
+      if (!title && !url) {
+        return res.status(400).json({ error: "Title or URL is required for classification" });
+      }
+
+      const activeDict = await getActiveDictionary();
+
+      const prompt = `You are a highly precise Moroccan school educational crawler & metadata classifier.
+Analyze the following document's details:
+Title: "${title || ""}"
+URL: "${url || ""}"
+Snippet from content / text: "${(text || "").substring(0, 1000)}"
+
+YOUR TASK:
+Classify this document structure strictly using the Provided Reference Classification Dictionary.
+You MUST select EXACTLY ONE Grade ID, Subject ID, Topic ID, and Document Type ID only if they exist in the dictionary and correspond to the document context.
+If the document does not match any subject or topic in our reference dictionary, or looks entirely unrelated to secondary school math/physics/svt, set "isMatch" to false.
+
+REFERENCE CLASSIFICATION DICTIONARY:
+${JSON.stringify(activeDict, null, 2)}
+
+OUTPUT SCHEMA:
+Return a JSON object containing:
+1. "gradeId": (string or null) The ID of the matching grade level (e.g. "1ere_annee_college", "3eme_annee_college", etc.)
+2. "subjectId": (string or null) The ID of the matching subject (e.g. "math", "pc", etc.)
+3. "topicId": (string or null) The ID of the matching educational topic (e.g. "equations", "symmetry", etc.)
+4. "documentTypeId": (string or null) The ID of the matching educational document type (e.g. "cours", "exercice", "summary_or_revision", "exam_compilation")
+5. "isMatch": (boolean) true if the document belongs to first/second/third year middle school or BAC level math/science, relates to our dictionary, and is valid. Otherwise, false.
+6. "reason": (string) Brief 1-sentence analytical justification.
+7. "cleanTitle": (string) A beautiful, cleaned human-readable version of the title, removing website footprints (like "talamidi", "talamidi.com", "moutamadris", "PDF", timestamps, or spam suffixes). Keep it short (2-4 words, e.g., "Equations_Et_Inequations").
+8. "renamePattern": (string) Suggested systematic file name using suffixes in format: "<Grade_Suffix>_<Subject_Suffix>_<Topic_Suffix>_<DocType_Suffix>_<CleanTitle>.pdf"
+Example: "1AC_MATH_EQ_EX_Equations_Et_Inequations.pdf" (using the suffixes listed in the dictionary). If not matched, this can be the original name.
+
+Make sure to respond strictly with valid JSON. Do not include any markdown block fences or conversational text outside of the JSON representation.`;
+
+      // Use gemini-3.5-flash as specified for text tasks
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
       });
 
-      res.json({ result: response.choices[0].message.content });
+      const resultText = response.text || "{}";
+      const classification = JSON.parse(resultText);
+
+      res.json(classification);
     } catch (error: any) {
-      console.error("[Notebook Error]", error);
-      res.status(500).json({ error: error.message });
+      console.error("[Classification Error]", error);
+      res.status(500).json({ error: error.message || "Failed to classify document" });
+    }
+  });
+
+  // POST Route to Combine/Merge multiple PDFs
+  app.post("/api/combine-pdfs", async (req, res) => {
+    try {
+      const { urls } = req.body;
+      if (!urls || !Array.isArray(urls) || urls.length < 2) {
+        return res.status(400).json({ error: "At least 2 PDF URLs are required to combine." });
+      }
+
+      console.log(`[Combiner] Merging ${urls.length} PDFs into a single file...`);
+      const mergedPdf = await PDFDocument.create();
+
+      for (const pdfUrl of urls) {
+        try {
+          let pdfBytes: ArrayBuffer;
+          if (pdfUrl.startsWith("file://")) {
+            // Local fallback if we have a file path
+            const filename = pdfUrl.substring(7);
+            const localPath = path.join(process.cwd(), "downloads", filename);
+            if (fs.existsSync(localPath)) {
+              pdfBytes = fs.readFileSync(localPath);
+            } else {
+              throw new Error(`Local file not found: ${localPath}`);
+            }
+          } else {
+            // Fetch remote URL
+            const response = await axios.get(pdfUrl, { 
+              responseType: "arraybuffer",
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              },
+              timeout: 15000 
+            });
+            pdfBytes = response.data;
+          }
+
+          const srcPdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+          const copiedPages = await mergedPdf.copyPages(srcPdf, srcPdf.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        } catch (e: any) {
+          console.error(`[Combiner] Skip merging failed URL: ${pdfUrl}`, e.message);
+        }
+      }
+
+      const mergedPdfBytes = await mergedPdf.save();
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "attachment; filename=combined_workstation_export.pdf");
+      res.send(Buffer.from(mergedPdfBytes));
+    } catch (error: any) {
+      console.error("[Combiner Error]", error);
+      res.status(500).json({ error: error.message || "Failed to combine PDFs" });
+    }
+  });
+
+  // POST Route to extract text from a remote PDF link directly on the server
+  app.post("/api/parse-pdf", async (req, res) => {
+    try {
+      const { url } = req.body;
+      if (!url) {
+        return res.status(400).json({ error: "PDF URL is required" });
+      }
+
+      console.log(`[Parser] Extracting text from: ${url}`);
+      let pdfBytes: ArrayBuffer;
+
+      const response = await axios.get(url, { 
+        responseType: "arraybuffer",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+        timeout: 15000 
+      });
+      pdfBytes = response.data;
+
+      const data = await pdf(Buffer.from(pdfBytes));
+      const text = data.text.replace(/\s+/g, " ").trim();
+
+      res.json({ text, title: path.basename(url) });
+    } catch (error: any) {
+      console.error("[Parser Error]", error);
+      res.status(500).json({ error: error.message || "Failed to parse PDF text content" });
     }
   });
 
@@ -1016,6 +1220,120 @@ Answer:`;
     } catch (error: any) {
       console.error(`[Crawler] Error:`, error);
       res.status(500).json({ error: `Crawler failed: ${error.message}` });
+    }
+  });
+
+  // API Route for PDF Discovery & Filtering (Search API / Pasted URLs)
+  app.post("/api/discover-pdfs", async (req, res) => {
+    try {
+      const { query, pastedUrls } = req.body;
+      let urlsToProcess: string[] = [];
+
+      if (pastedUrls && Array.isArray(pastedUrls)) {
+        urlsToProcess = pastedUrls.filter((u: any) => typeof u === "string" && u.trim().length > 0);
+      } else if (query && query.trim().length > 0) {
+        console.log(`[Discover] Querying search grounding for: ${query}`);
+        // Use gemini-3.5-flash as specified for text/search grounding tasks
+        const response = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: `Find educational resources, articles, lessons, exams or direct PDF files related to the search query: "${query}". Specify the full direct URLs from legitimate sources and educational webpages starting with http or https.`,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
+        });
+
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks && Array.isArray(chunks)) {
+          for (const chunk of chunks) {
+            if (chunk.web?.uri) {
+              urlsToProcess.push(chunk.web.uri);
+            }
+          }
+        }
+
+        // Enrich by extracting any potential URLs found inside the generated response text itself
+        const text = response.text || "";
+        const urlRegex = /(https?:\/\/[^\s$,;?#()\[\]"']+)/g;
+        let match;
+        while ((match = urlRegex.exec(text)) !== null) {
+          urlsToProcess.push(match[1]);
+        }
+      }
+
+      // De-duplicate, resolve redirect trails, and normalize URLs
+      urlsToProcess = Array.from(new Set(urlsToProcess.map(u => resolveUrl(u.trim()))));
+
+      const results = urlsToProcess.map(urlStr => {
+        try {
+          const parsed = new URL(urlStr);
+          const pathname = parsed.pathname.toLowerCase();
+          const hostname = parsed.hostname.toLowerCase();
+
+          const isDirectPdf = pathname.endsWith(".pdf");
+
+          // Filter out obvious noise domains to satisfy criteria [App rejects unrelated links]
+          const isNoisy = hostname.includes("facebook.com") || 
+                          hostname.includes("twitter.com") || 
+                          hostname.includes("instagram.com") || 
+                          hostname.includes("youtube.com") || 
+                          hostname.includes("linkedin.com") || 
+                          hostname.includes("github.com") || 
+                          hostname.includes("stackoverflow.com") || 
+                          hostname.includes("npm") || 
+                          hostname.includes("localhost") ||
+                          hostname === "google.com" ||
+                          hostname === "www.google.com";
+
+          // Educational indicators (curriculum pathways, schools, pdf indicators)
+          const isEduPage = hostname.includes("talamidi") || 
+                            hostname.includes("moutamadris") || 
+                            hostname.includes("alloschool") || 
+                            pathname.includes("math") || 
+                            pathname.includes("physique") || 
+                            pathname.includes("cours") || 
+                            pathname.includes("exerc") || 
+                            pathname.includes("exam") || 
+                            pathname.includes("pdf") ||
+                            pathname.includes("download") ||
+                            pathname.includes("drive.google.com");
+
+          let accepted = false;
+          let reason = "";
+
+          if (isDirectPdf) {
+            accepted = true;
+            reason = "Direct PDF document link detected";
+          } else if (isNoisy) {
+            accepted = false;
+            reason = "Rejected: Noisy domain (social utility or search engine)";
+          } else if (isEduPage) {
+            accepted = true;
+            reason = "Accepted: Educational domain or URL path parameter suggestive of academic documents";
+          } else {
+            accepted = true;
+            reason = "Accepted: Link likely contains educational indexes or PDF downloads";
+          }
+
+          return {
+            url: urlStr,
+            isDirectPdf,
+            accepted,
+            reason
+          };
+        } catch (err) {
+          return {
+            url: urlStr,
+            isDirectPdf: false,
+            accepted: false,
+            reason: "Rejected: Invalid malformed URL structure"
+          };
+        }
+      });
+
+      res.json({ results });
+    } catch (err: any) {
+      console.error("[Discover Error]", err);
+      res.status(500).json({ error: err.message || "Failed during PDF discovery" });
     }
   });
 
