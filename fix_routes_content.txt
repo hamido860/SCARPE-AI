@@ -1,0 +1,119 @@
+  app.post("/api/ai/extract-content", async (req, res) => {
+    try {
+      const { userIntent, negativeIntent, rawText } = req.body;
+      if (!rawText) return res.status(400).json({ error: "rawText is required" });
+
+      const prompt = `The user wants to extract specific information from the following text.
+      
+      POSITIVE INTENT (What to keep): ${userIntent || "Everything valuable"}
+      NEGATIVE INTENT (What to EXCLUDE/REMOVE): ${negativeIntent || "None"}
+      
+      Please extract the content matching the positive intent, and strictly remove anything matching the negative intent.
+      CRITICAL: If the extracted content contains exams, exercises, mathematical formulas, or special symbols (like ∀, ∈, ℝ), PRESERVE THEM EXACTLY AS THEY APPEAR in the original text. Do not summarize or rephrase them.
+      Return ONLY the extracted, cleaned text. Do not include markdown formatting like \`\`\`text.
+      
+      Original Text:
+      ${rawText}`;
+
+      const aiResponse = await nvidia.chat.completions.create({
+        model: 'meta/llama-3.1-70b-instruct',
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      res.json({ text: aiResponse.choices[0].message.content });
+    } catch (error: any) {
+      console.error("[Extract AI Error]", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/guided-scrape", async (req, res) => {
+    try {
+      const { userIntent, negativeIntent, url, links } = req.body;
+      if (!links || !Array.isArray(links)) return res.status(400).json({ error: "links array is required" });
+
+      const prompt = `The user is looking for: "${userIntent}" on the website "${url}".
+      They specifically want full posts, detailed content, and documents (especially PDFs) related to this topic.
+      
+      CRITICAL: The user wants to AVOID or EXCLUDE links related to: "${negativeIntent || 'None'}". Do NOT pick links matching this negative intent.
+      
+      Here is a list of links found on the current page:
+      ${JSON.stringify(links, null, 2)}
+      
+      Return a JSON array of string URLs that are highly relevant to the positive intent and DO NOT match the negative intent. Limit to max 15 highly relevant links.
+      If none are relevant, return []. ONLY return the JSON array, nothing else.`;
+
+      const aiResponse = await nvidia.chat.completions.create({
+        model: "meta/llama-3.1-70b-instruct",
+        messages: [{ role: "user", content: prompt + "\n\nRespond strictly with a JSON array format." }],
+        response_format: { type: "json_object" }
+      });
+
+      res.json({ text: aiResponse.choices[0].message.content });
+    } catch (error: any) {
+      console.error("[Guided Scrape AI Error]", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/index", async (req, res) => {
+    try {
+      const { url, title, text } = req.body;
+      if (!text) return res.status(400).json({ error: "Text is required" });
+
+      const chunks = chunkText(text);
+      let indexedCount = 0;
+
+      for (const chunk of chunks) {
+        if (chunk.trim().length < 10) continue;
+
+        const embedResponse = await nvidia.embeddings.create({
+          model: 'nvidia/nv-embedqa-e5-v5',
+          input: chunk,
+          encoding_format: "float",
+          // @ts-ignore
+          extra_body: { input_type: "passage" }
+        });
+        const embedding = embedResponse.data[0].embedding;
+
+        if (embedding) {
+          vectorStore.push({
+            id: Math.random().toString(36).substring(7),
+            url,
+            title,
+            text: chunk,
+            embedding
+          });
+          indexedCount++;
+        }
+      }
+
+      res.json({ success: true, indexedChunks: indexedCount, totalDocuments: vectorStore.length });
+    } catch (error: any) {
+      console.error("[Index Error]", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/index-pdf-url", async (req, res) => {
+    try {
+      const { url, title } = req.body;
+      if (!url) return res.status(400).json({ error: "URL is required" });
+
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+        timeout: 30000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        validateStatus: (status) => status < 500
+      });
+
+      if (response.status === 404) {
+        return res.status(404).json({ error: "File not found on target server" });
+      }
+
+      let indexedCount = 0;
+      const isZip = url.toLowerCase().endsWith('.zip') || response.headers['content-type']?.includes('zip');
+

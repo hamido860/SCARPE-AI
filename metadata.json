@@ -1,0 +1,6 @@
+{
+  "name": "Remix: Remix: ScrapeAI",
+  "description": "A powerful web scraping tool with AI-powered content analysis and extraction.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
