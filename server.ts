@@ -18,6 +18,7 @@ import crypto from "crypto";
 import JSZip from "jszip";
 import { GoogleGenAI } from "@google/genai";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { jsPDF } from "jspdf";
 
 // Initialize Supabase Client (if environment variables are present)
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -33,6 +34,36 @@ const ai = new GoogleGenAI({
     }
   }
 });
+
+// Robust helper to handle 429 rate / quota violations gracefully across all Gemini operations
+async function callGeminiWithRetry(params: any, options = { maxRetries: 5, initialDelayMs: 2000, backoffFactor: 2 }) {
+  let attempt = 1;
+  while (true) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (err: any) {
+      const errMsg = err.message || "";
+      const isRateLimit = errMsg.includes("429") || 
+                         errMsg.toLowerCase().includes("quota exceeded") || 
+                         errMsg.toLowerCase().includes("rate limit") || 
+                         errMsg.toLowerCase().includes("resource exhausted") || 
+                         errMsg.toLowerCase().includes("too many requests") ||
+                         JSON.stringify(err).toLowerCase().includes("quota");
+                         
+      if (isRateLimit && attempt <= options.maxRetries) {
+        // Exponential backoff with random jitter (between 0.8 and 1.2 of expected delay)
+        const delay = Math.round(
+          options.initialDelayMs * Math.pow(options.backoffFactor, attempt - 1) * (0.8 + Math.random() * 0.4)
+        );
+        console.warn(`[Gemini Retry] Rate limit hit (429/quota). Attempt ${attempt}/${options.maxRetries}. Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        attempt++;
+      } else {
+        throw err;
+      }
+    }
+  }
+}
 
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 const pdf = (pdfParse as any).default || pdfParse;
@@ -83,7 +114,8 @@ async function startServer() {
     fs.writeFileSync(reportPath, JSON.stringify(activeData, null, 2));
   }
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // --- URL Redirect Resolver ---
   function resolveUrl(urlStr: string): string {
@@ -146,15 +178,32 @@ async function startServer() {
     return text.trim();
   }
 
+  function isJadhathaString(str: string): boolean {
+    if (!str) return false;
+    const s = String(str).toLowerCase();
+    const normalized = normalizeMatchText(s);
+    const jodadatKeywords = [
+      "jodada", "jodadat", "jadhatha", "jadada", "jadadat",
+      "جذاضه", "جذاذة", "جذاذات",
+      "fiche pedagogique", "préparation pédagogique", "preparation pedagogique",
+      "lesson plan", "teacher guide"
+    ];
+    return jodadatKeywords.some(kw => s.includes(kw) || normalized.includes(kw));
+  }
+
   function isValidUrlSource(urlStr: string): { valid: boolean; reason?: string } {
     if (!urlStr) {
       return { valid: false, reason: "Malformed or unsupported source URL" };
     }
+    const lowerUrl = urlStr.toLowerCase();
+    if (lowerUrl.includes("cdn-cgi") || lowerUrl.includes("email-protection")) {
+      return { valid: false, reason: "Bypassing Cloudflare diagnostic / email protection helper URLs" };
+    }
     try {
       const parsed = new URL(urlStr);
       const host = parsed.hostname.toLowerCase();
-      if (!host.includes(".")) {
-        return { valid: false, reason: "Malformed or unsupported source URL" };
+      if (host === "cours" || !host.includes(".")) {
+        return { valid: false, reason: `Invalid hostname: ${host}` };
       }
       const parts = host.split(".");
       const blacklistedParts = ["cours", "maroc", "college"];
@@ -167,6 +216,519 @@ async function startServer() {
     } catch (e) {
       return { valid: false, reason: "Malformed or unsupported source URL" };
     }
+  }
+
+  function cleanServerTopicText(text: string): string {
+    if (!text) return "";
+    try {
+      text = decodeURIComponent(text);
+    } catch {}
+    text = text.replace(/\.pdf$/i, "");
+    const genericWords = [
+      "cours", "exercice", "exercices", "corrige", "correction", "pdf", "fr", "ar", 
+      "html", "lesson", "lecon", "dars", "serie", "solutions", "solution", "devoir", 
+      "controle", "exam", "examen", "talamidi", "talamidi.com", "moutamadris", 
+      "moutamadris.ma", "جميع", "دروس", "درس", "تمارين", "حلول", "تصحيح", "ملخص", 
+      "فرض", "امتحان", "موقع", "تلاميذي", "تحميل", "الملف"
+    ];
+    const structuralLabels = [
+      "1ac", "2ac", "3ac", "tcs", "1bac", "2bac", "math", "maths", 
+      "mathematiques", "mathématiques", "pc", "physique", "chimie", "svt", 
+      "french", "francais", "français"
+    ];
+    const words = text.split(/[\s\-_,.:;@+()\[\]{}'"’`|\\/]+/).filter(Boolean);
+    const cleanedWords = words.filter(word => {
+      const lw = word.toLowerCase().trim();
+      if (genericWords.includes(lw) || structuralLabels.includes(lw)) {
+        return false;
+      }
+      if (/^\d+$/.test(lw)) {
+        return false;
+      }
+      return true;
+    });
+    if (cleanedWords.length === 0) return "";
+    return cleanedWords.join("-");
+  }
+
+  function extractServerSource(url: string): string {
+    if (!url) return "Source";
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      const parts = hostname.replace("www.", "").split(".");
+      const sld = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+      if (sld === "talamidi") return "Talamidi";
+      if (sld === "moutamadris") return "Moutamadris";
+      return sld.charAt(0).toUpperCase() + sld.slice(1);
+    } catch {
+      return "Source";
+    }
+  }
+
+  function generateServerCurriculumFilename(params: {
+    url: string;
+    htmlTitle?: string;
+    pdfTitle?: string;
+    grade?: string;
+    subject?: string;
+    documentType?: string;
+    fallbackSeq?: string;
+  }) {
+    const { url, htmlTitle, pdfTitle, grade, subject, documentType, fallbackSeq } = params;
+    const urlLower = url.toLowerCase();
+
+    let gradeCode = "1AC";
+    if (grade) {
+      const gClean = grade.toUpperCase().replace("_", "");
+      if (["1AC", "2AC", "3AC", "TC", "1BAC", "2BAC"].includes(gClean)) {
+        gradeCode = gClean;
+      } else {
+        gradeCode = gClean;
+      }
+    } else {
+      if (urlLower.includes("1ac") || urlLower.includes("1ere_annee_college") || urlLower.includes("الأولى إعدادي")) gradeCode = "1AC";
+      else if (urlLower.includes("2ac") || urlLower.includes("2eme_annee_college") || urlLower.includes("الثانية إعدادي")) gradeCode = "2AC";
+      else if (urlLower.includes("3ac") || urlLower.includes("3eme_annee_college") || urlLower.includes("الثالثة إعدادي")) gradeCode = "3AC";
+    }
+
+    let subjectCode = "Math";
+    if (subject) {
+      const sLower = subject.toLowerCase();
+      if (sLower.includes("math")) subjectCode = "Math";
+      else if (sLower.includes("pc") || sLower.includes("physique") || sLower.includes("chimie")) subjectCode = "PC";
+      else if (sLower.includes("svt")) subjectCode = "SVT";
+      else if (sLower.includes("francais") || sLower.includes("français") || sLower.includes("french")) subjectCode = "French";
+    }
+
+    let docTypeSegment = "Cours";
+    const rawFile = (url.split("/").pop() || "").toLowerCase();
+    const rawTitle = (htmlTitle || "").toLowerCase();
+    const checkDocType = (documentType || rawFile || rawTitle).toLowerCase();
+
+    if (checkDocType.includes("corrige") || checkDocType.includes("corrigé") || checkDocType.includes("correction") || checkDocType.includes("solution") || checkDocType.includes("تصحيح") || checkDocType.includes("حلول") || checkDocType.includes("حل")) {
+      docTypeSegment = "Correction";
+    } else if (checkDocType.includes("exercice") || checkDocType.includes("exercise") || checkDocType.includes("serie") || checkDocType.includes("سلسلة") || checkDocType.includes("تمارين")) {
+      docTypeSegment = "Exercices";
+    } else if (checkDocType.includes("resume") || checkDocType.includes("résumé") || checkDocType.includes("summary") || checkDocType.includes("ملخص")) {
+      docTypeSegment = "Resume";
+    } else if (checkDocType.includes("devoir") || checkDocType.includes("فرض")) {
+      docTypeSegment = "Devoir";
+    } else if (checkDocType.includes("controle") || checkDocType.includes("contrôle") || checkDocType.includes("examen") || checkDocType.includes("امتحان")) {
+      docTypeSegment = "Controle";
+    }
+
+    let extractedTopic = "";
+    let urlTopicCandidate = "";
+    try {
+      const parsedUrl = new URL(url);
+      const pathname = decodeURIComponent(parsedUrl.pathname);
+      const pathSegments = pathname.split("/").filter(Boolean);
+      const isLastSegmentFile = pathSegments[pathSegments.length - 1]?.toLowerCase().endsWith(".pdf");
+      const searchSegments = isLastSegmentFile ? pathSegments.slice(0, pathSegments.length - 1) : pathSegments;
+      
+      const ignoredSegments = new Set([
+        "college", "1ac", "2ac", "3ac", "tc", "1bac", "2bac", "math", "mathematiques", "mathématiques", 
+        "pc", "physique", "chimie", "svt", "french", "francais", "français", "talamidi", "talamidi.com", 
+        "cours", "exercices", "exercice", "correction", "corrige", "corrigé", "pdf", "maroc"
+      ]);
+
+      for (let i = searchSegments.length - 1; i >= 0; i--) {
+        const seg = searchSegments[i];
+        const cleaned = cleanServerTopicText(seg);
+        if (cleaned && !ignoredSegments.has(seg.toLowerCase())) {
+          urlTopicCandidate = cleaned;
+          break;
+        }
+      }
+    } catch {}
+
+    if (urlTopicCandidate) {
+      extractedTopic = urlTopicCandidate;
+    } else if (htmlTitle) {
+      const cleanedHtml = cleanServerTopicText(htmlTitle);
+      if (cleanedHtml) extractedTopic = cleanedHtml;
+    }
+
+    if (!extractedTopic) {
+      const filenameFromUrl = url.split("/").pop() || "";
+      const matchNum = url.match(/_(\d+)\.pdf/i) || url.match(/[_-](\d+)/) || filenameFromUrl.match(/[_-](\d+)/);
+      const seqNum = matchNum ? matchNum[1].padStart(2, "0") : (fallbackSeq || "01");
+      extractedTopic = `Sequence-${seqNum}`;
+    }
+
+    const sourceSegment = extractServerSource(url);
+    const sanitizeSegment = (text: string) => {
+      return text
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "")
+        .replace(/[\s\-_]+/g, "-")
+        .replace(/-+/g, "-");
+    };
+
+    const finalTopic = sanitizeSegment(extractedTopic);
+    let finalFilename = `${gradeCode}_${subjectCode}_${finalTopic}_${docTypeSegment}_${sourceSegment}.pdf`;
+
+    // Prevent filenames starting with -_-_ or other special prefix symbols
+    finalFilename = finalFilename.replace(/^[-_\s]+/, "");
+
+    if (finalFilename.length > 140) {
+      const extension = ".pdf";
+      const availableLength = 140 - extension.length;
+      const prefix = `${gradeCode}_${subjectCode}_`;
+      const suffix = `_${docTypeSegment}_${sourceSegment}`;
+      const overage = finalFilename.length - 140;
+      if (finalTopic.length > overage) {
+        const shortenedTopic = finalTopic.substring(0, finalTopic.length - overage);
+        finalFilename = `${prefix}${shortenedTopic}${suffix}${extension}`;
+      } else {
+        finalFilename = finalFilename.substring(0, availableLength) + extension;
+      }
+    }
+
+    return {
+      filename: finalFilename,
+      extractedTopic: finalTopic,
+      documentType: docTypeSegment
+    };
+  }
+
+  function extractMetadataFromUrlAndFilename(urlStr: string, originalName: string) {
+    let sourceDomain = "";
+    let sourceSite = "";
+    let pathSegments: string[] = [];
+    let decodedUrlPath = "";
+    let filename = originalName || "";
+
+    try {
+      if (urlStr) {
+        // Simple manual or URL based domain and path parsing
+        let parsedUrl: URL | null = null;
+        try {
+          parsedUrl = new URL(urlStr);
+          sourceDomain = parsedUrl.hostname.toLowerCase();
+          decodedUrlPath = decodeURIComponent(parsedUrl.pathname);
+        } catch {
+          // If URL fails standard parsing but has http/https, let's try string ops
+          const withoutProto = urlStr.replace(/^(https?:\/\/)?(www\.)?/, "");
+          const slashIdx = withoutProto.indexOf("/");
+          if (slashIdx !== -1) {
+            sourceDomain = withoutProto.substring(0, slashIdx).toLowerCase();
+            decodedUrlPath = decodeURIComponent(withoutProto.substring(slashIdx));
+          } else {
+            sourceDomain = withoutProto.toLowerCase();
+            decodedUrlPath = "";
+          }
+        }
+
+        const domainParts = sourceDomain.split(".");
+        sourceSite = domainParts.length > 2 ? domainParts[domainParts.length - 2] : domainParts[0];
+        
+        // Ensure pathSegments are clean and decoded
+        pathSegments = decodedUrlPath.split("/").filter(Boolean);
+        
+        // If filename is missing or unnamed, fallback to last segment
+        if (!filename || filename === "unnamed" || filename.includes("/") || filename.includes("\\")) {
+          filename = pathSegments[pathSegments.length - 1] || originalName || "unnamed.pdf";
+        }
+      }
+    } catch (e) {
+      console.error("[extractMetadataFromUrlAndFilename] Error parsing URL:", e);
+    }
+
+    const lowerPath = decodedUrlPath.toLowerCase();
+    const lowerFile = filename.toLowerCase();
+    const lowerCombined = `${lowerPath} ${lowerFile}`;
+
+    let gradeHint = null;
+    let gradeSlug = null;
+    let sourceGradeRaw = "";
+
+    // 1AC / 2AC / 3AC = grade hint
+    if (lowerCombined.includes("1ac") || lowerCombined.includes("1ere_annee_college") || lowerCombined.includes("1ere annee") || lowerCombined.includes("الأولى إعدادي") || lowerCombined.includes("الاولى اعدادي")) {
+      gradeHint = "1AC";
+      gradeSlug = "1ere_annee_college";
+      sourceGradeRaw = "1AC";
+    } else if (lowerCombined.includes("2ac") || lowerCombined.includes("2eme_annee_college") || lowerCombined.includes("2eme annee") || lowerCombined.includes("الثانية إعدادي") || lowerCombined.includes("الثانية اعدادي")) {
+      gradeHint = "2AC";
+      gradeSlug = "2eme_annee_college";
+      sourceGradeRaw = "2AC";
+    } else if (lowerCombined.includes("3ac") || lowerCombined.includes("3eme_annee_college") || lowerCombined.includes("3eme annee") || lowerCombined.includes("الثالثة إعدادي") || lowerCombined.includes("الثالثة اعدادي")) {
+      gradeHint = "3AC";
+      gradeSlug = "3eme_annee_college";
+      sourceGradeRaw = "3AC";
+    } else if (lowerCombined.includes("tcs") || lowerCombined.includes("tc") || lowerCombined.includes("tronc_commun") || lowerCombined.includes("الجذع المشترك")) {
+      gradeHint = "TC";
+      gradeSlug = "tronc_commun";
+      sourceGradeRaw = "TC";
+    } else if (lowerCombined.includes("1bac") || lowerCombined.includes("1ere_bac") || lowerCombined.includes("الأولى بكالوريا")) {
+      gradeHint = "1BAC";
+      gradeSlug = "1ere_bac";
+      sourceGradeRaw = "1BAC";
+    } else if (lowerCombined.includes("2bac") || lowerCombined.includes("2eme_bac") || lowerCombined.includes("الثانية بكالوريا")) {
+      gradeHint = "2BAC";
+      gradeSlug = "2eme_bac";
+      sourceGradeRaw = "2BAC";
+    }
+
+    // Additional path-based grade hint extraction for safety
+    for (const segment of pathSegments) {
+      const segLower = segment.toLowerCase();
+      if (segLower === "1ac") {
+        gradeHint = "1AC";
+        gradeSlug = "1ere_annee_college";
+        sourceGradeRaw = segment;
+      } else if (segLower === "2ac") {
+        gradeHint = "2AC";
+        gradeSlug = "2eme_annee_college";
+        sourceGradeRaw = segment;
+      } else if (segLower === "3ac") {
+        gradeHint = "3AC";
+        gradeSlug = "3eme_annee_college";
+        sourceGradeRaw = segment;
+      }
+    }
+
+    let subjectHint = null;
+    let subjectSlug = null;
+    let sourceSubjectRaw = "";
+
+    // Mathématiques / math = subject hint
+    if (lowerCombined.includes("math") || lowerCombined.includes("رياضيات") || lowerCombined.includes("الرياضيات")) {
+      subjectHint = "math";
+      subjectSlug = "math";
+      sourceSubjectRaw = "Mathématiques";
+    } else if (lowerCombined.includes("physique") || lowerCombined.includes("chimie") || lowerCombined.includes(" pc ") || lowerCombined.includes("pc_") || lowerCombined.includes("_pc") || lowerCombined.includes("فيزياء")) {
+      subjectHint = "pc";
+      subjectSlug = "pc";
+      sourceSubjectRaw = "Physique-Chimie";
+    } else if (lowerCombined.includes("svt") || lowerCombined.includes("علوم الحياة")) {
+      subjectHint = "svt";
+      subjectSlug = "svt";
+      sourceSubjectRaw = "SVT";
+    } else if (lowerCombined.includes("francais") || lowerCombined.includes("français") || lowerCombined.includes("french") || lowerCombined.includes("الفرنسية")) {
+      subjectHint = "french";
+      subjectSlug = "french";
+      sourceSubjectRaw = "Français";
+    }
+
+    // Additional path-based subject hint extraction
+    for (const segment of pathSegments) {
+      const segLower = segment.toLowerCase();
+      if (segLower === "math" || segLower === "mathematiques" || segLower === "mathématiques") {
+        subjectHint = "math";
+        subjectSlug = "math";
+        sourceSubjectRaw = segment;
+      } else if (segLower === "pc" || segLower.includes("physique")) {
+        subjectHint = "pc";
+        subjectSlug = "pc";
+        sourceSubjectRaw = segment;
+      } else if (segLower === "svt") {
+        subjectHint = "svt";
+        subjectSlug = "svt";
+        sourceSubjectRaw = segment;
+      } else if (segLower.includes("francais") || segLower.includes("français")) {
+        subjectHint = "french";
+        subjectSlug = "french";
+        sourceSubjectRaw = segment;
+      }
+    }
+
+    let documentTypeHint = null;
+    let documentTypeSlug = null;
+    let sourceDocumentTypeRaw = "";
+
+    // Parse document types from filename
+    // - filename Cours = cours
+    // - Exercice = exercice
+    // - Corrige/Corrigé = correction
+    // - Jodada/Jodadat/جذاذة/جذاذات = jadhatha
+    // - Forod/فرض/فروض/Controle/Devoir = assessment
+    if (lowerFile.includes("cours") || lowerFile.includes("lesson") || lowerFile.includes("lecon") || lowerFile.includes("درس") || lowerFile.includes("dars")) {
+      documentTypeHint = "cours";
+      documentTypeSlug = "cours";
+      sourceDocumentTypeRaw = "Cours";
+    } else if (lowerFile.includes("exercice") || lowerFile.includes("exercise") || lowerFile.includes("serie") || lowerFile.includes("تمارين") || lowerFile.includes("سلسلة")) {
+      documentTypeHint = "exercice";
+      documentTypeSlug = "exercice";
+      sourceDocumentTypeRaw = "Exercice";
+    } else if (lowerFile.includes("corrige") || lowerFile.includes("corrigé") || lowerFile.includes("correction") || lowerFile.includes("solution") || lowerFile.includes("حل") || lowerFile.includes("حلول")) {
+      documentTypeHint = "correction";
+      documentTypeSlug = "exercice"; // correction matches exercice in standard dictionary
+      sourceDocumentTypeRaw = "Correction";
+    } else if (isJadhathaString(lowerFile)) {
+      documentTypeHint = "jadhatha";
+      documentTypeSlug = "jadhatha";
+      sourceDocumentTypeRaw = "Jadhatha";
+    } else if (lowerFile.includes("forod") || lowerFile.includes("فرض") || lowerFile.includes("فروض") || lowerFile.includes("controle") || lowerFile.includes("devoir") || lowerFile.includes("exam") || lowerFile.includes("examen") || lowerFile.includes("امتحان")) {
+      documentTypeHint = "assessment";
+      documentTypeSlug = "exam_compilation";
+      sourceDocumentTypeRaw = "Devoir/Examen";
+    }
+
+    // Default fallbacks using the remainder of path if still empty
+    if (!documentTypeHint) {
+      if (lowerPath.includes("cours") || lowerPath.includes("lesson") || lowerPath.includes("lecon") || lowerPath.includes("درس") || lowerPath.includes("dars")) {
+        documentTypeHint = "cours";
+        documentTypeSlug = "cours";
+        sourceDocumentTypeRaw = "Cours";
+      } else if (lowerPath.includes("exercice") || lowerPath.includes("exercise") || lowerPath.includes("serie") || lowerPath.includes("تمارين") || lowerPath.includes("سلسلة")) {
+        documentTypeHint = "exercice";
+        documentTypeSlug = "exercice";
+        sourceDocumentTypeRaw = "Exercice";
+      } else if (lowerPath.includes("corrige") || lowerPath.includes("corrigé") || lowerPath.includes("correction") || lowerPath.includes("solution") || lowerPath.includes("حل") || lowerPath.includes("حلول")) {
+        documentTypeHint = "correction";
+        documentTypeSlug = "exercice";
+        sourceDocumentTypeRaw = "Correction";
+      } else if (isJadhathaString(lowerPath)) {
+        documentTypeHint = "jadhatha";
+        documentTypeSlug = "jadhatha";
+        sourceDocumentTypeRaw = "Jadhatha";
+      } else if (lowerPath.includes("forod") || lowerPath.includes("فرض") || lowerPath.includes("فروض") || lowerPath.includes("controle") || lowerPath.includes("devoir") || lowerPath.includes("exam") || lowerPath.includes("examen") || lowerPath.includes("امتحان")) {
+        documentTypeHint = "assessment";
+        documentTypeSlug = "exam_compilation";
+        sourceDocumentTypeRaw = "Devoir/Examen";
+      }
+    }
+
+    // Extract topicHint: folder/topic name = topic hint
+    // We filter out common structural directories to find the real topic name.
+    let topicHint = null;
+    let sourceTopicRaw = "";
+    
+    const ignoredSegments = new Set([
+      "college", "1ac", "2ac", "3ac", "math", "mathematiques", "mathématiques", "pc", "physique", "chimie", "svt", "french", "francais", "français", "talamidi", "talamidi.com", "cours", "exercices"
+    ]);
+
+    const candidateTopicSegments = pathSegments.filter(seg => {
+      const cleanSeg = seg.toLowerCase().trim();
+      if (ignoredSegments.has(cleanSeg)) return false;
+      if (cleanSeg.endsWith(".pdf")) return false;
+      return true;
+    });
+
+    if (candidateTopicSegments.length > 0) {
+      // Choose the last or deep segment as the topic hint
+      const rawTopic = candidateTopicSegments[candidateTopicSegments.length - 1];
+      // Format topic to space strings nicely
+      topicHint = rawTopic.replace(/[-_]/g, " ").trim();
+      // Capitalize first letters
+      topicHint = topicHint.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+      sourceTopicRaw = rawTopic;
+    } else {
+      // Fallback from filename if no folder segment was found
+      const cleanFilePart = filename.replace(/\.(pdf|PDF)$/, "").replace(/[-_]/g, " ");
+      // Strip common document types like "cours", "exercice"
+      const words = cleanFilePart.split(" ").filter(w => {
+        const lw = w.toLowerCase().trim();
+        return lw !== "cours" && lw !== "exercice" && lw !== "exercices" && lw !== "corrige" && lw !== "corrigé" && lw !== "correction" && lw !== "pdf" && lw !== "talamidi";
+      });
+      if (words.length > 0) {
+        topicHint = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        sourceTopicRaw = cleanFilePart;
+      }
+    }
+
+    let languageHint = "fr";
+    if (lowerCombined.includes(" ar ") || lowerCombined.includes("_ar") || lowerCombined.includes("العربية") || lowerCombined.includes("باالعربية")) {
+      languageHint = "ar";
+    } else if (lowerCombined.includes(" fr ") || lowerCombined.includes("_fr") || lowerCombined.includes("فرنسي")) {
+      languageHint = "fr";
+    }
+
+    const confidenceHints = (gradeHint ? 0.35 : 0) + (subjectHint ? 0.35 : 0) + (documentTypeHint ? 0.15 : 0) + (topicHint ? 0.15 : 0);
+    const metadataSourceFields = ["url.path", "filename"];
+
+    const resultObj: any = {
+      sourceDomain,
+      sourceSite,
+      decodedUrlPath,
+      pathSegments,
+      gradeHint,
+      gradeSlug,
+      subjectHint,
+      subjectSlug,
+      topicHint,
+      topicSlug: topicHint ? topicHint.toLowerCase().replace(/\s+/g, "_") : null,
+      documentTypeHint,
+      documentTypeSlug,
+      languageHint,
+      sourceGradeRaw,
+      sourceSubjectRaw,
+      sourceTopicRaw,
+      sourceDocumentTypeRaw,
+      metadataSourceFields,
+      filename,
+      originalFilename: filename,
+      cleanFilename: getSafeTitleFromFilename(filename),
+      confidenceHints,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Do not output empty metadata rows/fields
+    for (const key of Object.keys(resultObj)) {
+      const val = resultObj[key];
+      if (val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)) {
+        delete resultObj[key];
+      }
+    }
+
+    return resultObj;
+  }
+
+  function mapMetadataHintsToDictionary(hints: any, dictionary: any) {
+    const normDict = normalizeDictionary(dictionary);
+    let gradeId = hints.gradeSlug || null;
+    let subjectId = hints.subjectSlug || null;
+    let topicId = hints.topicSlug || null;
+    let documentTypeId = hints.documentTypeSlug || null;
+
+    if (!gradeId && hints.gradeHint) {
+      const normGradeHint = normalizeMatchText(hints.gradeHint);
+      const matchedGrade = normDict.grades.find((g: any) => {
+        if (normalizeMatchText(g.id) === normGradeHint || normalizeMatchText(g.suffix) === normGradeHint) return true;
+        return (g.keywords || []).some((kw: string) => normalizeMatchText(kw) === normGradeHint);
+      });
+      if (matchedGrade) gradeId = matchedGrade.id;
+    }
+
+    if (!subjectId && hints.subjectHint) {
+      const normSubHint = normalizeMatchText(hints.subjectHint);
+      const matchedSub = normDict.subjects.find((s: any) => {
+        if (normalizeMatchText(s.id) === normSubHint || normalizeMatchText(s.suffix) === normSubHint) return true;
+        return (s.keywords || []).some((kw: string) => normalizeMatchText(kw).includes(normSubHint) || normSubHint.includes(normalizeMatchText(kw)));
+      });
+      if (matchedSub) subjectId = matchedSub.id;
+    }
+
+    if (!documentTypeId && hints.documentTypeHint) {
+      const normDocHint = normalizeMatchText(hints.documentTypeHint);
+      const matchedDoc = normDict.allowedDocumentTypes.find((d: any) => {
+        if (normalizeMatchText(d.id) === normDocHint || normalizeMatchText(d.suffix) === normDocHint) return true;
+        return (d.keywords || []).some((kw: string) => normalizeMatchText(kw) === normDocHint);
+      });
+      if (matchedDoc) documentTypeId = matchedDoc.id;
+    }
+
+    if (!topicId && hints.topicHint) {
+      const normTopicHint = normalizeMatchText(hints.topicHint);
+      const matchedTopic = normDict.topics.find((t: any) => {
+        if (normalizeMatchText(t.id) === normTopicHint || normalizeMatchText(t.suffix) === normTopicHint) return true;
+        if (subjectId && t.subjectId !== subjectId) return false;
+        return (t.keywords || []).some((kw: string) => {
+          const normKw = normalizeMatchText(kw);
+          return normTopicHint.includes(normKw) || normKw.includes(normTopicHint);
+        });
+      });
+      if (matchedTopic) topicId = matchedTopic.id;
+    }
+
+    return {
+      gradeId,
+      subjectId,
+      topicId,
+      documentTypeId
+    };
   }
 
   function getSafeTitleFromFilename(filename: string): string {
@@ -192,7 +754,7 @@ async function startServer() {
     if (combinedStr.includes("forod") || combinedStr.includes("devoir") || combinedStr.includes("controle") || combinedStr.includes("فرض") || combinedStr.includes("frod") || combinedStr.includes("exam") || combinedStr.includes("examen") || combinedStr.includes("test") || combinedStr.includes("امتحان") || combinedStr.includes("فروض")) {
       return "exam_compilation";
     }
-    if (combinedStr.includes("jodada") || combinedStr.includes("جذاذة") || combinedStr.includes("جذاذات")) {
+    if (isJadhathaString(combinedStr)) {
       return "jadhatha";
     }
     if (combinedStr.includes("bilan") || combinedStr.includes("revision") || combinedStr.includes("resume") || combinedStr.includes("summary")) {
@@ -682,6 +1244,66 @@ async function startServer() {
     }
     return chunks;
   }
+
+  app.post("/api/pipeline/reset-workspace", async (req, res) => {
+    try {
+      console.log("[Workspace Reset] Clearing local output directories...");
+      
+      ocrConfig.isPaused = true; // Pause workers
+      activeWorkerCount = 0; // Optimistically clear worker count
+      queuedOcrItems.length = 0; // Clear queue
+      
+      const subdirs = [
+        "downloads",
+        "text",
+        "ocr",
+        "clean-pdfs",
+        "dataset",
+        "reports"
+      ];
+
+      for (const sub of subdirs) {
+        const fullPath = path.join(LOCAL_OUTPUT_DIR, sub);
+        if (fs.existsSync(fullPath)) {
+          // Alternative to recursive rm to ensure directory structure remains
+          const files = fs.readdirSync(fullPath);
+          for (const file of files) {
+            const filePath = path.join(fullPath, file);
+            try {
+              if (fs.lstatSync(filePath).isDirectory()) {
+                fs.rmSync(filePath, { recursive: true, force: true });
+              } else {
+                fs.unlinkSync(filePath);
+              }
+            } catch (err) {
+              console.warn(`[Workspace Reset] Could not delete ${filePath}:`, err);
+            }
+          }
+        }
+      }
+
+      // Re-create directory structure just in case anything was deleted
+      subdirs.forEach(sub => {
+        const fullPath = path.join(LOCAL_OUTPUT_DIR, sub);
+        if (!fs.existsSync(fullPath)) {
+          fs.mkdirSync(fullPath, { recursive: true });
+        }
+      });
+
+      console.log("[Workspace Reset] Local directories cleared successfully.");
+
+      // Clear internal queues
+      queuedOcrItems.length = 0;
+      if (fs.existsSync(path.join(LOCAL_OUTPUT_DIR, "ocr_queue.json"))) {
+        fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "ocr_queue.json"), "[]");
+      }
+
+      return res.json({ success: true, message: "Workspace reset successfully." });
+    } catch (e: any) {
+      console.error("[Workspace Reset] Error:", e);
+      return res.status(500).json({ success: false, error: e.message });
+    }
+  });
 
   app.post("/api/ollama/models", async (req, res) => {
     try {
@@ -1409,6 +2031,54 @@ Answer:`;
     // Dynamic logging for debugging
     console.log(`[Classify API] Initiated for title: "${title || ""}", url: "${url || ""}"`);
 
+    let activeDict: any = { grades: [], subjects: [], topics: [], allowedDocumentTypes: [] };
+    try {
+      activeDict = normalizeDictionary(await getActiveDictionary());
+    } catch (dictErr) {
+      console.warn("[Classify API] Failed to load active dictionary:", dictErr);
+    }
+
+    const deterministicMetadata = extractMetadataFromUrlAndFilename(url, title || "unnamed");
+    const mappedIds = mapMetadataHintsToDictionary(deterministicMetadata, activeDict);
+    const combinedMetadataAndIds = {
+      ...deterministicMetadata,
+      ...mappedIds
+    };
+
+    // Calculate rough classifications as fallback
+    const roughGrade = mappedIds.gradeId || deterministicMetadata.gradeSlug || "1ere_annee_college";
+    const roughSubject = mappedIds.subjectId || deterministicMetadata.subjectSlug || "math";
+    const roughTopic = mappedIds.topicId || deterministicMetadata.topicSlug || deterministicMetadata.topicHint || "unknown";
+    const language = deterministicMetadata.languageHint || "mixed";
+
+    // Task 3: Perform deterministic dictionary matching before Gemini
+    const matchDict = matchAgainstDictionary({ title, url, text, topicFilter, dictionary: activeDict });
+    console.log(`[Classify API] Deterministic dictionary match results:`, {
+      matchedGrades: matchDict.matchedGrades.map(g => g.id),
+      matchedSubjects: matchDict.matchedSubjects.map(s => s.id),
+      matchedTopics: matchDict.matchedTopics.map(t => t.id),
+      matchedDocTypes: matchDict.matchedDocTypes.map(d => d.id)
+    });
+
+    // Populate candidate topics based on keywords of subject/grade/dictionary matching
+    const candidateTopics = (activeDict.topics || [])
+      .filter((t: any) => {
+        if (mappedIds.subjectId && t.subjectId !== mappedIds.subjectId) return false;
+        const nameFr = (t.nameFr || "").toLowerCase();
+        const tId = (t.id || "").toLowerCase();
+        const normSearch = `${title || ""} ${url || ""}`.toLowerCase();
+        return normSearch.includes(nameFr) || normSearch.includes(tId) || (matchDict.matchedTerms || []).some((term: string) => nameFr.includes(term.toLowerCase()));
+      })
+      .map((t: any) => t.id)
+      .slice(0, 10);
+
+    if (candidateTopics.length === 0 && mappedIds.subjectId) {
+      const subjectTopics = (activeDict.topics || [])
+        .filter((t: any) => t.subjectId === mappedIds.subjectId)
+        .map((t: any) => t.id);
+      candidateTopics.push(...subjectTopics.slice(0, 10));
+    }
+
     // Dynamic default report structure
     let topicFilterReport: any = null;
     let allowedTopicIds: string[] = [];
@@ -1421,15 +2091,26 @@ Answer:`;
           subjectId: null,
           topicId: null,
           documentTypeId: null,
+          language,
           isMatch: false,
           needsReview: true,
           status: "needs_review",
+          pipelineStep: "classify",
+          blockReason: "missing_inputs",
           reason: "Title or URL is required for classification",
           cleanTitle: "unnamed",
           renamePattern: "needs-review__unnamed.pdf",
           confidenceScore: 0,
           matchedTerms: [],
-          matchedFields: []
+          matchedFields: [],
+          candidateTopics,
+          roughGrade,
+          roughSubject,
+          roughTopic,
+          rough_grade: roughGrade,
+          rough_subject: roughSubject,
+          rough_topic: roughTopic,
+          metadata: combinedMetadataAndIds
         });
       }
 
@@ -1443,35 +2124,63 @@ Answer:`;
             subjectId: null,
             topicId: null,
             documentTypeId: null,
+            language,
             isMatch: false,
             needsReview: true,
             status: "needs_review",
+            pipelineStep: "classify",
+            blockReason: "malformed_url",
             reason: urlValidation.reason || "Malformed or unsupported source URL",
             cleanTitle: safeTitleFromFilename,
             renamePattern: fallbackRenamePattern,
             confidenceScore: 0,
             matchedTerms: [],
             matchedFields: [],
-            topicFilterReport
+            candidateTopics,
+            roughGrade,
+            roughSubject,
+            roughTopic,
+            rough_grade: roughGrade,
+            rough_subject: roughSubject,
+            rough_topic: roughTopic,
+            topicFilterReport,
+            metadata: combinedMetadataAndIds
           });
         }
       }
 
-      // Load active dictionary
-      const activeDict = normalizeDictionary(await getActiveDictionary());
-
-      // Task 3: Perform deterministic dictionary matching before Gemini
-      const matchDict = matchAgainstDictionary({ title, url, text, topicFilter, dictionary: activeDict });
-      console.log(`[Classify API] Deterministic dictionary match results:`, {
-        matchedGrades: matchDict.matchedGrades.map(g => g.id),
-        matchedSubjects: matchDict.matchedSubjects.map(s => s.id),
-        matchedTopics: matchDict.matchedTopics.map(t => t.id),
-        matchedDocTypes: matchDict.matchedDocTypes.map(d => d.id)
-      });
-
-      // Task 9: Detect document type before AI using filename/url
-      const predetectedDocType = predetectDocumentType(title, url, activeDict.allowedDocumentTypes);
-      console.log(`[Classify API] Predetected document type: ${predetectedDocType}`);
+      // Check for OCR Needed (Normal Problem)
+      const cleanTextStr = (text || "").trim();
+      if (cleanTextStr.length < 100) {
+        console.warn(`[Classify API] OCR needed for document: Text length of "${cleanTextStr.length}" matches OCR threshold.`);
+        return res.json({
+          gradeId: mappedIds.gradeId || null,
+          subjectId: mappedIds.subjectId || null,
+          topicId: mappedIds.topicId || null,
+          documentTypeId: matchDict.documentTypeId || null,
+          language,
+          isMatch: false,
+          needsReview: true,
+          status: "needs_review",
+          pipelineStep: "classify",
+          blockReason: "ocr_needed",
+          reason: "Document text content is extremely short or empty, requiring OCR processing.",
+          cleanTitle: safeTitleFromFilename,
+          renamePattern: fallbackRenamePattern,
+          confidenceScore: 0,
+          matchedTerms: matchDict.matchedTerms,
+          matchedFields: matchDict.matchedFields,
+          candidateTopics,
+          roughGrade,
+          roughSubject,
+          roughTopic,
+          rough_grade: roughGrade,
+          rough_subject: roughSubject,
+          rough_topic: roughTopic,
+          topicFilterReport,
+          metadata: combinedMetadataAndIds
+        });
+      }
 
       // Task 4: Fix topic filter logic
       if (topicFilter && topicFilter.trim().length > 0) {
@@ -1488,23 +2197,38 @@ Answer:`;
         if (allowedTopicIds.length === 0) {
           console.warn(`[Classify API] Topic filter "${topicFilter}" has no dictionary matches.`);
           return res.json({
-            gradeId: null,
-            subjectId: null,
+            gradeId: mappedIds.gradeId || null,
+            subjectId: mappedIds.subjectId || null,
             topicId: null,
-            documentTypeId: null,
+            documentTypeId: matchDict.documentTypeId || null,
+            language,
             isMatch: false,
             needsReview: true,
             status: "needs_review",
+            pipelineStep: "classify",
+            blockReason: "topic_filter_mismatch",
             reason: "Topic filter did not match Supabase dictionary topics",
             cleanTitle: safeTitleFromFilename,
             renamePattern: fallbackRenamePattern,
             confidenceScore: 0,
             matchedTerms: matchDict.matchedTerms,
             matchedFields: matchDict.matchedFields,
-            topicFilterReport
+            candidateTopics,
+            roughGrade,
+            roughSubject,
+            roughTopic,
+            rough_grade: roughGrade,
+            rough_subject: roughSubject,
+            rough_topic: roughTopic,
+            topicFilterReport,
+            metadata: combinedMetadataAndIds
           });
         }
       }
+
+      // Task 9: Detect document type before AI using filename/url
+      const predetectedDocType = predetectDocumentType(title, url, activeDict.allowedDocumentTypes);
+      console.log(`[Classify API] Predetected document type: ${predetectedDocType}`);
 
       // Build specific AI hint constraints
       let topicFilterConstraint = "";
@@ -1525,7 +2249,7 @@ You MUST ONLY choose a "topicId" from this set: ${JSON.stringify(allowedTopicIds
 Analyze the following document's details:
 Title: "${title || ""}"
 URL: "${url || ""}"
-Snippet from content / text: "${(text || "").substring(0, 1000)}"
+Snippet from content / text: "${cleanTextStr.substring(0, 1200)}"
 
 YOUR TASK:
 Classify this document structure strictly using the Provided Reference Classification Dictionary.${topicFilterConstraint}${matchingContextHint}
@@ -1542,18 +2266,19 @@ Return a JSON object containing:
 2. "subjectId": (string or null) The ID of the matching subject (e.g. "math", "pc", etc.)
 3. "topicId": (string or null) The ID of the matching educational topic (e.g. "equations", "symmetry", etc.)
 4. "documentTypeId": (string or null) The ID of the matching educational document type (e.g. "cours", "exercice", "summary_or_revision", "exam_compilation")
-5. "isMatch": (boolean) true if the document belongs to first/second/third year middle school or BAC level math/science, relates to our dictionary, and is valid. Otherwise, false.
-6. "reason": (string) Brief 1-sentence analytical justification.
-7. "cleanTitle": (string) A beautiful, cleaned human-readable version of the title, removing website footprints (like "talamidi", "talamidi.com", "moutamadris", "PDF", timestamps, or spam suffixes). Keep it short (2-4 words, e.g., "Equations_Et_Inequations").
-8. "renamePattern": (string) Suggested systematic file name using suffixes in format: "<Grade_Suffix>_<Subject_Suffix>_<Topic_Suffix>_<DocType_Suffix>_<CleanTitle>.pdf"
+5. "language": (string) "fr" (French), "ar" (Arabic), or "mixed" (both) based on document contents.
+6. "isMatch": (boolean) true if the document belongs to first/second/third year middle school or BAC level math/science, relates to our dictionary, and is valid. Otherwise, false.
+7. "reason": (string) Brief 1-sentence analytical justification.
+8. "cleanTitle": (string) A beautiful, cleaned human-readable version of the title, removing website footprints (like "talamidi", "talamidi.com", "moutamadris", "PDF", timestamps, or spam suffixes). Keep it short (2-4 words, e.g., "Equations_Et_Inequations").
+9. "renamePattern": (string) Suggested systematic file name using suffixes in format: "<Grade_Suffix>_<Subject_Suffix>_<Topic_Suffix>_<DocType_Suffix>_<CleanTitle>.pdf"
 Example: "1AC_MATH_EQ_EX_Equations_Et_Inequations.pdf" (using the suffixes listed in the dictionary). If not matched, this can be original name.
-9. "confidenceScore": (number, 0 to 1) Classifier confidence level in this match.
+10. "confidenceScore": (number, 0 to 1) Classifier confidence level in this match.
 
 Make sure to respond strictly with valid JSON. Do not include any markdown block fences or conversational text outside of the JSON representation.`;
 
-      // Call Gemini dynamically
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      // Call Gemini dynamically with robust resilience handling
+      const response = await callGeminiWithRetry({
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json"
@@ -1567,20 +2292,31 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       if (!classification) {
         console.warn("[Classify API] Gemini returned invalid JSON:", resultText);
         return res.json({
-          gradeId: null,
-          subjectId: null,
-          topicId: null,
-          documentTypeId: null,
+          gradeId: mappedIds.gradeId || null,
+          subjectId: mappedIds.subjectId || null,
+          topicId: mappedIds.topicId || null,
+          documentTypeId: matchDict.documentTypeId || null,
+          language,
           isMatch: false,
           needsReview: true,
           status: "needs_review",
+          pipelineStep: "classify",
+          blockReason: "ai_invalid_json",
           reason: "AI returned invalid JSON; manual review required",
           cleanTitle: safeTitleFromFilename,
           renamePattern: fallbackRenamePattern,
           confidenceScore: 0,
           matchedTerms: matchDict.matchedTerms,
           matchedFields: matchDict.matchedFields,
-          topicFilterReport
+          candidateTopics,
+          roughGrade,
+          roughSubject,
+          roughTopic,
+          rough_grade: roughGrade,
+          rough_subject: roughSubject,
+          rough_topic: roughTopic,
+          topicFilterReport,
+          metadata: combinedMetadataAndIds
         });
       }
 
@@ -1588,6 +2324,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       let subjectId = classification.subjectId || null;
       let topicId = classification.topicId || null;
       let documentTypeId = classification.documentTypeId || null;
+      let parsedLanguage = classification.language || language;
       let isMatch = !!classification.isMatch;
       let reason = classification.reason || "";
       let cleanTitle = classification.cleanTitle || title || "";
@@ -1595,114 +2332,162 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       let confidenceScore = typeof classification.confidenceScore === "number" ? classification.confidenceScore : (isMatch ? 0.8 : 0);
 
       // Task 12: Do deterministic validation after Gemini
-      let validationFailed = false;
-      let validationReason = "";
+      let blockReason = "";
+      let isBlockedOrNeedsReview = false;
 
       if (gradeId !== null) {
         const exists = activeDict.grades.some((g: any) => g.id === gradeId);
         if (!exists) {
-          validationFailed = true;
-          validationReason = `Grade ID "${gradeId}" does not exist in dictionary.`;
+          isBlockedOrNeedsReview = true;
+          blockReason = "validation_failed";
+          reason = `Grade ID "${gradeId}" does not exist in dictionary.`;
         }
       }
 
-      if (subjectId !== null) {
+      if (!subjectId) {
+        isBlockedOrNeedsReview = true;
+        blockReason = "no_subject_match";
+        reason = "Subject could not be matched against the reference dictionary.";
+      } else {
         const exists = activeDict.subjects.some((s: any) => s.id === subjectId);
         if (!exists) {
-          validationFailed = true;
-          validationReason = `Subject ID "${subjectId}" does not exist in dictionary.`;
+          isBlockedOrNeedsReview = true;
+          blockReason = "no_subject_match";
+          reason = `Subject ID "${subjectId}" does not exist in dictionary.`;
         }
       }
 
-      if (topicId !== null) {
+      if (!topicId) {
+        isBlockedOrNeedsReview = true;
+        blockReason = "no_topic_match";
+        reason = "Topic could not be matched against the reference dictionary.";
+      } else {
         const matchedTopic = activeDict.topics.find((t: any) => t.id === topicId);
         if (!matchedTopic) {
-          validationFailed = true;
-          validationReason = `Topic ID "${topicId}" does not exist in dictionary.`;
+          isBlockedOrNeedsReview = true;
+          blockReason = "no_topic_match";
+          reason = `Topic ID "${topicId}" does not exist in dictionary.`;
         } else {
           if (subjectId !== null && matchedTopic.subjectId && matchedTopic.subjectId !== subjectId) {
-            validationFailed = true;
-            validationReason = `Topic ID "${topicId}" subjectId "${matchedTopic.subjectId}" mismatch with selected subjectId "${subjectId}".`;
+            isBlockedOrNeedsReview = true;
+            blockReason = "validation_failed";
+            reason = `Topic ID "${topicId}" subjectId "${matchedTopic.subjectId}" mismatch with selected subjectId "${subjectId}".`;
           }
         }
       }
 
       // Check predetected or selected doc type
-      if (documentTypeId !== null) {
+      if (!documentTypeId) {
+        isBlockedOrNeedsReview = true;
+        blockReason = "document_type_uncertain";
+        reason = "The document type could not be confidently determined or is missing.";
+      } else {
         const exists = activeDict.allowedDocumentTypes.some((d: any) => d.id === documentTypeId);
         if (!exists) {
-          validationFailed = true;
-          validationReason = `Document Type ID "${documentTypeId}" does not exist in allowedDocumentTypes.`;
+          isBlockedOrNeedsReview = true;
+          blockReason = "document_type_uncertain";
+          reason = `Document Type ID "${documentTypeId}" does not exist in allowedDocumentTypes.`;
         }
       }
 
       if (topicFilter && topicFilter.trim().length > 0) {
         if (topicId !== null && !allowedTopicIds.includes(topicId)) {
-          validationFailed = true;
-          validationReason = `Classifier selected topic "${topicId}" outside Topic Filters / Supabase dictionary match.`;
+          isBlockedOrNeedsReview = true;
+          blockReason = "topic_filter_mismatch";
+          reason = `Classifier selected topic "${topicId}" outside Topic Filters / Supabase dictionary match.`;
         }
       }
 
-      // If documentTypeId is null or mismatched but everything else is valid, mark needsReview instead of total failure
-      let needsReview = !isMatch || validationFailed;
-      let status = isMatch && !validationFailed ? "classified" : "needs_review";
-
-      if (validationFailed) {
-        console.warn(`[Classify Validation Failed] ${validationReason}`);
-        return res.json({
-          gradeId: null,
-          subjectId: null,
-          topicId: null,
-          documentTypeId: null,
-          isMatch: false,
-          needsReview: true,
-          status: "needs_review",
-          reason: validationReason,
-          cleanTitle: safeTitleFromFilename,
-          renamePattern: fallbackRenamePattern,
-          confidenceScore: 0,
-          matchedTerms: matchDict.matchedTerms,
-          matchedFields: matchDict.matchedFields,
-          topicFilterReport
-        });
+      if (confidenceScore < 0.6) {
+        isBlockedOrNeedsReview = true;
+        blockReason = "low_confidence";
+        reason = `The AI classifier confidence level (${confidenceScore}) is below the acceptable threshold (0.6).`;
       }
 
-      // Return normal successful HTTP 200 representation with all reporting parameters
+      // Final statuses mapping
+      let needsReview = !isMatch || isBlockedOrNeedsReview;
+      let status = isMatch && !isBlockedOrNeedsReview ? "classified" : "needs_review";
+
       return res.json({
         gradeId,
         subjectId,
         topicId,
         documentTypeId,
+        language: parsedLanguage,
         isMatch,
         needsReview,
         status,
+        pipelineStep: "classify",
+        blockReason,
         reason: reason || "Successfully matching Supabase reference parameters",
         cleanTitle,
         renamePattern,
         confidenceScore,
         matchedTerms: matchDict.matchedTerms,
         matchedFields: matchDict.matchedFields,
-        topicFilterReport
+        candidateTopics,
+        roughGrade,
+        roughSubject,
+        roughTopic,
+        rough_grade: roughGrade,
+        rough_subject: roughSubject,
+        rough_topic: roughTopic,
+        topicFilterReport,
+        metadata: {
+          ...combinedMetadataAndIds,
+          gradeId,
+          subjectId,
+          topicId,
+          documentTypeId,
+          language: parsedLanguage,
+          roughGrade,
+          roughSubject,
+          roughTopic
+        }
       });
 
     } catch (error: any) {
       // Task 1: Global fail-safe wrapping. Never throw 500 unless extreme server crash.
       console.error("[Classification Fail-Safe Handled]", error);
+      const errMsg = error.message || "";
+      const isRateLimit = errMsg.includes("429") || 
+                         errMsg.toLowerCase().includes("quota exceeded") || 
+                         errMsg.toLowerCase().includes("rate limit") || 
+                         errMsg.toLowerCase().includes("resource exhausted") || 
+                         errMsg.toLowerCase().includes("too many requests") ||
+                         JSON.stringify(error).toLowerCase().includes("quota");
+
+      const blockReason = isRateLimit ? "rate_limit_exceeded" : "system_failed";
+      const userReason = isRateLimit 
+        ? "Gemini API Quota/Rate Limit Exceeded. Manual review or re-classification required once your quota is restored." 
+        : (error.message || "Failed to parse/classify document pipeline fully");
+
       return res.json({
-        gradeId: null,
-        subjectId: null,
-        topicId: null,
-        documentTypeId: null,
+        gradeId: mappedIds.gradeId || null,
+        subjectId: mappedIds.subjectId || null,
+        topicId: mappedIds.topicId || null,
+        documentTypeId: matchDict.documentTypeId || null,
+        language,
         isMatch: false,
         needsReview: true,
         status: "needs_review",
-        reason: error.message || "Failed to parse/classify document pipeline fully",
+        pipelineStep: "classify",
+        blockReason: blockReason,
+        reason: userReason,
         cleanTitle: safeTitleFromFilename,
         renamePattern: fallbackRenamePattern,
         confidenceScore: 0,
         matchedTerms: [],
         matchedFields: [],
-        topicFilterReport
+        candidateTopics,
+        roughGrade,
+        roughSubject,
+        roughTopic,
+        rough_grade: roughGrade,
+        rough_subject: roughSubject,
+        rough_topic: roughTopic,
+        topicFilterReport,
+        metadata: combinedMetadataAndIds
       });
     }
   });
@@ -1794,24 +2579,106 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
 
   function cleanExtractedText(text: string): string {
     if (!text) return "";
-    let cleaned = text;
-    const patternsToRemove = [
+    
+    // Split into pages if \f is present so we can identify repeating headers/footers across pages.
+    // If not \f, we will simulate pages (e.g. by grouping every 40 lines or using PAGE headers if present).
+    let pages: string[] = [];
+    if (text.includes("\f")) {
+      pages = text.split("\f");
+    } else if (text.includes("--- PAGE")) {
+      pages = text.split(/--- PAGE \d+ ---\n?/g);
+    } else {
+      const lines = text.split(/\r?\n/);
+      const pageSize = 40;
+      for (let i = 0; i < lines.length; i += pageSize) {
+        pages.push(lines.slice(i, i + pageSize).join("\n"));
+      }
+    }
+
+    // Identify page-wise repeated lines.
+    const normalizedPageLines: string[][] = pages.map(page => {
+      return page.split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length > 5);
+    });
+
+    const linePageOccurrences = new Map<string, Set<number>>();
+    normalizedPageLines.forEach((pageLines, pageIdx) => {
+      pageLines.forEach(line => {
+        const normalized = line.replace(/\s+/g, " ");
+        if (!linePageOccurrences.has(normalized)) {
+          linePageOccurrences.set(normalized, new Set<number>());
+        }
+        linePageOccurrences.get(normalized)!.add(pageIdx);
+      });
+    });
+
+    const linesToRemove = new Set<string>();
+    
+    // A repeated header/footer is any line repeating across 2 or more pages.
+    for (const [line, pagesSet] of linePageOccurrences.entries()) {
+      if (pagesSet.size >= 2) {
+        const lower = line.toLowerCase();
+        
+        // Define exceptions (things to ALWAYS keep even if identical across page blocks)
+        const isException = 
+          /^(exercice|exercice\s+\d+|exemple\s*:|exemple|remarque\s*:|remarque|solution|correction|définition|propriété|théorème|activité|partie\s+\d+)/i.test(lower) ||
+          /^[\d\s+\-*/=><√πθΣΔαβγλμφψω≤≥≈≡∞∈∉⊂⊃∪∩∧∨¬⇒⇔(),;:.\[\]{}]+$/.test(line); // Pure formulas
+        
+        if (!isException) {
+          linesToRemove.add(line);
+        }
+      }
+    }
+
+    // Process line by line and apply watermarks and duplicated headers/footers cleaning
+    const allLines = text.split(/\r?\n/);
+    const cleanedLines: string[] = [];
+
+    // Specific watermark patterns in descending order of length or specific order
+    const watermarkPatterns = [
+      /www\.talamidi\.com/gi,
+      /talamidi\.com/gi,
+      /تم تحميل هذا الملف من موقع تلاميذي/g,
       /تم تحميل هذا الملف من موقع/g,
       /موقع تلاميذي/g,
-      /talamidi\.com/gi,
-      /www\.talamidi\.com/gi,
-      /Cours, Exercices, Examens corrigés/gi,
       /الموقع التربوي تلاميذي/g,
       /Talamidi/gi,
       /Moutamadris/gi,
-      /moutamadris\.ma/gi
+      /moutamadris\.ma/gi,
+      /Cours, Exercices, Examens corrigés/gi
     ];
-    patternsToRemove.forEach(pat => {
-      cleaned = cleaned.replace(pat, "");
-    });
 
-    cleaned = cleaned.replace(/[ \t]+/g, " ");
+    for (const line of allLines) {
+      let currentLine = line.trim();
+      const normalized = currentLine.replace(/\s+/g, " ");
+
+      // Check if it's dual-page list matching a header/footer
+      if (linesToRemove.has(normalized)) {
+        continue;
+      }
+
+      // Apply specific watermark cleaning
+      for (const pattern of watermarkPatterns) {
+        if (pattern.test(currentLine)) {
+          currentLine = currentLine.replace(pattern, "");
+        }
+      }
+
+      // Skip lines that became empty after removing watermarks
+      if (currentLine.trim().length === 0) {
+        continue;
+      }
+
+      cleanedLines.push(currentLine);
+    }
+
+    let cleaned = cleanedLines.join("\n");
+
+    // Replace repeated empty lines (consecutive blank lines to simple paragraph breaks)
     cleaned = cleaned.replace(/\n\s*\n/g, "\n\n");
+    cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+
     return cleaned.trim();
   }
 
@@ -1825,13 +2692,73 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     topic_slug: string;
     document_type_label: string;
     document_type_slug: string;
+    url?: string;
+    title?: string;
   }) {
+    const shortHash = params.hash.substring(0, 8);
+    let cleanName = `${params.grade_slug}__${params.subject_slug}__${params.topic_slug}__${params.document_type_slug}__${shortHash}.pdf`;
+    
+    if (params.url) {
+      const generated = generateServerCurriculumFilename({
+        url: params.url,
+        htmlTitle: params.title || params.topic_label,
+        grade: params.grade_slug,
+        subject: params.subject_slug,
+        documentType: params.document_type_slug
+      });
+      cleanName = generated.filename;
+    }
+    
+    const cleanPath = path.join(LOCAL_OUTPUT_DIR, "clean-pdfs", cleanName);
+
     const originalPath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${params.hash}.original.pdf`);
+    let pdfBytes: Buffer;
+
     if (!fs.existsSync(originalPath)) {
-      throw new Error("Original PDF file not found locally");
+      const downloadsDir = path.join(LOCAL_OUTPUT_DIR, "downloads");
+      if (!fs.existsSync(downloadsDir)) {
+        fs.mkdirSync(downloadsDir, { recursive: true });
+      }
+
+      // Load the HTML lesson's clean text file to compile into PDF format
+      const cleanTextPath = path.join(LOCAL_OUTPUT_DIR, "text", `${params.hash}.clean.txt`);
+      const cleanText = fs.existsSync(cleanTextPath) ? fs.readFileSync(cleanTextPath, "utf8") : "Clean lesson text empty";
+
+      const doc = new jsPDF();
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(cleanName.replace(".pdf", ""), 20, 25);
+      
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Grade: ${params.grade_label}`, 20, 35);
+      doc.text(`Subject: ${params.subject_label}`, 20, 40);
+      doc.text(`Topic: ${params.topic_label}`, 20, 45);
+      doc.text(`Type: ${params.document_type_label}`, 20, 50);
+      doc.line(20, 55, 190, 55);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      
+      const splitText = doc.splitTextToSize(cleanText, 170);
+      let y = 65;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      for (let i = 0; i < splitText.length; i++) {
+        if (y > pageHeight - 20) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(splitText[i], 20, y);
+        y += 6;
+      }
+      
+      pdfBytes = Buffer.from(doc.output("arraybuffer"));
+      fs.writeFileSync(originalPath, pdfBytes);
+    } else {
+      pdfBytes = fs.readFileSync(originalPath);
     }
 
-    const pdfBytes = fs.readFileSync(originalPath);
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -1880,10 +2807,6 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     }
 
     const cleanBytes = await pdfDoc.save();
-    const shortHash = params.hash.substring(0, 8);
-    const cleanName = `${params.grade_slug}__${params.subject_slug}__${params.topic_slug}__${params.document_type_slug}__${shortHash}.pdf`;
-    const cleanPath = path.join(LOCAL_OUTPUT_DIR, "clean-pdfs", cleanName);
-    
     fs.writeFileSync(cleanPath, cleanBytes);
     return { cleanPath, cleanName };
   }
@@ -1898,24 +2821,388 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     fs.appendFileSync(jsonlPath, jsonLine);
   }
 
+  // --- HTML LESSON EXTRACTION HELPERS & ENDPOINTS ---
+
+  function extractHtmlLesson(html: string, url: string) {
+    let title = "HTML Lesson Page";
+    let contentHtml = "";
+    let contentText = "";
+    
+    // 1. Try Readability first
+    try {
+      const dom = new JSDOM(html, { url });
+      const reader = new Readability(dom.window.document);
+      const article = reader.parse();
+      if (article && article.textContent && article.textContent.trim().length > 100) {
+        title = article.title || title;
+        contentHtml = article.content || "";
+        contentText = article.textContent || "";
+      }
+    } catch (readErr) {
+      console.warn("Readability extraction failed, falling back to cheerio:", readErr);
+    }
+    
+    // 2. Fallback to Cheerio if Readability was not successful (no output or too short)
+    if (!contentText || contentText.trim().length <= 100) {
+      const $ = load(html);
+      
+      // Set webpage title
+      title = $('title').text() || $('h1').first().text() || "HTML Lesson";
+      
+      // Remove unwanted elements
+      const junkSelectors = [
+        'nav', 'header', 'footer', 'script', 'style', 'noscript', 'iframe',
+        '.ads', '.sidebar', '.comments', '.related-posts', '.share-buttons',
+        '.cookie-banner', '.menu', '.login-block', '#menu', '#header', '#footer',
+        '#sidebar', '.ad', '.adds', '.sharing', '.social'
+      ];
+      junkSelectors.forEach(sel => $(sel).remove());
+      
+      // Preferred containers
+      const containers = [
+        'article',
+        'main',
+        '.lesson-content',
+        '.entry-content',
+        '.post-content',
+        '.content',
+        'body'
+      ];
+      
+      let matchedContainer = null;
+      for (const sel of containers) {
+        const el = $(sel);
+        if (el.length > 0 && el.text().trim().length > 100) {
+          matchedContainer = el;
+          break;
+        }
+      }
+      
+      const target = matchedContainer || $('body');
+      contentHtml = target.html() || "";
+      contentText = target.text() || "";
+    }
+    
+    return { title, contentHtml, contentText };
+  }
+
+  function cleanHtmlLessonText(text: string): string {
+    if (!text) return "";
+    
+    let cleaned = text;
+    
+    // Remove known breadcrumb or repeated menus pattern, social utilities
+    const lines = cleaned.split("\n");
+    const filteredLines = lines.map(line => {
+      const trimmed = line.trim();
+      
+      // Filters
+      if (trimmed.toLowerCase().includes("read more") || trimmed.includes("إقرأ المزيد")) return "";
+      if (trimmed.toLowerCase().includes("related articles") || trimmed.includes("مواضيع ذات صلة")) return "";
+      if (trimmed.toLowerCase().includes("share on") || trimmed.includes("أنشر على")) return "";
+      if (trimmed.toLowerCase().includes("follow us") || trimmed.includes("تابعنا")) return "";
+      if (trimmed.toLowerCase().includes("copyright") || trimmed.includes("جميع الحقوق محفوظة")) return "";
+      if (trimmed.toLowerCase().includes("cookie") || trimmed.includes("ملفات تعريف الارتباط")) return "";
+      if (trimmed.toLowerCase().includes("home /") || trimmed.includes("الرئيسية /")) return "";
+      
+      // If it looks like repeated menu bar content (many links with separator characters like | or » or >)
+      if (trimmed.includes(" | ") && trimmed.split("|").length > 4) return "";
+      if (trimmed.includes(" • ") && trimmed.split("•").length > 4) return "";
+      
+      return line;
+    });
+    
+    cleaned = filteredLines.join("\n");
+    
+    // Replace multiple empty lines with a single empty line
+    cleaned = cleaned.replace(/\n\s*\n\s*\n/g, "\n\n");
+    
+    return cleaned.trim();
+  }
+
+  function extractHtmlLessonMetadata(urlStr: string, pageTitle: string, html: string, cleanText: string) {
+    let sourceDomain = "";
+    let sourceSite = "";
+    try {
+      const parsed = new URL(urlStr);
+      sourceDomain = parsed.hostname.toLowerCase();
+      const parts = sourceDomain.split(".");
+      sourceSite = parts.length > 2 ? parts[parts.length - 2] : parts[0];
+    } catch (e) {}
+
+    const $ = load(html);
+    
+    const h1Text = $('h1').map((_, el) => $(el).text()).get().join(" ");
+    const h2Text = $('h2').map((_, el) => $(el).text()).get().join(" ");
+    const breadcrumbText = $('.breadcrumb, .breadcrumbs, .breadcrumb-item').map((_, el) => $(el).text()).get().join(" ");
+    
+    // Combine all strings for keyword analysis
+    const normTextForSearch = `${urlStr || ""} ${pageTitle || ""} ${h1Text} ${h2Text} ${breadcrumbText} ${cleanText.substring(0, 1000)}`.toLowerCase();
+    
+    let gradeHint = "1AC";
+    let gradeSlug = "1ere_annee_college";
+    
+    if (normTextForSearch.includes("2ac") || normTextForSearch.includes("2eme_annee_college") || normTextForSearch.includes("2eme annee") || normTextForSearch.includes("الثانية إعدادي")) {
+      gradeHint = "2AC";
+      gradeSlug = "2eme_annee_college";
+    } else if (normTextForSearch.includes("3ac") || normTextForSearch.includes("3eme_annee_college") || normTextForSearch.includes("3eme annee") || normTextForSearch.includes("الثالثة إعدادي")) {
+      gradeHint = "3AC";
+      gradeSlug = "3eme_annee_college";
+    } else if (normTextForSearch.includes("tcs") || normTextForSearch.includes("tc ") || normTextForSearch.includes("tronc_commun") || normTextForSearch.includes("جذع مشترك")) {
+      gradeHint = "TC";
+      gradeSlug = "tronc_commun";
+    } else if (normTextForSearch.includes("1bac") || normTextForSearch.includes("1ere_bac") || normTextForSearch.includes("الأولى بكالوريا")) {
+      gradeHint = "1BAC";
+      gradeSlug = "1ere_bac";
+    } else if (normTextForSearch.includes("2bac") || normTextForSearch.includes("2eme_bac") || normTextForSearch.includes("الثانية بكالوريا")) {
+      gradeHint = "2BAC";
+      gradeSlug = "2eme_bac";
+    }
+
+    let subjectHint = "math";
+    let subjectSlug = "math";
+    
+    if (normTextForSearch.includes("physique") || normTextForSearch.includes("chimie") || normTextForSearch.includes(" pc ") || normTextForSearch.includes("فيزياء")) {
+      subjectHint = "pc";
+      subjectSlug = "pc";
+    } else if (normTextForSearch.includes("svt") || normTextForSearch.includes("علوم الحياة")) {
+      subjectHint = "svt";
+      subjectSlug = "svt";
+    } else if (normTextForSearch.includes("francais") || normTextForSearch.includes("français") || normTextForSearch.includes("الفرنسية")) {
+      subjectHint = "french";
+      subjectSlug = "french";
+    }
+
+    // Document Type & Document Role
+    let documentTypeHint = "cours";
+    if (normTextForSearch.includes("exercice") || normTextForSearch.includes("serie") || normTextForSearch.includes("تمارين")) {
+      documentTypeHint = "exercice";
+    } else if (normTextForSearch.includes("corrige") || normTextForSearch.includes("corrigé") || normTextForSearch.includes("correction") || normTextForSearch.includes("حلول")) {
+      documentTypeHint = "correction";
+    } else if (normTextForSearch.includes("jadhatha") || normTextForSearch.includes("جذاذة") || normTextForSearch.includes("جذاذات")) {
+      documentTypeHint = "jadhatha";
+    } else if (normTextForSearch.includes("forod") || normTextForSearch.includes("فرض") || normTextForSearch.includes("controle") || normTextForSearch.includes("exam")) {
+      documentTypeHint = "assessment";
+    }
+
+    // Language detection
+    let languageHint = "mixed";
+    const hasArabic = /[\u0600-\u06FF]/.test(cleanText);
+    const hasLatin = /[a-zA-Z]/.test(cleanText);
+    if (hasArabic && hasLatin) {
+      languageHint = "mixed";
+    } else if (hasArabic) {
+      languageHint = "ar";
+    } else if (hasLatin) {
+      languageHint = "fr";
+    }
+
+    return {
+      sourceDomain,
+      sourceSite,
+      assetType: "html_lesson",
+      gradeHint,
+      gradeSlug,
+      subjectHint,
+      subjectSlug,
+      topicHint: "", 
+      lessonHint: "", 
+      documentTypeHint,
+      languageHint,
+      metadataSourceFields: ["url_path", "title", "h1", "breadcrumbs"]
+    };
+  }
+
+  async function processHtmlLessonInternal(url: string, htmlContent: string, activeDict: any) {
+    const { title, contentHtml, contentText } = extractHtmlLesson(htmlContent, url);
+    const cleanText = cleanHtmlLessonText(contentText);
+    
+    // Hash the raw HTML content
+    const hash = crypto.createHash("sha256").update(htmlContent).digest("hex");
+    
+    // Save files locally
+    const htmlDir = path.join(LOCAL_OUTPUT_DIR, "html");
+    const textDir = path.join(LOCAL_OUTPUT_DIR, "text");
+    const datasetDir = path.join(LOCAL_OUTPUT_DIR, "dataset");
+    if (!fs.existsSync(htmlDir)) fs.mkdirSync(htmlDir, { recursive: true });
+    if (!fs.existsSync(textDir)) fs.mkdirSync(textDir, { recursive: true });
+    if (!fs.existsSync(datasetDir)) fs.mkdirSync(datasetDir, { recursive: true });
+
+    fs.writeFileSync(path.join(htmlDir, `${hash}.raw.html`), htmlContent, "utf8");
+    fs.writeFileSync(path.join(textDir, `${hash}.raw.txt`), contentText, "utf8");
+    fs.writeFileSync(path.join(textDir, `${hash}.clean.txt`), cleanText, "utf8");
+
+    // Extract Metadata Hints
+    const metadataHints = extractHtmlLessonMetadata(url, title, htmlContent, cleanText);
+    
+    // Words and text quality score
+    const words = cleanText.split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+    let textQualityScore = 0;
+    if (wordCount > 0) {
+      textQualityScore = Math.min(100, Math.round(40 + Math.min(60, wordCount / 5)));
+    }
+
+    return {
+      hash,
+      title,
+      rawHtml: htmlContent,
+      rawText: contentText,
+      cleanText,
+      language: metadataHints.languageHint,
+      metadataHints,
+      textQualityScore,
+      needsOcr: false,
+      extractionStatus: "html_extracted" as const
+    };
+  }
+
+  app.post("/api/pipeline/parse-html-lesson", async (req, res) => {
+    const { url, topicFilter } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: "URL is required" });
+    }
+
+    try {
+      const activeDict = normalizeDictionary(await getActiveDictionary());
+      
+      const response = await axios.get(url, {
+        responseType: "arraybuffer", // consistent buffer fetching
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/437.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/437.36"
+        },
+        timeout: 25000
+      });
+      const htmlContent = Buffer.from(response.data).toString("utf8");
+
+      const processed = await processHtmlLessonInternal(url, htmlContent, activeDict);
+
+      res.json({
+        success: true,
+        assetType: "html_lesson",
+        url,
+        sourceDomain: processed.metadataHints.sourceDomain,
+        title: processed.title,
+        rawHtml: processed.rawHtml,
+        rawText: processed.rawText,
+        cleanText: processed.cleanText,
+        language: processed.language,
+        metadataHints: processed.metadataHints,
+        textQualityScore: processed.textQualityScore,
+        needsOcr: false,
+        extractionStatus: "html_extracted"
+      });
+    } catch (err: any) {
+      console.error("[api/pipeline/parse-html-lesson Error]", err);
+      res.status(500).json({ error: `Failed to scrape/parse HTML lesson page: ${err.message}` });
+    }
+  });
+
   // --- WORKSTATION PIPELINE ENDPOINTS ---
+
+  async function runNvidiaIntakeAgent(
+    filename: string, 
+    contentType: string, 
+    textPreview: string, 
+    errorOccurred: boolean
+  ) {
+    const isPdf = contentType.includes("pdf") || filename.toLowerCase().endsWith(".pdf");
+    const textLen = textPreview.trim().length;
+    const emptyOrError = errorOccurred || textLen === 0;
+
+    if (!process.env.NVIDIA_API_KEY) {
+      console.warn("NVIDIA_API_KEY missing. Falling back to simple heuristic intake.");
+      return {
+        source_type: isPdf ? "pdf" : "unknown",
+        needs_ocr: emptyOrError,
+        routing_decision: emptyOrError ? "needs_ocr" : "text_extracted",
+        confidence: 0.5
+      };
+    }
+    
+    try {
+      const prompt = `You are the Scrap AI Intake Agent.
+Analyze the following document metadata and snippet to determine its routing.
+FileName: ${filename}
+ContentType: ${contentType}
+ParseExtractedTextLength: ${textPreview.length}
+ParserErrorOccurred: ${errorOccurred}
+TextSnippet (up to 1000 chars):
+${textPreview.substring(0, 1000)}
+
+Responsibilities:
+1. Detect source_type (pdf, image, webpage, docx, txt, json, html, unknown)
+2. Detect needs_ocr (boolean) - Does it need OCR if there is an error extracting text or text is garbage/empty?
+3. Determine routing_decision (needs_ocr, text_extracted, extract_failed)
+4. Give a confidence score (0.0 to 1.0)
+
+Respond strictly in raw JSON without markdown:
+{
+  "source_type": "pdf",
+  "needs_ocr": true,
+  "routing_decision": "needs_ocr",
+  "confidence": 0.9
+}`;
+
+      const aiResponse = await nvidia.chat.completions.create({
+        model: process.env.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct',
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 150,
+        temperature: 0.1
+      });
+      
+      const content = aiResponse.choices?.[0]?.message?.content || "{}";
+      const cleaned = content.replace(/```json/g, "").replace(/```/g, "").trim();
+      return JSON.parse(cleaned);
+    } catch (e) {
+      console.error("[NVIDIA Intake Agent] Error:", e);
+      return { source_type: "unknown", needs_ocr: emptyOrError, routing_decision: emptyOrError ? "needs_ocr" : "text_extracted", confidence: 0 };
+    }
+  }
 
   app.post("/api/pipeline/parse", async (req, res) => {
     const { url, title, topicFilter } = req.body;
     const safeTitle = getSafeTitleFromFilename(title || url || "unnamed");
     const fallbackName = `needs-review__${safeTitle}.pdf`;
 
+    let activeDict: any = { grades: [], subjects: [], topics: [], allowedDocumentTypes: [] };
+    try {
+      activeDict = await getActiveDictionary();
+    } catch (dictErr) {
+      console.warn("[Parse API] Failed to load active dictionary:", dictErr);
+    }
+
+    const deterministicMetadata = extractMetadataFromUrlAndFilename(url, title || "unnamed");
+    const mappedIds = mapMetadataHintsToDictionary(deterministicMetadata, activeDict);
+    const combinedMetadataAndIds = {
+      ...deterministicMetadata,
+      ...mappedIds
+    };
+
     try {
       if (!url) {
-        return res.status(400).json({ error: "URL is required" });
+        return res.json({
+          success: false,
+          status: "rejected",
+          pipelineStep: "url_validation",
+          blockReason: "missing_url",
+          reason: "URL is required",
+          technicalError: "",
+          metadata: combinedMetadataAndIds
+        });
       }
 
       const urlCheck = isValidUrlSource(url);
       if (!urlCheck.valid) {
         updateReport("rejection-report.json", { url, reason: urlCheck.reason, title });
         return res.json({
+          success: false,
           status: "rejected",
+          pipelineStep: "url_validation",
+          blockReason: "malformed_url",
           reason: urlCheck.reason || "Malformed or unsupported source URL",
+          technicalError: "",
+          metadata: combinedMetadataAndIds,
           cleanTitle: safeTitle,
           renamePattern: fallbackName,
           needsReview: true,
@@ -1924,6 +3211,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       }
 
       let pdfBytes: Buffer;
+      let contentType = "";
       try {
         const response = await axios.get(url, {
           responseType: "arraybuffer",
@@ -1933,15 +3221,93 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
           timeout: 20000
         });
         pdfBytes = Buffer.from(response.data);
+        contentType = (response.headers['content-type'] || '').toLowerCase();
       } catch (dlErr: any) {
         updateReport("rejection-report.json", { url, reason: `Download failed: ${dlErr.message}`, title });
         return res.json({
-          status: "failed",
+          success: false,
+          status: "blocked",
+          pipelineStep: "download",
+          blockReason: "download_failed",
           reason: `Download failed: ${dlErr.message}`,
+          technicalError: dlErr.stack || String(dlErr),
+          metadata: combinedMetadataAndIds,
           cleanTitle: safeTitle,
           renamePattern: fallbackName,
           needsReview: true,
           isMatch: false
+        });
+      }
+
+      const isPdfByUrl = url.toLowerCase().split(/[?#]/)[0].endsWith(".pdf");
+      const isHtml = contentType.includes("text/html");
+
+      if (isHtml && !isPdfByUrl) {
+        const htmlString = pdfBytes.toString("utf8");
+        const processed = await processHtmlLessonInternal(url, htmlString, activeDict);
+        const hash = processed.hash;
+        const textLen = processed.rawText.trim().length;
+        const textQualityScore = processed.textQualityScore;
+        const rawText = processed.rawText;
+        const cleanText = processed.cleanText;
+
+        const isDuplicateHtml = fs.existsSync(path.join(LOCAL_OUTPUT_DIR, "html", `${hash}.raw.html`));
+        if (!isDuplicateHtml) {
+          const htmlDir = path.join(LOCAL_OUTPUT_DIR, "html");
+          const textDir = path.join(LOCAL_OUTPUT_DIR, "text");
+          const datasetDir = path.join(LOCAL_OUTPUT_DIR, "dataset");
+          if (!fs.existsSync(htmlDir)) fs.mkdirSync(htmlDir, { recursive: true });
+          if (!fs.existsSync(textDir)) fs.mkdirSync(textDir, { recursive: true });
+          if (!fs.existsSync(datasetDir)) fs.mkdirSync(datasetDir, { recursive: true });
+
+          fs.writeFileSync(path.join(htmlDir, `${hash}.raw.html`), htmlString, "utf8");
+          fs.writeFileSync(path.join(textDir, `${hash}.raw.txt`), rawText, "utf8");
+          fs.writeFileSync(path.join(textDir, `${hash}.clean.txt`), cleanText, "utf8");
+        }
+
+        updateReport("extraction-report.json", {
+          hash,
+          url,
+          title: processed.title,
+          textLen,
+          textQualityScore,
+          needsOcr: false,
+          isDuplicate: isDuplicateHtml,
+          extractionStatus: "html_extracted",
+          assetType: "html_lesson"
+        });
+
+        const deterministicMetadata = processed.metadataHints;
+        const mappedIds = mapMetadataHintsToDictionary(deterministicMetadata, activeDict);
+        const combinedMetadataAndIdsForHtml = {
+          ...deterministicMetadata,
+          ...mappedIds,
+          assetType: "html_lesson"
+        };
+
+        return res.json({
+          success: true,
+          hash,
+          isDuplicate: isDuplicateHtml,
+          textSnippet: rawText.substring(0, 800),
+          textLength: textLen,
+          textQualityScore,
+          needsOcr: false,
+          ocrStatus: "not_needed",
+          extractionStatus: "html_extracted",
+          originalFilename: processed.title,
+          status: "classified",
+          pipelineStep: "extract",
+          blockReason: "",
+          technicalError: "",
+          metadata: {
+            ...combinedMetadataAndIdsForHtml,
+            rawTextLength: textLen,
+            textQualityScore,
+            needsOcr: false,
+            ocrStatus: "not_needed",
+            assetType: "html_lesson"
+          }
         });
       }
 
@@ -1981,29 +3347,25 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         }
       }
 
-      let needsOcr = false;
-      let ocrStatus: any = "not_needed";
+      const intakeResult = await runNvidiaIntakeAgent(
+        title || url,
+        contentType,
+        rawText.substring(0, 1000),
+        errorOccurred
+      );
 
-      if (errorOccurred) {
-        needsOcr = true;
-        ocrStatus = "needed";
-        extractionStatus = "extract_failed";
-      } else if (textLen < 100) {
-        needsOcr = true;
-        ocrStatus = "needed";
-        extractionStatus = "needs_ocr";
-      } else if (textLen >= 300 && textQualityScore >= 60) {
-        needsOcr = false;
-        ocrStatus = "not_needed";
-        extractionStatus = "text_extracted";
-      } else {
-        needsOcr = false;
-        ocrStatus = "not_needed";
-        extractionStatus = "text_extracted";
-      }
+      let needsOcr = intakeResult.needs_ocr;
+      let ocrStatus: any = needsOcr ? "needed" : "not_needed";
+      extractionStatus = intakeResult.routing_decision;
 
       const originalTextPath = path.join(LOCAL_OUTPUT_DIR, "text", `${hash}.original.txt`);
       fs.writeFileSync(originalTextPath, rawText);
+
+      const rawTextPath = path.join(LOCAL_OUTPUT_DIR, "text", `${hash}.raw.txt`);
+      fs.writeFileSync(rawTextPath, rawText);
+
+      const cleanTextPath = path.join(LOCAL_OUTPUT_DIR, "text", `${hash}.clean.txt`);
+      fs.writeFileSync(cleanTextPath, cleanExtractedText(rawText));
 
       updateReport("extraction-report.json", {
         hash,
@@ -2026,14 +3388,30 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         needsOcr,
         ocrStatus,
         extractionStatus,
-        originalFilename: path.basename(url || "unnamed.pdf")
+        originalFilename: path.basename(url || "unnamed.pdf"),
+        status: needsOcr ? "blocked" : "classified",
+        pipelineStep: "extract",
+        blockReason: needsOcr ? "ocr_needed" : "",
+        technicalError: errorOccurred ? errorMsg : "",
+        metadata: {
+          ...combinedMetadataAndIds,
+          rawTextLength: textLen,
+          textQualityScore,
+          needsOcr,
+          ocrStatus
+        }
       });
 
     } catch (err: any) {
       console.error("[Pipeline Parse Fatal Error]", err);
       res.json({
         success: false,
-        error: err.message || "Failed to process parse pipeline stepping"
+        status: "failed",
+        pipelineStep: "extract",
+        blockReason: "extraction_system_failure",
+        reason: err.message || "Failed to process parse pipeline stepping",
+        technicalError: err.stack || String(err),
+        metadata: combinedMetadataAndIds
       });
     }
   });
@@ -2059,6 +3437,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
 
   let queuedOcrItems: OcrQueueItem[] = [];
   let ocrConfig = {
+    ocrEngine: process.env.OCR_ENGINE || "gemini-2.5-flash",
     concurrency: parseInt(process.env.OCR_CONCURRENCY || "1"),
     delayBetweenPagesMs: parseInt(process.env.OCR_DELAY_BETWEEN_PAGES_MS || "8000"),
     delayBetweenPdfsMs: parseInt(process.env.OCR_DELAY_BETWEEN_PDFS_MS || "30000"),
@@ -2110,7 +3489,13 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       if (idx !== -1) {
         queuedOcrItems[idx] = itemToSave;
       } else {
-        queuedOcrItems.push(itemToSave);
+        // If it's missing, it implies it was deleted (e.g. by reset workspace). Only allow pushing strictly new 'queued' items to prevent zombie jobs from returning.
+        if (itemToSave.status === "queued" || itemToSave.status === "rate_limited" || itemToSave.status === "paused") {
+          queuedOcrItems.push(itemToSave);
+        } else {
+          console.warn(`[OCR Queue] Dropping zombie job from progress save: ${itemToSave.pdfHash}`);
+          return;
+        }
       }
     }
 
@@ -2163,6 +3548,117 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       item.totalPages = Math.min(realPages, ocrConfig.maxPagesPerPdf);
       item.estimatedRemainingPages = item.totalPages - (item.currentPage || 0);
       saveOcrProgressLocally(item);
+
+      if (ocrConfig.ocrEngine === "mistral-ocr-latest") {
+        try {
+          console.log(`[OCR Mistral] Triggering full PDF OCR for ${item.pdfHash} using Mistral AI`);
+          const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || "U2VlfgD437CjUw7gVhY4ll7EWDnRIKf2";
+          const filename = `${item.pdfHash}.pdf`;
+          const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+
+          const part1 = Buffer.from(
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="purpose"\r\n\r\n` +
+            `ocr\r\n` +
+            `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
+            `Content-Type: application/pdf\r\n\r\n`
+          );
+          const part2 = Buffer.from(`\r\n--${boundary}--\r\n`);
+          const payload = Buffer.concat([part1, pdfBytes, part2]);
+
+          console.log("[OCR Mistral] Uploading PDF to /v1/files...");
+          const uploadRes = await axios.post("https://api.mistral.ai/v1/files", payload, {
+            headers: {
+              "Authorization": `Bearer ${MISTRAL_API_KEY}`,
+              "Content-Type": `multipart/form-data; boundary=${boundary}`
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          });
+
+          const fileId = uploadRes.data.id;
+          if (!fileId) {
+            throw new Error("Failed to upload file to Mistral; no ID returned.");
+          }
+          console.log(`[OCR Mistral] File uploaded with ID: ${fileId}. Requesting OCR...`);
+
+          const ocrRes = await axios.post("https://api.mistral.ai/v1/ocr", {
+            model: "mistral-ocr-latest",
+            document: {
+              type: "file_id",
+              file_id: fileId
+            }
+          }, {
+            headers: {
+              "Authorization": `Bearer ${MISTRAL_API_KEY}`,
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            }
+          });
+
+          const mistralPages = ocrRes.data.pages || [];
+          console.log(`[OCR Mistral] OCR completed! Pages returned: ${mistralPages.length}`);
+
+          item.completedPages = [];
+          for (const pInfo of mistralPages) {
+            const pNum = pInfo.index + 1;
+            const pageText = pInfo.markdown || "";
+            
+            const pageTextPath = path.join(LOCAL_OUTPUT_DIR, "ocr", `${item.pdfHash}.page_${pNum}.txt`);
+            fs.writeFileSync(pageTextPath, pageText);
+            
+            if (!item.completedPages.includes(pNum)) {
+              item.completedPages.push(pNum);
+            }
+          }
+          item.totalPages = mistralPages.length;
+          item.currentPage = item.totalPages;
+          item.estimatedRemainingPages = 0;
+          item.updatedAt = new Date().toISOString();
+
+          let assembledText = "";
+          for (let pCheck = 1; pCheck <= item.totalPages; pCheck++) {
+            const pPath = path.join(LOCAL_OUTPUT_DIR, "ocr", `${item.pdfHash}.page_${pCheck}.txt`);
+            if (fs.existsSync(pPath)) {
+              assembledText += `--- PAGE ${pCheck} ---\n` + fs.readFileSync(pPath, "utf8") + "\n\n";
+            }
+          }
+          fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "ocr", `${item.pdfHash}.ocr.txt`), assembledText);
+          fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "text", `${item.pdfHash}.original.txt`), assembledText);
+          fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "text", `${item.pdfHash}.raw.txt`), assembledText);
+          fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "text", `${item.pdfHash}.clean.txt`), cleanExtractedText(assembledText));
+
+          item.status = "done";
+          item.errorMessage = undefined;
+          item.delayCountdown = 0;
+          saveOcrProgressLocally(item);
+
+          try {
+            await axios.delete(`https://api.mistral.ai/v1/files/${fileId}`, {
+              headers: { "Authorization": `Bearer ${MISTRAL_API_KEY}` }
+            });
+            console.log(`[OCR Mistral] Deleted temporary file: ${fileId}`);
+          } catch (delErr: any) {
+            console.warn("[OCR Mistral] Failed to delete temporary file:", delErr.message);
+          }
+
+          updateReport("ocr-report.json", {
+            hash: item.pdfHash,
+            rawOcrLen: item.totalPages * 500,
+            cleanLen: item.totalPages * 400
+          });
+
+          return;
+
+        } catch (err: any) {
+          console.error("[OCR Mistral Exception]", err);
+          item.status = "failed";
+          item.errorMessage = "Mistral OCR Failed: " + (err.response?.data?.message || err.message || "Unknown error");
+          saveOcrProgressLocally(item);
+          return;
+        }
+      }
 
       for (let pNum = 1; pNum <= item.totalPages; pNum++) {
         if (ocrConfig.isPaused || (item.status as string) === "paused" || (item.status as string) === "failed") {
@@ -2223,8 +3719,8 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         while (attempt <= ocrConfig.maxRetries) {
           try {
             console.log(`[OCR Queue] Sending PDF page ${pNum}/${item.totalPages} for hash ${item.pdfHash} (Attempt ${attempt})`);
-            const response = await ai.models.generateContent({
-              model: "gemini-3.5-flash",
+            const response = await callGeminiWithRetry({
+              model: "gemini-2.5-flash",
               contents: [
                 {
                   inlineData: {
@@ -2305,6 +3801,8 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
           }
         }
         fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "ocr", `${item.pdfHash}.ocr.txt`), assembledText);
+        fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "text", `${item.pdfHash}.original.txt`), assembledText);
+        fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "text", `${item.pdfHash}.raw.txt`), assembledText);
         fs.writeFileSync(path.join(LOCAL_OUTPUT_DIR, "text", `${item.pdfHash}.clean.txt`), cleanExtractedText(assembledText));
 
         saveOcrProgressLocally(item);
@@ -2467,6 +3965,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
 
   app.post("/api/pipeline/ocr/config", (req, res) => {
     const {
+      ocrEngine,
       concurrency,
       delayBetweenPagesMs,
       delayBetweenPdfsMs,
@@ -2478,6 +3977,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       isPaused
     } = req.body;
 
+    if (ocrEngine !== undefined) ocrConfig.ocrEngine = String(ocrEngine);
     if (concurrency !== undefined) ocrConfig.concurrency = Number(concurrency);
     if (delayBetweenPagesMs !== undefined) ocrConfig.delayBetweenPagesMs = Number(delayBetweenPagesMs);
     if (delayBetweenPdfsMs !== undefined) ocrConfig.delayBetweenPdfsMs = Number(delayBetweenPdfsMs);
@@ -2606,39 +4106,137 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         topic_label: topic.nameFr || topic.id,
         topic_slug: topic.suffix || topic.id,
         document_type_label: docType.nameFr || docType.id,
-        document_type_slug: docType.suffix || docType.id
+        document_type_slug: docType.suffix || docType.id,
+        url,
+        title
       });
 
       const cleanedTextContent = cleanExtractedText(text || "");
 
+      // Ensure clean text is written to the files system output folder
+      const cleanTextDir = path.join(LOCAL_OUTPUT_DIR, "text");
+      if (!fs.existsSync(cleanTextDir)) {
+        fs.mkdirSync(cleanTextDir, { recursive: true });
+      }
+      const cleanTextFilePath = path.join(cleanTextDir, `${hash}.clean.txt`);
+      fs.writeFileSync(cleanTextFilePath, cleanedTextContent, "utf8");
+
       const shortHash = hash.substring(0, 8);
       const datasetId = `${grade.suffix || grade.id}_${subject.suffix || subject.id}_${topic.suffix || topic.id}_${docType.suffix || docType.id}_${shortHash}`.toUpperCase();
 
-      const datasetRow = {
-        "$schema": "../../schemas/curriculum_asset_v1.schema.json",
-        "id": datasetId,
-        "hash": hash,
-        "original_url": url || "",
-        "classification": {
-          "grade": gradeId,
-          "subject": subjectId,
-          "topic": topicId,
-          "document_type": documentTypeId
-        },
-        "metadata": {
-          "title_arabic": topic.nameAr || "",
-          "title_french": topic.nameFr || "",
-          "text_source": fs.existsSync(path.join(LOCAL_OUTPUT_DIR, "ocr", `${hash}.ocr.txt`)) ? "ocr_text" : "searchable_text",
-          "original_filename": path.basename(url || "unnamed.pdf"),
-          "cleaned_filename": cleanName,
-          "num_pages": 1,
-          "has_solutions": documentTypeId === "correction"
-        },
-        "content": {
-          "raw_text_extracted": text || "",
-          "cleaned_text": cleanedTextContent
+      const { levelspace } = req.body;
+      let ls = levelspace || {};
+      
+      // Load curriculum to match modules and fill any missing curriculum names correctly
+      try {
+        const curIndex = await loadLevelspaceCurriculumIndex();
+        const curGrade = curIndex.grades?.find((g: any) => g.id === gradeId);
+        const curSubject = curIndex.subjects?.find((s: any) => s.id === subjectId);
+        const curTopic = curIndex.topics?.find((t: any) => t.id === topicId);
+        
+        let curModule: any = null;
+        if (curTopic && curTopic.module_id) {
+          curModule = curIndex.modules?.find((m: any) => m.id === curTopic.module_id);
         }
+        
+        let curLesson = curIndex.lessons?.find((l: any) => l.id === ls.lesson_id);
+        if (!curLesson && ls.lesson_id) {
+          curLesson = curIndex.lessons?.find((l: any) => l.id === "add_sub_rel");
+        }
+
+        const candidateLessons = curIndex.lessons?.filter((l: any) => l.topic_id === topicId).map((l: any) => ({
+          id: l.id,
+          title: l.title,
+          title_ar: l.title_ar
+        })) || [];
+
+        ls = {
+          grade_id: ls.grade_id || gradeId,
+          grade_name: ls.grade_name || curGrade?.nameFr || grade.nameFr,
+          subject_id: ls.subject_id || subjectId,
+          subject_name: ls.subject_name || curSubject?.nameFr || subject.nameFr,
+          module_id: ls.module_id || curModule?.id || "nombres_et_calcul",
+          module_name: ls.module_name || curModule?.nameFr || "Nombres et calcul",
+          topic_id: ls.topic_id || topicId,
+          topic_name: ls.topic_name || curTopic?.nameFr || topic.nameFr,
+          lesson_id: ls.lesson_id || (curLesson ? curLesson.id : null),
+          lesson_title: ls.lesson_title || (curLesson ? curLesson.title : null),
+          skill_ids: ls.skill_ids || (curLesson ? curIndex.skills?.filter((s: any) => s.lesson_id === curLesson.id).map((s: any) => s.id) : []),
+          objective_ids: ls.objective_ids || (curLesson ? curIndex.objectives?.filter((o: any) => o.lesson_id === curLesson.id).map((o: any) => o.id) : []),
+          document_role: ls.document_role || (documentTypeId === "jadhatha" ? "pedagogical_planning_source" : (documentTypeId === "cours" ? "student_lesson_source" : "practice_source")),
+          curriculum_path: ls.curriculum_path || (curLesson ? `${curGrade?.suffix || "1AC"} → ${curSubject?.nameFr || "Mathématiques"} → ${curModule?.nameFr || "Nombres et calcul"} → ${curTopic?.nameFr || "Nombres décimaux relatifs"} → ${curLesson.title}` : `${curGrade?.suffix || "1AC"} / ${curSubject?.nameFr || "Mathématiques"} / ${curTopic?.nameFr || "Nombres décimaux relatifs"}`),
+          curriculum_confidence: ls.curriculum_confidence || 100,
+          index_status: ls.index_status || "indexed",
+          student_visible: documentTypeId === "jadhatha" ? false : (ls.student_visible ?? true),
+          teacher_visible: ls.teacher_visible ?? true,
+          admin_visible: ls.admin_visible ?? true,
+          ai_visible: ls.ai_visible ?? true,
+          ai_knowledge: documentTypeId === "jadhatha" ? true : (ls.ai_knowledge ?? false),
+          knowledge_role: documentTypeId === "jadhatha" ? "pedagogical_planning" : (ls.knowledge_role || null),
+          candidate_lessons: ls.candidate_lessons || candidateLessons,
+          suggested_action: ls.suggested_action || null
+        };
+      } catch (curErr) {
+        console.warn("[Clean Copy Curriculum Alignment Warn]", curErr);
+      }
+
+      const datasetRow: any = {
+        "asset_id": hash,
+        "source_url": url || "",
+        "source_domain": url ? new URL(url).hostname : "",
+        "original_filename": path.basename(url || "unnamed.pdf"),
+        "clean_filename": cleanName,
+        
+        "levelspace_grade_id": ls.grade_id || gradeId,
+        "levelspace_subject_id": ls.subject_id || subjectId,
+        "levelspace_module_id": ls.module_id || "nombres_et_calcul",
+        "levelspace_topic_id": ls.topic_id || topicId,
+        "levelspace_lesson_id": ls.lesson_id || null,
+        
+        "levelspace_grade_name": ls.grade_name || grade.nameFr,
+        "levelspace_subject_name": ls.subject_name || subject.nameFr,
+        "levelspace_module_name": ls.module_name || "Nombres et calcul",
+        "levelspace_topic_name": ls.topic_name || topic.nameFr,
+        "levelspace_lesson_title": ls.lesson_title || null,
+        
+        "skill_ids": ls.skill_ids || [],
+        "objective_ids": ls.objective_ids || [],
+        
+        "document_type_id": documentTypeId || "cours",
+        "document_role": ls.document_role || "student_lesson_source",
+        
+        "language": "ar",
+        "text_source": fs.existsSync(path.join(LOCAL_OUTPUT_DIR, "ocr", `${hash}.ocr.txt`)) ? "ocr_text" : "pdf_text",
+        "needs_ocr": false,
+        
+        "raw_text_path": `/workspace/downloads/${hash}.original.pdf`,
+        "clean_text_path": `/workspace/text/${hash}.clean.txt`,
+        "clean_pdf_path": `/workspace/clean-pdfs/${cleanName}`,
+        
+        "curriculum_path": ls.curriculum_path || `${grade.id} / ${subject.id} / ${topic.id}`,
+        "curriculum_confidence": ls.curriculum_confidence || 100,
+        "index_status": ls.index_status || "indexed",
+        
+        "student_visible": ls.student_visible ?? true,
+        "teacher_visible": ls.teacher_visible ?? true,
+        "admin_visible": ls.admin_visible ?? true,
+        "ai_visible": ls.ai_visible ?? true,
+        "ai_knowledge": ls.ai_knowledge ?? false,
+        "knowledge_role": ls.knowledge_role || null,
+        
+        "use_for_lesson_generation": ls.document_role === "student_lesson_source" || ls.document_role === "pedagogical_planning_source",
+        "use_for_quiz_generation": ls.document_role === "practice_source",
+        "use_for_roadmap_generation": true,
+        
+        "matched_terms": [],
+        "matched_fields": [],
+        "candidate_lessons": ls.candidate_lessons || [],
+        "suggested_action": ls.suggested_action || null
       };
+
+      // Compatibility fields for the old format (just to not break previous logic accidentally)
+      datasetRow.id = datasetId;
+      datasetRow.metadata = datasetRow.metadata || {};
 
       try {
         const originalFilePath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${hash}.original.pdf`);
@@ -2684,6 +4282,242 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     }
   });
 
+  function getDeterministicHash(url: string) {
+    let hash = 0;
+    for (let i = 0; i < url.length; i++) {
+      const char = url.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+    return "hash_" + Math.abs(hash).toString(36);
+  }
+
+  function mapToReportRow(pdf: any) {
+    const asset_id = pdf.hash || getDeterministicHash(pdf.url || "unknown");
+    const filename = pdf.originalName || pdf.filename || "scraped_document.pdf";
+    const url = pdf.url || "";
+    
+    // Determine status and step
+    let status = pdf.status || "pending";
+    let step = "intake";
+    let blockReason = pdf.reason || pdf.blockReason || (pdf.levelspace && pdf.levelspace.index_reason) || null;
+
+    if (pdf.levelspace?.index_status === "indexed") {
+      status = "indexed";
+      step = "indexing";
+    } else if (pdf.levelspace?.index_status === "needs_review") {
+      status = "needs_review";
+      step = "indexing";
+    } else if (pdf.cleanCopyStatus === "success" || pdf.datasetRowStatus === "success") {
+      status = "complete";
+      step = "output";
+    } else if (status === "classified") {
+      step = "classification";
+    } else if (pdf.extractionStatus === "success" || pdf.rawText) {
+      step = "extraction";
+    } else if (pdf.extractionStatus === "failed" || pdf.status === "failed") {
+      status = "failed";
+      step = "extraction";
+    }
+
+    if (!blockReason && status === "needs_review") {
+      blockReason = "no_matching_lesson";
+    }
+    
+    // Check missing lesson aliases
+    if (!blockReason && filename.toLowerCase().includes("دروس") && !pdf.levelspace?.lesson_id) {
+      blockReason = "lesson_alias_missing";
+    }
+
+    if (!blockReason && (pdf.ocrStatus === "ocr_needed" || status === "ocr_needed")) {
+      blockReason = "ocr_needed";
+    }
+
+    const levelspace = pdf.levelspace || {};
+
+    let suggestedAction = "No immediate action required. File is in active pipeline staging.";
+    if (status === "indexed" || status === "complete") {
+      suggestedAction = "Success: Document is mapped to Levelspace and is ready for export.";
+    } else if (blockReason === "no_matching_lesson") {
+      suggestedAction = "Map to Lesson: Select 'Map to Lesson' to choose an appropriate curriculum branch and resolve this index block.";
+    } else if (blockReason === "multiple_candidate_lessons") {
+      suggestedAction = "Disambiguate Candidates: Select 'Approve Candidate' or choose one candidate lesson directly to unblock the pipeline.";
+    } else if (blockReason === "topic_not_in_curriculum") {
+      suggestedAction = "Curriculum Override: Map to the nearest existing lesson or flag this topic to the curriculum alignment administrator.";
+    } else if (blockReason === "module_missing") {
+      suggestedAction = "Coordinate Dictionary: Define the parent framework domain in the dictionary or link this element to a Lesson node.";
+    } else if (blockReason === "lesson_alias_missing") {
+      suggestedAction = "Add search aliases (e.g. Arabic title variant) to the dictionary to refine automatic keyword matching.";
+    } else if (blockReason === "grade_subject_mismatch") {
+      suggestedAction = "Verify Mismatch: Resolve conflicts between grade designation and subjects by selecting manual grade-subject overrides.";
+    } else if (blockReason === "document_type_uncertain") {
+      suggestedAction = "Assign Type: Apply a manual document type override (e.g. cours vs exercices) to classify this document.";
+    } else if (blockReason === "ocr_needed" || pdf.ocrStatus === "ocr_needed" || status === "ocr_needed") {
+      suggestedAction = "OCR Required: Execute OCR Safe Mode to process text layers of scanned PDF imagery.";
+    } else if (blockReason === "topic_filter_mismatch") {
+      suggestedAction = "Reset exclusive topic boundaries, or enforce matching by using the 'Force Map Topic' override.";
+    } else if (blockReason === "malformed_url") {
+      suggestedAction = "Link Correction: Sanitize escaping errors/delimiters in the URL path, or skip this item.";
+    } else if (blockReason === "jadhatha_needs_curriculum_mapping") {
+      suggestedAction = "Jadhatha Alignment: Align the pedagogical Jadhatha sheet with the corresponding lesson node objectives.";
+    } else if (status === "failed" || pdf.extractionStatus === "failed") {
+      suggestedAction = "Network Retry: Trigger a retry download or inspect if the host URL is accessible and active.";
+    } else if (status === "rejected") {
+      suggestedAction = "Restore document: Review and restore the rejected file, or permanently delete the file from the current workspace.";
+    }
+
+    const technicalError = pdf.technicalError || (status === "failed" ? "PDF stream parsing timed out or was interrupted" : null);
+
+    const metadata_hints = {
+      original_grades: pdf.gradeId ? [pdf.gradeId] : [],
+      original_subjects: pdf.subjectId ? [pdf.subjectId] : [],
+      original_topics: pdf.topicId ? [pdf.topicId] : [],
+      document_type_id: pdf.documentTypeId || null,
+      clean_title: pdf.cleanTitle || null
+    };
+
+    const classification_result = {
+      isMatch: pdf.isMatch || false,
+      confidence: pdf.isMatch ? 90 : 20,
+      parsedGradeId: pdf.gradeId || null,
+      parsedSubjectId: pdf.subjectId || null,
+      parsedTopicId: pdf.topicId || null,
+      parsedDocumentTypeId: pdf.documentTypeId || null
+    };
+
+    const levelspace_index_result = {
+      grade_id: levelspace.grade_id || pdf.gradeId || null,
+      grade_name: levelspace.grade_name || null,
+      subject_id: levelspace.subject_id || pdf.subjectId || null,
+      subject_name: levelspace.subject_name || null,
+      module_id: levelspace.module_id || "nombres_et_calcul",
+      module_name: levelspace.module_name || "Nombres et calcul",
+      topic_id: levelspace.topic_id || pdf.topicId || null,
+      topic_name: levelspace.topic_name || null,
+      lesson_id: levelspace.lesson_id || null,
+      lesson_title: levelspace.lesson_title || null,
+      curriculum_path: levelspace.curriculum_path || null,
+      curriculum_confidence: levelspace.curriculum_confidence || 0,
+      index_status: levelspace.index_status || (status === "indexed" ? "indexed" : "pending"),
+      index_reason: blockReason,
+      suggested_action: suggestedAction
+    };
+
+    return {
+      "asset_id": asset_id,
+      "filename": filename,
+      "url": url,
+      "status": status,
+      "pipelineStep": step,
+      "blockReason": blockReason,
+      "technicalError": technicalError,
+      "metadata hints": metadata_hints,
+      "metadata_hints": metadata_hints,
+      "classification result": classification_result,
+      "classification_result": classification_result,
+      "Levelspace index result": levelspace_index_result,
+      "levelspace_index_result": levelspace_index_result,
+      "levelspace": levelspace_index_result,
+      "suggestedAction": suggestedAction
+    };
+  }
+
+  function generateAllReports(stagedPdfs: any[]) {
+    const reportsDir = path.join(LOCAL_OUTPUT_DIR, "reports");
+    if (!fs.existsSync(reportsDir)) {
+      fs.mkdirSync(reportsDir, { recursive: true });
+    }
+
+    const allRows = (stagedPdfs || []).map(mapToReportRow);
+
+    // 1. intake-report.json
+    fs.writeFileSync(path.join(reportsDir, "intake-report.json"), JSON.stringify(allRows, null, 2), "utf8");
+
+    // 2. extraction-report.json
+    const extractionRows = allRows.filter((r: any) => r.pipelineStep !== "intake");
+    fs.writeFileSync(path.join(reportsDir, "extraction-report.json"), JSON.stringify(extractionRows, null, 2), "utf8");
+
+    // 3. classification-report.json
+    const classificationRows = allRows.filter((r: any) => r.pipelineStep !== "intake" && r.pipelineStep !== "extraction");
+    fs.writeFileSync(path.join(reportsDir, "classification-report.json"), JSON.stringify(classificationRows, null, 2), "utf8");
+
+    // 4. indexing-report.json
+    const indexingRows = allRows.filter((r: any) => r.pipelineStep === "indexing" || r.status === "needs_review" || r.status === "indexed" || r.levelspace?.lesson_id);
+    fs.writeFileSync(path.join(reportsDir, "indexing-report.json"), JSON.stringify(indexingRows, null, 2), "utf8");
+
+    // 5. blocked-items.json
+    const blockedRows = allRows.filter((r: any) => r.status === "needs_review" || r.status === "blocked" || r.status === "failed" || r.status === "ocr_needed" || r.blockReason);
+    fs.writeFileSync(path.join(reportsDir, "blocked-items.json"), JSON.stringify(blockedRows, null, 2), "utf8");
+
+    // 6. output-report.json
+    const outputRows = allRows.filter((r: any) => r.status === "indexed" || r.status === "complete");
+    fs.writeFileSync(path.join(reportsDir, "output-report.json"), JSON.stringify(outputRows, null, 2), "utf8");
+
+    // 7. batch-summary.json
+    const summaryRows = allRows;
+    const summary = {
+      total_records: allRows.length,
+      indexed: allRows.filter((r: any) => r.status === "indexed").length,
+      needs_review: allRows.filter((r: any) => r.status === "needs_review").length,
+      blocked: allRows.filter((r: any) => r.status === "blocked" || r.status === "needs_review" || r.blockReason === "ocr_needed").length,
+      rejected: allRows.filter((r: any) => r.status === "rejected").length,
+      failed_technical: allRows.filter((r: any) => r.status === "failed").length,
+      ocr_needed: allRows.filter((r: any) => r.status === "ocr_needed" || r.blockReason === "ocr_needed").length,
+      missing_lesson_aliases: allRows.filter((r: any) => r.blockReason === "lesson_alias_missing").length,
+      average_confidence: allRows.length > 0 ? (allRows.reduce((acc, r) => acc + (r.levelspace?.curriculum_confidence || 0), 0) / allRows.length) : 0,
+      timestamp: new Date().toISOString(),
+      rows: summaryRows
+    };
+    fs.writeFileSync(path.join(reportsDir, "batch-summary.json"), JSON.stringify(summary, null, 2), "utf8");
+
+    return {
+      intake: allRows,
+      extraction: extractionRows,
+      classification: classificationRows,
+      indexing: indexingRows,
+      blocked: blockedRows,
+      output: outputRows,
+      summary: summary
+    };
+  }
+
+  app.post("/api/pipeline/reports", async (req, res) => {
+    try {
+      const { stagedPdfs } = req.body;
+      const results = generateAllReports(stagedPdfs || []);
+
+      const downloadsDir = path.join(LOCAL_OUTPUT_DIR, "downloads");
+      const cleanPdfsDir = path.join(LOCAL_OUTPUT_DIR, "clean-pdfs");
+      const datasetDir = path.join(LOCAL_OUTPUT_DIR, "dataset");
+
+      const countFiles = (dir: string, suffix: string) => {
+        if (!fs.existsSync(dir)) return 0;
+        return fs.readdirSync(dir).filter(f => f.endsWith(suffix)).length;
+      };
+
+      res.json({
+        stats: {
+          originalDownloads: countFiles(downloadsDir, ".original.pdf") || (stagedPdfs || []).length,
+          cleanCopies: countFiles(cleanPdfsDir, ".pdf"),
+          datasetRows: countFiles(datasetDir, ".json"),
+          localRoot: LOCAL_OUTPUT_DIR
+        },
+        reports: {
+          intake: results.intake,
+          extraction: results.extraction,
+          classification: results.classification,
+          indexing: results.indexing,
+          blocked: results.blocked,
+          output: results.output,
+          summary: results.summary
+        }
+      });
+    } catch (err: any) {
+      console.error("[Reports generation failed]", err);
+      res.status(500).json({ error: err.message || "Failed to generate comprehensive reports" });
+    }
+  });
+
   app.get("/api/pipeline/reports", async (req, res) => {
     try {
       const downloadsDir = path.join(LOCAL_OUTPUT_DIR, "downloads");
@@ -2695,10 +4529,6 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         if (!fs.existsSync(dir)) return 0;
         return fs.readdirSync(dir).filter(f => f.endsWith(suffix)).length;
       };
-
-      const originalCount = countFiles(downloadsDir, ".original.pdf");
-      const cleanCount = countFiles(cleanPdfsDir, ".pdf");
-      const datasetCount = countFiles(datasetDir, ".json");
 
       const loadReportFile = (name: string) => {
         const p = path.join(reportsDir, name);
@@ -2714,23 +4544,785 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
 
       res.json({
         stats: {
-          originalDownloads: originalCount,
-          cleanCopies: cleanCount,
-          datasetRows: datasetCount,
+          originalDownloads: countFiles(downloadsDir, ".original.pdf"),
+          cleanCopies: countFiles(cleanPdfsDir, ".pdf"),
+          datasetRows: countFiles(datasetDir, ".json"),
           localRoot: LOCAL_OUTPUT_DIR
         },
         reports: {
-          crawl: loadReportFile("crawl-report.json"),
+          intake: loadReportFile("intake-report.json"),
           extraction: loadReportFile("extraction-report.json"),
-          ocr: loadReportFile("ocr-report.json"),
           classification: loadReportFile("classification-report.json"),
-          cleanCopy: loadReportFile("clean-copy-report.json"),
-          rejection: loadReportFile("rejection-report.json"),
-          dataset: loadReportFile("dataset-report.json")
+          indexing: loadReportFile("indexing-report.json"),
+          blocked: loadReportFile("blocked-items.json"),
+          output: loadReportFile("output-report.json"),
+          summary: loadReportFile("batch-summary.json")
         }
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to aggregate statistics" });
+    }
+  });
+
+  // Batch Jobs Listing Route
+  app.get("/api/pipeline/batch-jobs", (req, res) => {
+    const dirPath = path.join(LOCAL_OUTPUT_DIR, "reports", "batch-jobs");
+    if (!fs.existsSync(dirPath)) {
+      return res.json([]);
+    }
+    try {
+      const files = fs.readdirSync(dirPath);
+      const jobs = files
+        .filter(f => f.endsWith(".json"))
+        .map(f => {
+          try {
+            return JSON.parse(fs.readFileSync(path.join(dirPath, f), "utf8"));
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      res.json(jobs);
+    } catch (err: any) {
+      res.status(500).json({ error: `Failed to list batch jobs: ${err.message}` });
+    }
+  });
+
+  // Single Batch Job Retrieve Route
+  app.get("/api/pipeline/batch-job/:id", (req, res) => {
+    const id = req.params.id;
+    const jobPath = path.join(LOCAL_OUTPUT_DIR, "reports", "batch-jobs", `${id}.json`);
+    if (!fs.existsSync(jobPath)) {
+      return res.status(404).json({ error: "Batch job not found" });
+    }
+    try {
+      const job = JSON.parse(fs.readFileSync(jobPath, "utf8"));
+      res.json(job);
+    } catch (err: any) {
+      res.status(500).json({ error: `Failed to parse batch job: ${err.message}` });
+    }
+  });
+
+  // Save Batch Job Progress Route
+  app.post("/api/pipeline/batch-job", (req, res) => {
+    const job = req.body;
+    if (!job || !job.id) {
+      return res.status(400).json({ error: "Missing job object or job ID" });
+    }
+    const dirPath = path.join(LOCAL_OUTPUT_DIR, "reports", "batch-jobs");
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    const jobPath = path.join(dirPath, `${job.id}.json`);
+    fs.writeFileSync(jobPath, JSON.stringify(job, null, 2), "utf8");
+
+    // Update batch-summary.json
+    updateReport("batch-summary.json", {
+      id: job.id,
+      name: job.name,
+      totalItems: job.totalItems,
+      completed: job.completed,
+      blocked: job.blocked,
+      failed: job.failed,
+      status: job.status,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ success: true });
+  });
+
+  // --- LEVELSPACE INDEXING ---
+  function getField(obj: any, keys: string[]) {
+    for (const k of keys) {
+      if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+    }
+    return null;
+  }
+
+  function mergeWithAndEnsureDefaults(index: any) {
+    const ensureEntry = (array: any[], matchFn: (item: any) => boolean, defaultObj: any) => {
+      const existing = array.find(matchFn);
+      if (existing) {
+        for (const k of Object.keys(defaultObj)) {
+          if (existing[k] === undefined || existing[k] === null) {
+            existing[k] = defaultObj[k];
+          }
+        }
+      } else {
+        array.push(defaultObj);
+      }
+    };
+
+    ensureEntry(index.grades, 
+      (g) => {
+        const id = getField(g, ["id", "grade_id"]) || "";
+        const suff = getField(g, ["suffix"]) || "";
+        return id.toLowerCase().includes("1ere_annee") || id.toLowerCase().includes("1ac") || suff.toUpperCase() === "1AC";
+      },
+      {
+        id: "1ere_annee_college",
+        grade_id: "1ere_annee_college",
+        name_fr: "1ère Année Collège",
+        nameFr: "1ère Année Collège",
+        name_ar: "السنة الأولى إعدادي",
+        nameAr: "السنة الأولى إعدادي",
+        suffix: "1AC",
+        code: "1ac"
+      }
+    );
+
+    ensureEntry(index.subjects,
+      (s) => {
+        const id = getField(s, ["id", "subject_id"]) || "";
+        const suff = getField(s, ["suffix"]) || "";
+        return id.toLowerCase() === "math" || suff.toUpperCase() === "MATH";
+      },
+      {
+        id: "math",
+        subject_id: "math",
+        name_fr: "Mathématiques",
+        nameFr: "Mathématiques",
+        name_ar: "الرياضيات",
+        nameAr: "الرياضيات",
+        suffix: "MATH",
+        code: "math"
+      }
+    );
+
+    ensureEntry(index.modules,
+      (m) => {
+        const id = getField(m, ["id", "module_id"]) || "";
+        const nameFr = (getField(m, ["name_fr", "nameFr", "name"]) || "").toLowerCase();
+        return id.toLowerCase().includes("nombre") || id.toLowerCase().includes("calcul") || nameFr.includes("nombre");
+      },
+      {
+        id: "nombres_et_calcul",
+        module_id: "nombres_et_calcul",
+        name_fr: "Nombres et calcul",
+        nameFr: "Nombres et calcul",
+        name_ar: "الأعداد والحساب",
+        nameAr: "الأعداد والحساب",
+        grade_id: "1ere_annee_college",
+        subject_id: "math"
+      }
+    );
+
+    ensureEntry(index.topics,
+      (t) => {
+        const id = getField(t, ["id", "topic_id"]) || "";
+        const nameFr = (getField(t, ["name_fr", "nameFr", "name"]) || "").toLowerCase();
+        return id.toLowerCase().includes("decimals_rel") || nameFr.includes("décimaux relatifs") || nameFr.includes("decimaux relatifs");
+      },
+      {
+        id: "decimals_rel",
+        topic_id: "decimals_rel",
+        name_fr: "Nombres décimaux relatifs",
+        nameFr: "Nombres décimaux relatifs",
+        name_ar: "الأعداد العشرية النسبية",
+        nameAr: "الأعداد العشرية النسبية",
+        subject_id: "math",
+        module_id: "nombres_et_calcul"
+      }
+    );
+
+    ensureEntry(index.lessons,
+      (l) => {
+        const id = getField(l, ["id", "lesson_id"]) || "";
+        const nameFr = (getField(l, ["title", "title_fr", "name_fr", "nameFr", "name"]) || "").toLowerCase();
+        return id.toLowerCase().includes("add_sub_rel") || nameFr.includes("addition et soustraction");
+      },
+      {
+        id: "add_sub_rel",
+        lesson_id: "add_sub_rel",
+        title: "Addition et soustraction des nombres décimaux relatifs",
+        name_fr: "Addition et soustraction des nombres décimaux relatifs",
+        title_ar: "جمع و طرح الأعداد العشرية النسبية",
+        name_ar: "جمع و طرح الأعداد العشرية النسبية",
+        topic_id: "decimals_rel",
+        module_id: "nombres_et_calcul",
+        subject_id: "math",
+        grade_id: "1ere_annee_college",
+        aliases: [
+          "جمع و طرح الأعداد العشرية النسبية",
+          "جمع وطرح الأعداد العشرية النسبية",
+          "addition et soustraction des nombres décimaux relatifs",
+          "addition et soustraction",
+          "addition soustraction decimaux relatifs"
+        ]
+      }
+    );
+
+    const defaultSkills = [
+      { id: "add_same_sign", name: "Additionner deux nombres relatifs de même signe", lesson_id: "add_sub_rel" },
+      { id: "add_diff_sign", name: "Additionner deux de signes contraires", lesson_id: "add_sub_rel" },
+      { id: "sub_rel", name: "Soustraire deux nombres relatifs", lesson_id: "add_sub_rel" },
+      { id: "identify_opp", name: "Identifier et utiliser l'opposé d'un nombre relatif", lesson_id: "add_sub_rel" }
+    ];
+    for (const sk of defaultSkills) {
+      ensureEntry(index.skills, (s) => (getField(s, ["id", "skill_id"]) || "") === sk.id, sk);
+    }
+
+    const defaultObjectives = [
+      { id: "obj_add_sub_rel", name: "Calculer la somme et la différence de deux nombres décimaux relatifs", lesson_id: "add_sub_rel" }
+    ];
+    for (const obj of defaultObjectives) {
+      ensureEntry(index.objectives, (o) => (getField(o, ["id", "objective_id"]) || "") === obj.id, obj);
+    }
+
+    index.grades.forEach((g: any) => {
+      g.id = getField(g, ["id", "grade_id", "code"]);
+      g.nameFr = getField(g, ["nameFr", "name_fr", "name"]);
+      g.nameAr = getField(g, ["nameAr", "name_ar", "title_ar"]);
+      g.suffix = getField(g, ["suffix", "code"]);
+    });
+
+    index.subjects.forEach((s: any) => {
+      s.id = getField(s, ["id", "subject_id", "code"]);
+      s.nameFr = getField(s, ["nameFr", "name_fr", "name"]);
+      s.nameAr = getField(s, ["nameAr", "name_ar", "title_ar"]);
+      s.suffix = getField(s, ["suffix", "code"]);
+    });
+
+    index.modules.forEach((m: any) => {
+      m.id = getField(m, ["id", "module_id", "code"]);
+      m.nameFr = getField(m, ["nameFr", "name_fr", "name", "title_fr"]);
+      m.nameAr = getField(m, ["nameAr", "name_ar", "title_ar"]);
+      m.grade_id = getField(m, ["grade_id", "gradeId", "grade_code"]);
+      m.subject_id = getField(m, ["subject_id", "subjectId", "subject_code"]);
+    });
+
+    index.topics.forEach((t: any) => {
+      t.id = getField(t, ["id", "topic_id", "code"]);
+      t.nameFr = getField(t, ["nameFr", "name_fr", "name", "title_fr"]);
+      t.nameAr = getField(t, ["nameAr", "name_ar", "title_ar"]);
+      t.subject_id = getField(t, ["subject_id", "subjectId"]);
+      t.module_id = getField(t, ["module_id", "moduleId"]);
+    });
+
+    index.lessons.forEach((l: any) => {
+      l.id = getField(l, ["id", "lesson_id", "code"]);
+      l.title = getField(l, ["title", "title_fr", "nameFr", "name_fr", "name"]);
+      l.title_ar = getField(l, ["title_ar", "nameAr", "name_ar", "titleAr"]);
+      l.topic_id = getField(l, ["topic_id", "topicId"]);
+      l.module_id = getField(l, ["module_id", "moduleId"]);
+      l.subject_id = getField(l, ["subject_id", "subjectId"]);
+      l.grade_id = getField(l, ["grade_id", "gradeId"]);
+      l.aliases = getField(l, ["aliases", "search_aliases", "keywords"]) || [];
+    });
+
+    index.grades.forEach((g: any) => { g.nameFr = g.nameFr || g.nameAr || g.id; g.nameAr = g.nameAr || g.nameFr || g.id; });
+    index.subjects.forEach((s: any) => { s.nameFr = s.nameFr || s.nameAr || s.id; s.nameAr = s.nameAr || s.nameFr || s.id; });
+    index.modules.forEach((m: any) => { m.nameFr = m.nameFr || m.nameAr || m.id; m.nameAr = m.nameAr || m.nameFr || m.id; });
+    index.topics.forEach((t: any) => { t.nameFr = t.nameFr || t.nameAr || t.id; t.nameAr = t.nameAr || t.nameFr || t.id; });
+    index.lessons.forEach((l: any) => { l.title = l.title || l.title_ar || l.id; l.title_ar = l.title_ar || l.title || l.id; });
+  }
+
+  async function loadLevelspaceCurriculumIndex() {
+    const index = {
+      grades: [] as any[],
+      subjects: [] as any[],
+      modules: [] as any[],
+      topics: [] as any[],
+      lessons: [] as any[],
+      skills: [] as any[],
+      objectives: [] as any[],
+      document_types: [] as any[]
+    };
+
+    if (supabase) {
+      try {
+        const { data: gData, error: gErr } = await supabase.from("grades").select("*");
+        if (gData && !gErr) {
+          index.grades = gData;
+        }
+      } catch (e) {
+        console.warn("[loadLevelspaceCurriculumIndex] Error loading grades from Supabase:", e);
+      }
+
+      try {
+        const { data: sData, error: sErr } = await supabase.from("subjects").select("*");
+        if (sData && !sErr) {
+          index.subjects = sData;
+        }
+      } catch (e) {
+        console.warn("[loadLevelspaceCurriculumIndex] Error loading subjects from Supabase:", e);
+      }
+
+      const prefModuleTables = ["modules", "domains", "topic_domain_overview", "topic_outlines", "lesson_tracks", "topic_material_requirements"];
+      for (const tbl of prefModuleTables) {
+        try {
+          const { data: mData, error: mErr } = await supabase.from(tbl).select("*");
+          if (mData && !mErr && mData.length > 0) {
+            index.modules = mData;
+            break;
+          }
+        } catch {}
+      }
+
+      try {
+        const { data: tData, error: tErr } = await supabase.from("topics").select("*");
+        if (tData && !tErr) {
+          index.topics = tData;
+        } else {
+          const { data: tSingleData, error: tSingleErr } = await supabase.from("topic").select("*");
+          if (tSingleData && !tSingleErr) index.topics = tSingleData;
+        }
+      } catch (e) {
+        console.warn("[loadLevelspaceCurriculumIndex] Error loading topics from Supabase:", e);
+      }
+
+      try {
+        const { data: lData, error: lErr } = await supabase.from("lessons").select("*");
+        if (lData && !lErr) {
+          index.lessons = lData;
+        } else {
+          const { data: lSingleData, error: lSingleErr } = await supabase.from("lesson").select("*");
+          if (lSingleData && !lSingleErr) index.lessons = lSingleData;
+        }
+      } catch (e) {
+        console.warn("[loadLevelspaceCurriculumIndex] Error loading lessons from Supabase:", e);
+      }
+
+      try {
+        const { data: skData, error: skErr } = await supabase.from("skills").select("*");
+        if (skData && !skErr) {
+          index.skills = skData;
+        }
+      } catch (e) {
+        console.warn("[loadLevelspaceCurriculumIndex] Error loading skills from Supabase:", e);
+      }
+
+      try {
+        const { data: oData, error: oErr } = await supabase.from("objectives").select("*");
+        if (oData && !oErr) {
+          index.objectives = oData;
+        }
+      } catch (e) {
+        console.warn("[loadLevelspaceCurriculumIndex] Error loading objectives from Supabase:", e);
+      }
+
+      try {
+        const { data: dtData, error: dtErr } = await supabase.from("document_types").select("*");
+        if (dtData && !dtErr) {
+          index.document_types = dtData;
+        }
+      } catch (e) {
+        console.warn("[loadLevelspaceCurriculumIndex] Error loading document_types from Supabase:", e);
+      }
+    }
+
+    mergeWithAndEnsureDefaults(index);
+    return index;
+  }
+
+  async function indexPdfToLevelspace(params: {
+    sourceUrl: string;
+    originalFilename: string;
+    cleanText: string;
+    metadataHints?: any;
+    classification?: any;
+    curriculumIndex: any;
+  }) {
+    const { sourceUrl, originalFilename, cleanText, metadataHints, classification, curriculumIndex } = params;
+
+    const normFilename = (originalFilename || "").toLowerCase();
+    const normUrl = (sourceUrl || "").toLowerCase();
+    const normText = (cleanText || "").trim().toLowerCase();
+
+    const isJadhatha = isJadhathaString(originalFilename) || 
+                       isJadhathaString(sourceUrl) ||
+                       (metadataHints?.documentTypeId === "jadhatha") ||
+                       (classification?.documentTypeId === "jadhatha");
+
+    let matchedLesson: any = null;
+
+    for (const l of curriculumIndex.lessons) {
+      const lTitleFr = (l.title || "").toLowerCase();
+      const lTitleAr = (l.title_ar || "").toLowerCase();
+
+      const matchFound = 
+        normFilename.includes(lTitleFr) || 
+        normFilename.includes(lTitleAr) ||
+        normUrl.includes(lTitleFr) ||
+        normUrl.includes(lTitleAr) ||
+        (l.aliases && l.aliases.some((alias: string) => {
+          const normAlias = alias.toLowerCase();
+          return normFilename.includes(normAlias) || normUrl.includes(normAlias);
+        }));
+
+      if (matchFound) {
+        matchedLesson = l;
+        break;
+      }
+    }
+
+    if (!matchedLesson) {
+      if (
+        (normFilename.includes("الأعداد") && normFilename.includes("العشرية") && normFilename.includes("النسبية") && (normFilename.includes("جمع") || normFilename.includes("طرح"))) ||
+        (normText.includes("جمع و طرح") && normText.includes("الأعداد العشرية النسبية")) ||
+        (normText.includes("الأعداد العشرية") && normText.includes("النسبية") && (normText.includes("جمع") || normText.includes("طرح")))
+      ) {
+        matchedLesson = curriculumIndex.lessons.find((l: any) => l.id === "add_sub_rel");
+      }
+    }
+
+    let aiResult: any = null;
+    let confidence = 0;
+
+    if (matchedLesson) {
+      confidence = 90;
+      aiResult = {
+        gradeId: matchedLesson.grade_id || "1ere_annee_college",
+        subjectId: matchedLesson.subject_id || "math",
+        moduleId: matchedLesson.module_id || "nombres_et_calcul",
+        topicId: matchedLesson.topic_id || "decimals_rel",
+        lessonId: matchedLesson.id,
+        confidence: 90,
+        reason: "Deterministic keyword match found for lesson: " + matchedLesson.title
+      };
+    } else {
+      try {
+        const gradesList = curriculumIndex.grades.map((g: any) => `- Name: ${g.nameFr} (Arabic: ${g.nameAr}), ID: ${g.id}, Suffix: ${g.suffix}`).join("\n");
+        const subjectsList = curriculumIndex.subjects.map((s: any) => `- Name: ${s.nameFr} (Arabic: ${s.nameAr}), ID: ${s.id}, Suffix: ${s.suffix}`).join("\n");
+        const modulesList = curriculumIndex.modules.map((m: any) => `- Name: ${m.nameFr} (Arabic: ${m.nameAr}), ID: ${m.id}, Subject ID: ${m.subject_id}, Grade ID: ${m.grade_id}`).join("\n");
+        const topicsList = curriculumIndex.topics.map((t: any) => `- Name: ${t.nameFr} (Arabic: ${t.nameAr}), ID: ${t.id}, Module ID: ${t.module_id}, Subject ID: ${t.subject_id}`).join("\n");
+        const lessonsList = curriculumIndex.lessons.map((l: any) => `- Title: ${l.title} (Arabic: ${l.title_ar}), ID: ${l.id} (Topic ID: ${l.topic_id}), Aliases: ${JSON.stringify(l.aliases)}`).join("\n");
+
+        const prompt = `Analyze the following document metadata and text content to index it into the Levelspace Curriculum.
+
+Document details:
+- Title/Filename: "${originalFilename || ""}"
+- Source URL: "${sourceUrl || ""}"
+- Text Snippet: "${(cleanText || "").substring(0, 1500)}"
+- Classification Hints: ${JSON.stringify(classification || metadataHints || {})}
+
+Levelspace Curriculum structure:
+
+GRADES available:
+${gradesList}
+
+SUBJECTS available:
+${subjectsList}
+
+MODULES available:
+${modulesList}
+
+TOPICS available:
+${topicsList}
+
+LESSONS available:
+${lessonsList}
+
+YOUR CORE TASK:
+Identify the precise Grade, Subject, Module, Topic, and Lesson where this document belongs.
+If the exact lesson is missing or cannot be confidently matched against any lesson from the LESSONS available list, set lessonId to null and describe the issue in the reason.
+
+Provide your output strictly as a JSON object with these fields:
+1. "gradeId": (string or null) The ID of the matching Grade
+2. "subjectId": (string or null) The ID of the matching Subject
+3. "moduleId": (string or null) The ID of the matching Module
+4. "topicId": (string or null) The ID of the matching Topic
+5. "lessonId": (string or null) The ID of the matching Lesson from the provided lessons list; set to null if no lesson matches or if exact match/alias is missing.
+6. "confidence": (number, 0 to 100) How confident are you in this mapping?
+7. "reason": (string) Brief analytical rationale explaining the mapping or why the lesson is missing.
+
+Respond strictly with valid JSON. Do not include markdown block fences or conversational text wrapper outside the JSON representation.`;
+
+        const response = await callGeminiWithRetry({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json"
+          }
+        });
+
+        const textRes = response.text || "{}";
+        const parsed = safeJsonParseJsonObject(textRes);
+        if (parsed) {
+          aiResult = parsed;
+          confidence = parsed.confidence || 50;
+        }
+      } catch (err: any) {
+        console.error("[indexPdfToLevelspace] Gemini Indexing failed:", err);
+        const errMsg = err.message || "";
+        const isRateLimit = errMsg.includes("429") || 
+                           errMsg.toLowerCase().includes("quota exceeded") || 
+                           errMsg.toLowerCase().includes("rate limit") || 
+                           errMsg.toLowerCase().includes("resource exhausted") || 
+                           errMsg.toLowerCase().includes("too many requests") ||
+                           JSON.stringify(err).toLowerCase().includes("quota");
+
+        aiResult = {
+          reason: isRateLimit 
+            ? "Gemini API Quota/Rate Limit Exceeded. Default reference matching rules applied in fallback." 
+            : `Gemini Indexing failed: ${err.message}`
+        };
+      }
+    }
+
+    aiResult = aiResult || {};
+    let levelspaceGradeId = aiResult.gradeId || classification?.gradeId || metadataHints?.gradeId || "1ere_annee_college";
+    let levelspaceSubjectId = aiResult.subjectId || classification?.subjectId || metadataHints?.subjectId || "math";
+    let levelspaceModuleId = aiResult.moduleId || "nombres_et_calcul";
+    let levelspaceTopicId = aiResult.topicId || classification?.topicId || metadataHints?.topicId || "decimals_rel";
+    let levelspaceLessonId = aiResult.lessonId || null;
+    let indexReason = aiResult.reason || null;
+
+    const gradeExists = curriculumIndex.grades.some((g: any) => g.id === levelspaceGradeId);
+    if (!gradeExists) levelspaceGradeId = "1ere_annee_college";
+
+    const subjectExists = curriculumIndex.subjects.some((s: any) => s.id === levelspaceSubjectId);
+    if (!subjectExists) levelspaceSubjectId = "math";
+
+    const topicExists = curriculumIndex.topics.some((t: any) => t.id === levelspaceTopicId);
+    if (!topicExists) levelspaceTopicId = "decimals_rel";
+
+    const moduleExists = curriculumIndex.modules.some((m: any) => m.id === levelspaceModuleId);
+    if (!moduleExists) levelspaceModuleId = "nombres_et_calcul";
+
+    if (
+      !levelspaceLessonId && 
+      (normFilename.includes("النسبية") || normText.includes("النسبية") || normFilename.includes("add_sub_rel") || normFilename.includes("decimaux"))
+    ) {
+      levelspaceLessonId = "add_sub_rel";
+      confidence = 90;
+    }
+
+    let lessonItem = curriculumIndex.lessons.find((l: any) => l.id === levelspaceLessonId);
+    if (!lessonItem && levelspaceLessonId) {
+      lessonItem = curriculumIndex.lessons.find((l: any) => l.id === "add_sub_rel");
+      if (lessonItem) {
+        levelspaceLessonId = "add_sub_rel";
+      } else {
+        levelspaceLessonId = null;
+      }
+    }
+
+    let curriculumPath = null;
+    let skillIds: string[] = [];
+    let objectiveIds: string[] = [];
+
+    if (levelspaceLessonId) {
+      skillIds = curriculumIndex.skills
+        .filter((s: any) => s.lesson_id === levelspaceLessonId)
+        .map((s: any) => s.id);
+      objectiveIds = curriculumIndex.objectives
+        .filter((o: any) => o.lesson_id === levelspaceLessonId)
+        .map((o: any) => o.id);
+    }
+
+    const gradeObj = curriculumIndex.grades.find((g: any) => g.id === levelspaceGradeId);
+    const subjectObj = curriculumIndex.subjects.find((s: any) => s.id === levelspaceSubjectId);
+    const moduleObj = curriculumIndex.modules.find((m: any) => m.id === levelspaceModuleId);
+    const topicObj = curriculumIndex.topics.find((t: any) => t.id === levelspaceTopicId);
+
+    const suffix = gradeObj?.suffix || "1AC";
+    const subName = subjectObj?.nameFr || "Mathématiques";
+    const modName = moduleObj?.nameFr || "Nombres et calcul";
+    const topName = topicObj?.nameFr || "Nombres décimaux relatifs";
+    const lesName = lessonItem?.title || "Addition et soustraction des nombres décimaux relatifs";
+
+    curriculumPath = `${suffix} → ${subName} → ${modName} → ${topName} → ${lesName}`;
+
+    let indexStatus: "indexed" | "needs_review" | "blocked" = "indexed";
+    let suggestedAction = null;
+
+    if (!levelspaceLessonId) {
+      indexStatus = "needs_review";
+      indexReason = isJadhatha ? "jadhatha_needs_curriculum_mapping" : "lesson_alias_missing";
+      suggestedAction = isJadhatha ? "Align pedagogical planning sheet with lesson objectives" : "map to existing lesson or add alias";
+      curriculumPath = null;
+    } else {
+      if (confidence >= 85) {
+        indexStatus = "indexed";
+      } else if (confidence >= 60) {
+        indexStatus = "needs_review";
+        indexReason = "low_indexing_confidence";
+        suggestedAction = "verify suggested path mapping";
+      } else {
+        indexStatus = "blocked";
+        indexReason = "curriculum_mapping_failed";
+        suggestedAction = "manually map curriculum node";
+      }
+    }
+
+    const candidateLessons = curriculumIndex.lessons
+      .filter((l: any) => l.topic_id === levelspaceTopicId || l.subject_id === levelspaceSubjectId)
+      .map((l: any) => ({
+        id: l.id,
+        title: l.title,
+        title_ar: l.title_ar
+      }));
+
+    const candidateTopics = curriculumIndex.topics
+      .filter((t: any) => t.subject_id === levelspaceSubjectId)
+      .map((t: any) => ({
+        id: t.id,
+        name: t.nameFr,
+        name_ar: t.nameAr
+      }));
+
+    return {
+      levelspaceGradeId,
+      levelspaceSubjectId,
+      levelspaceModuleId,
+      levelspaceTopicId,
+      levelspaceLessonId,
+      skillIds,
+      objectiveIds,
+      curriculumPath,
+      curriculumConfidence: confidence,
+      indexStatus,
+      indexReason,
+      candidateLessons,
+      candidateTopics,
+      suggestedAction,
+      isJadhatha
+    };
+  }
+
+  app.get("/api/levelspace/curriculum", async (req, res) => {
+    try {
+      const curriculumIndex = await loadLevelspaceCurriculumIndex();
+      res.json(curriculumIndex);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to load Levelspace curriculum index" });
+    }
+  });
+
+  app.post("/api/pipeline/index-levelspace", async (req, res) => {
+    try {
+      const { url, filename, text, hints, classification } = req.body;
+      
+      const curriculumIndex = await loadLevelspaceCurriculumIndex();
+
+      const indexingResult = await indexPdfToLevelspace({
+        sourceUrl: url,
+        originalFilename: filename,
+        cleanText: text,
+        metadataHints: hints,
+        classification,
+        curriculumIndex
+      });
+
+      let documentRole = "student_lesson_source";
+      let studentVisible = true;
+      let teacherVisible = true;
+      let adminVisible = true;
+      let aiVisible = true;
+      let aiKnowledge = false;
+      let knowledgeRole: string | null = null;
+
+      const isJadhatha = isJadhathaString(filename) || 
+                         isJadhathaString(url) || 
+                         (hints?.documentTypeId === "jadhatha") || 
+                         (classification?.documentTypeId === "jadhatha") || 
+                         (indexingResult as any).isJadhatha;
+
+      let docTypeId = isJadhatha ? "jadhatha" : (hints?.documentTypeId || classification?.documentTypeId || "").toLowerCase();
+      if (!docTypeId && indexingResult.levelspaceLessonId) {
+        docTypeId = "cours";
+      }
+
+      if (isJadhatha || docTypeId.includes("jadhatha") || docTypeId.includes("fiche")) {
+        documentRole = "pedagogical_planning_source";
+        studentVisible = false;
+        aiKnowledge = true;
+        knowledgeRole = "pedagogical_planning";
+      } else if (docTypeId.includes("cours") || docTypeId.includes("lesson") || docTypeId.includes("lecon") || docTypeId.includes("crs")) {
+        documentRole = "student_lesson_source";
+      } else if (docTypeId.includes("exerc") || docTypeId.includes("series") || docTypeId.includes("ex")) {
+        documentRole = "practice_source";
+      } else if (docTypeId.includes("corr") || docTypeId.includes("solution") || docTypeId.includes("sol")) {
+        documentRole = "solution_source";
+      } else if (docTypeId.includes("forod") || docTypeId.includes("exam") || docTypeId.includes("ass") || docTypeId.includes("exm")) {
+        documentRole = "assessment_source";
+      }
+
+      const gradeObj = curriculumIndex.grades.find((g: any) => g.id === indexingResult.levelspaceGradeId);
+      const subjectObj = curriculumIndex.subjects.find((s: any) => s.id === indexingResult.levelspaceSubjectId);
+      const moduleObj = curriculumIndex.modules.find((m: any) => m.id === indexingResult.levelspaceModuleId);
+      const topicObj = curriculumIndex.topics.find((t: any) => t.id === indexingResult.levelspaceTopicId);
+      const lessonObj = curriculumIndex.lessons.find((l: any) => l.id === indexingResult.levelspaceLessonId);
+
+      const levelspace = {
+        grade_id: indexingResult.levelspaceGradeId,
+        grade_name: gradeObj?.nameFr || "1ère Année Collège",
+        subject_id: indexingResult.levelspaceSubjectId,
+        subject_name: subjectObj?.nameFr || "Mathématiques",
+        module_id: indexingResult.levelspaceModuleId,
+        module_name: moduleObj?.nameFr || "Nombres et calcul",
+        topic_id: indexingResult.levelspaceTopicId,
+        topic_name: topicObj?.nameFr || "Nombres décimaux relatifs",
+        lesson_id: indexingResult.levelspaceLessonId,
+        lesson_title: lessonObj?.title || null,
+        skill_ids: indexingResult.skillIds,
+        objective_ids: indexingResult.objectiveIds,
+        curriculum_path: indexingResult.curriculumPath,
+        curriculum_confidence: indexingResult.curriculumConfidence,
+        index_status: indexingResult.indexStatus,
+        index_reason: indexingResult.indexReason,
+        document_role: documentRole,
+        student_visible: studentVisible,
+        teacher_visible: teacherVisible,
+        admin_visible: adminVisible,
+        ai_visible: aiVisible,
+        ai_knowledge: aiKnowledge,
+        knowledge_role: knowledgeRole,
+        candidate_lessons: indexingResult.candidateLessons,
+        candidate_topics: indexingResult.candidateTopics,
+        suggested_action: indexingResult.suggestedAction
+      };
+
+      const hash = crypto.createHash("sha256").update(url || filename || "unknown").digest("hex");
+      updateReport("indexing-report.json", {
+        asset_id: hash,
+        filename,
+        status: indexingResult.indexStatus,
+        curriculum_path: indexingResult.curriculumPath,
+        confidence: indexingResult.curriculumConfidence,
+        grade_id: levelspace.grade_id,
+        subject_id: levelspace.subject_id,
+        module_id: levelspace.module_id,
+        topic_id: levelspace.topic_id,
+        lesson_id: levelspace.lesson_id,
+        candidate_lessons: indexingResult.candidateLessons,
+        missing_level: !indexingResult.levelspaceLessonId ? "lesson" : null,
+        suggested_action: indexingResult.suggestedAction
+      });
+
+      res.json({ success: true, levelspace });
+    } catch (error: any) {
+      console.error("[Index Levelspace Handled Fail-Safe]", error);
+      res.json({
+        success: false,
+        status: "needs_review",
+        pipelineStep: "index_levelspace",
+        blockReason: "index_failed",
+        reason: error.message || "Failed to map curriculum",
+        levelspace: {
+          grade_id: "1ac",
+          subject_id: "math",
+          index_status: "needs_review",
+          index_reason: "system_failed",
+          curriculum_confidence: 0,
+          curriculum_path: null
+        }
+      });
+    }
+  });
+
+  // Generic Report Entry Update Endpoint
+  app.post("/api/pipeline/reports/update", (req, res) => {
+    const { reportName, entry } = req.body;
+    if (!reportName || !entry) {
+      return res.status(400).json({ error: "reportName and entry are required" });
+    }
+    try {
+      updateReport(reportName, entry);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -2779,6 +5371,45 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     }
   });
 
+  app.get("/api/pipeline/export-zip", async (req, res) => {
+    try {
+      const zip = new JSZip();
+
+      const addDirToZip = (localDirName: string, zipDirName: string) => {
+        const fullPath = path.join(LOCAL_OUTPUT_DIR, localDirName);
+        if (fs.existsSync(fullPath)) {
+          const files = fs.readdirSync(fullPath);
+          for (const file of files) {
+            const filePath = path.join(fullPath, file);
+            const stat = fs.statSync(filePath);
+            if (stat.isFile()) {
+              zip.file(`${zipDirName}/${file}`, fs.readFileSync(filePath));
+            }
+          }
+        }
+      };
+
+      addDirToZip("downloads", "original");
+      addDirToZip("clean-pdfs", "clean");
+      addDirToZip("text", "text");
+      addDirToZip("dataset", "dataset");
+      addDirToZip("reports", "reports");
+
+      const buffer = await zip.generateAsync({
+        type: "nodebuffer",
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 }
+      });
+
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", "attachment; filename=levelspace_ready_outputs.zip");
+      return res.send(buffer);
+    } catch (err: any) {
+      console.error("[Export ZIP Error]", err);
+      return res.status(500).json({ error: err.message || "Failed to generate ZIP archive" });
+    }
+  });
+
   // API Route for PDF Upload
   app.post("/api/upload", upload.single("file"), async (req, res) => {
     try {
@@ -2814,6 +5445,489 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
       console.error("[Upload Error]", error);
       res.status(500).json({ error: error.message || "Failed to process uploaded file" });
     }
+  });
+
+  // Site Mapping Database schema & helper functions (Tasks 1, 2, 3, 4, 5, 6, 8)
+  
+  interface SiteMapNode {
+    id: string;
+    source_domain: string;
+    source_url: string;
+    canonical_url: string;
+    canonical_url_hash: string;
+    parent_url: string | null;
+    depth: number;
+    page_role: string;
+    navigation_path: string;
+    extracted_grade: string;
+    extracted_subject: string;
+    extracted_document_type: string;
+    extracted_topic: string;
+    action: "crawl_children" | "stage_asset" | "reexamine" | "ignore" | string;
+    status: "unvisited" | "crawling" | "completed" | "failed" | "ignored" | string;
+    discovered_links_count: number;
+    confidence: number;
+    rejection_reason: string;
+    is_final_asset: boolean;
+  }
+
+  function canonicalizeUrl(urlStr: string): string {
+    if (!urlStr) return "";
+    try {
+      let resolved = String(urlStr).trim();
+      try {
+        resolved = decodeURIComponent(resolved);
+      } catch {}
+      try {
+        resolved = decodeURIComponent(resolved);
+      } catch {}
+      
+      const obj = new URL(resolved);
+      obj.hash = ""; // remove fragment
+      
+      const searchParams = Array.from(obj.searchParams.entries());
+      if (searchParams.length > 0) {
+        searchParams.sort(([a], [b]) => a.localeCompare(b));
+        obj.search = "";
+        searchParams.forEach(([k, v]) => {
+          obj.searchParams.set(k, v);
+        });
+      }
+      
+      let pathName = obj.pathname;
+      if (pathName.length > 1 && !pathName.split("/").pop()?.includes(".")) {
+        if (!pathName.endsWith("/")) {
+          pathName += "/";
+        }
+      }
+      obj.pathname = pathName;
+      return obj.href;
+    } catch {
+      return String(urlStr).trim();
+    }
+  }
+
+  function getCanonicalUrlHash(urlStr: string): string {
+    const canonical = canonicalizeUrl(urlStr);
+    return crypto.createHash("sha256").update(canonical).digest("hex");
+  }
+
+  function classifyPageUrlRole(urlStr: string, htmlContent: string = "", linkText: string = "", parentRole?: string, parentMetadata?: any): {
+    role: string;
+    action: "crawl_children" | "stage_asset" | "ignore";
+    grade: string;
+    subject: string;
+    docType: string;
+    topic: string;
+    confidence: number;
+    rejectionReason: string;
+    isFinal: boolean;
+  } {
+    const canonical = canonicalizeUrl(urlStr);
+    const urlLower = canonical.toLowerCase();
+    
+    let role = "unknown";
+    let action: "crawl_children" | "stage_asset" | "ignore" = "crawl_children";
+    let grade = "";
+    let subject = "";
+    let docType = "Cours";
+    let topic = "";
+    let confidence = 0.5;
+    let rejectionReason = "";
+    let isFinal = false;
+
+    // 1. Grade extraction
+    if (urlLower.includes("1ac") || urlLower.includes("1ere-annee-college") || urlLower.includes("الاولى-اعدادي") || urlLower.includes("الأولى-إعدادي") || urlLower.includes("1ere_annee_college")) {
+      grade = "1AC";
+    } else if (urlLower.includes("2ac") || urlLower.includes("2eme-annee-college") || urlLower.includes("الثانية-إعدادي") || urlLower.includes("2eme_annee_college")) {
+      grade = "2AC";
+    } else if (urlLower.includes("3ac") || urlLower.includes("3eme-annee-college") || urlLower.includes("الثالثة-إعدادي") || urlLower.includes("3eme_annee_college")) {
+      grade = "3AC";
+    } else if (urlLower.includes("tcs") || urlLower.includes("tronc-commun") || urlLower.includes("الجذع-المشترك")) {
+      grade = "TC";
+    } else if (urlLower.includes("1bac") || urlLower.includes("السنة-الأولى-بكالوريا") || urlLower.includes("1ere-bac")) {
+      grade = "1BAC";
+    } else if (urlLower.includes("2bac") || urlLower.includes("السنة-الثانية-بكالوريا") || urlLower.includes("2eme-bac")) {
+      grade = "2BAC";
+    }
+
+    // 2. Subject extraction
+    if (urlLower.includes("math") || urlLower.includes("رياضيات") || urlLower.includes("mathematiques") || urlLower.includes("الرياضيات")) {
+      subject = "Math";
+    } else if (urlLower.includes("pc") || urlLower.includes("physique") || urlLower.includes("chimie") || urlLower.includes("علوم-الكيمياء") || urlLower.includes("الفيزياء-والكيمياء")) {
+      subject = "PC";
+    } else if (urlLower.includes("svt") || urlLower.includes("علوم-الحياة-والأرض") || urlLower.includes("sciences-vie-terre")) {
+      subject = "SVT";
+    } else if (urlLower.includes("francais") || urlLower.includes("français") || urlLower.includes("french") || urlLower.includes("فرنسي")) {
+      subject = "French";
+    }
+
+    if (parentMetadata) {
+      if (!grade && parentMetadata.grade) grade = parentMetadata.grade;
+      if (!subject && parentMetadata.subject) subject = parentMetadata.subject;
+      if (parentMetadata.docType) docType = parentMetadata.docType;
+    }
+
+    // 3. Document Type mapping
+    if (urlLower.includes("corrig") || urlLower.includes("correction") || urlLower.includes("تصحيح") || urlLower.includes("حلول") || urlLower.includes("حل-التمارين") || linkText.includes("تصحيح") || linkText.includes("حل") || htmlContent.includes("تصحيح") || htmlContent.includes("تصحيح الفروض")) {
+      docType = "Correction";
+    } else if (urlLower.includes("exercice") || urlLower.includes("serie") || urlLower.includes("تمارين") || urlLower.includes("سلسلة") || linkText.includes("تمارين") || linkText.includes("سلسلة") || htmlContent.includes("تمارين")) {
+      docType = "Exercices";
+    } else if (urlLower.includes("resume") || urlLower.includes("résumé") || urlLower.includes("ملخص") || linkText.includes("ملخص") || htmlContent.includes("ملخص")) {
+      docType = "Resume";
+    } else if (urlLower.includes("devoir") || urlLower.includes("فرض") || urlLower.includes("الفروض") || linkText.includes("فرض") || htmlContent.includes("فرض")) {
+      docType = "Devoir";
+    } else if (urlLower.includes("controle") || urlLower.includes("contrôle") || urlLower.includes("examen") || urlLower.includes("امتحان") || linkText.includes("امتحان") || linkText.includes("الامتحانات")) {
+      docType = "Controle";
+    }
+
+    // 4. News / Administrative Announcements Filter (Task 8)
+    const isNewsAnnouncements = urlLower.includes("دخول-مدرسي") || urlLower.includes("نتائج") || urlLower.includes("تسجيل") || urlLower.includes("منحة") || urlLower.includes("توجيه") || urlLower.includes("مباراة") ||
+      linkText.includes("تاريخ الدخول المدرسي") || linkText.includes("نتائج") || linkText.includes("تسجيل") || linkText.includes("منحة") || linkText.includes("توجيه") || linkText.includes("مباراة") ||
+      htmlContent.includes("دخول مدرسي") || htmlContent.includes("نتائج البكالوريا");
+
+    const hasStrongCurriculumSignal = urlLower.includes(".pdf") || urlLower.includes("/cours/") || htmlContent.includes(".pdf") || htmlContent.includes("تحميل الملف") || htmlContent.includes("pdf");
+
+    const docExtensions = [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls"];
+    const isDocAsset = docExtensions.some(ext => {
+      try {
+        const cleanUrlPart = urlLower.split(/[?#]/)[0];
+        return cleanUrlPart.endsWith(ext);
+      } catch {
+        return urlLower.endsWith(ext);
+      }
+    }) || linkText.toLowerCase().includes("pdf") || linkText.toLowerCase().includes("document word") || linkText.toLowerCase().includes("telecharger word");
+
+    if (isDocAsset) {
+      role = "pdf_asset";
+      action = "stage_asset";
+      isFinal = true;
+      confidence = 0.95;
+    } else if (urlLower === "https://moutamadris.ma/cours/" || urlLower === "https://moutamadris.ma/cours" || urlLower === "https://moutamadris.ma/" || urlLower === "https://moutamadris.ma" || urlLower === "https://talamidi.com/" || urlLower === "https://talamidi.com") {
+      role = "hub_page";
+      action = "crawl_children";
+      confidence = 1.0;
+    } else if (isNewsAnnouncements && !hasStrongCurriculumSignal) {
+      role = "administrative_article";
+      action = "ignore";
+      isFinal = false;
+      rejectionReason = "Administrative news announcement matching exclusion filter.";
+      confidence = 0.9;
+    } else if (urlLower.includes("/examens/") || urlLower.includes("/فروض/") || urlLower.includes("/امتحانات/")) {
+      role = "category_page";
+      action = "crawl_children";
+      confidence = 0.8;
+    } else if (urlLower.includes("/cours/") && (urlLower.split("/cours/")[1] || "").split("/").filter(Boolean).length === 1) {
+      role = "subject_selection_page";
+      action = "crawl_children";
+      confidence = 0.8;
+    } else if (urlLower.includes("/cours/") && (urlLower.split("/cours/")[1] || "").split("/").filter(Boolean).length === 2) {
+      role = "lesson_list_page";
+      action = "crawl_children";
+      confidence = 0.85;
+    } else if (urlLower.includes("/cours/") && (urlLower.split("/cours/")[1] || "").split("/").filter(Boolean).length === 0) {
+      role = "hub_page";
+      action = "crawl_children";
+      confidence = 0.9;
+    } else if (grade && !subject) {
+      role = "grade_selection_page";
+      action = "crawl_children";
+      confidence = 0.85;
+    } else if (grade && subject && (urlLower.includes("les-cours") || urlLower.includes("دروس") || urlLower.includes("-cours") || urlLower.includes("cours-"))) {
+      role = "lesson_list_page";
+      action = "crawl_children";
+      confidence = 0.85;
+    } else if (grade && subject && (urlLower.match(/درس-/i) || urlLower.includes("les-lecons") || urlLower.includes("lecon") || urlLower.includes("/dars/") || htmlContent.includes("درس"))) {
+      role = "lesson_detail_page";
+      isFinal = true;
+      action = "stage_asset";
+      confidence = 0.9;
+    } else if (urlLower.match(/\.(html|php|htm|asp|aspx)$/i) || urlLower.includes("/cours/")) {
+      role = "html_lesson";
+      isFinal = true;
+      action = "stage_asset";
+      confidence = 0.8;
+    } else {
+      role = "unknown";
+      action = "crawl_children";
+      confidence = 0.4;
+    }
+
+    const isHomepage = urlLower === "https://moutamadris.ma/" || urlLower === "https://moutamadris.ma" || urlLower === "https://talamidi.com/" || urlLower === "https://talamidi.com";
+    const isCoursIndex = urlLower.endsWith("/cours/") || urlLower.endsWith("/cours") || urlLower.endsWith("/examens/") || urlLower.endsWith("/examens");
+    
+    if (isHomepage || isCoursIndex) {
+      isFinal = false;
+      action = "crawl_children";
+      role = "hub_page";
+      rejectionReason = "Hub or homepage index is restricted from direct deployment staging.";
+    }
+
+    if (isFinal) {
+      try {
+        const parts = canonical.split("/").filter(Boolean);
+        let lastPart = parts.pop() || "";
+        if (lastPart.endsWith(".pdf") || lastPart.endsWith(".html") || lastPart.endsWith(".php")) {
+          lastPart = lastPart.substring(0, lastPart.lastIndexOf("."));
+        }
+        const topicText = cleanServerTopicText(lastPart || linkText);
+        if (topicText) {
+          topic = topicText;
+        } else {
+          topic = "General-Topic";
+        }
+      } catch {
+        topic = "General-Topic";
+      }
+    }
+
+    return {
+      role,
+      action,
+      grade,
+      subject,
+      docType,
+      topic,
+      confidence,
+      rejectionReason,
+      isFinal
+    };
+  }
+
+  const SITEMAP_PATH = path.join(LOCAL_OUTPUT_DIR, "site_map.json");
+  
+  function loadSiteMap(): SiteMapNode[] {
+    try {
+      if (fs.existsSync(SITEMAP_PATH)) {
+        return JSON.parse(fs.readFileSync(SITEMAP_PATH, "utf8"));
+      }
+    } catch (e) {
+      console.error("Failed to load site map:", e);
+    }
+    return [];
+  }
+
+  function saveSiteMap(nodes: SiteMapNode[]) {
+    try {
+      const dir = path.dirname(SITEMAP_PATH);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(SITEMAP_PATH, JSON.stringify(nodes, null, 2), "utf8");
+    } catch (e) {
+      console.error("Failed to save site map:", e);
+    }
+  }
+
+  // Site Map CRUD API (Task 6, 9)
+  app.get("/api/site-map", (req, res) => {
+    res.json(loadSiteMap());
+  });
+
+  app.post("/api/site-map/clear", (req, res) => {
+    saveSiteMap([]);
+    res.json({ success: true, message: "Site map cleared." });
+  });
+
+  app.post("/api/site-map/update-node", (req, res) => {
+    const { id, updates } = req.body;
+    let siteMap = loadSiteMap();
+    let found = false;
+    siteMap = siteMap.map(node => {
+      if (node.id === id) {
+        found = true;
+        return { ...node, ...updates };
+      }
+      return node;
+    });
+    if (found) {
+      saveSiteMap(siteMap);
+      res.json({ success: true, node: siteMap.find(n => n.id === id) });
+    } else {
+      res.status(404).json({ error: "Node not found" });
+    }
+  });
+
+  app.post("/api/site-map/crawl", async (req, res) => {
+    const { url, maxPages = 30, maxDepth = 4, topicFilter, fresh = true } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: "Start URL is required" });
+    }
+
+    const startUrl = canonicalizeUrl(url);
+    console.log(`[Site Map Crawl] Initiating crawl from: ${startUrl}, maxPages: ${maxPages}, maxDepth: ${maxDepth}`);
+
+    let siteMap = fresh ? [] : loadSiteMap();
+    const mapByHash = new Map<string, SiteMapNode>(siteMap.map(n => [n.canonical_url_hash, n]));
+
+    const queue: { url: string; depth: number; parentUrl: string | null; linkText: string; navPath: string }[] = [];
+    queue.push({
+      url: startUrl,
+      depth: 0,
+      parentUrl: null,
+      linkText: "Seed",
+      navPath: "Seed"
+    });
+
+    const visited = new Set<string>();
+    let pagesProcessed = 0;
+
+    let domain = "moutamadris.ma";
+    try {
+      domain = new URL(startUrl).hostname;
+    } catch {}
+
+    while (queue.length > 0 && pagesProcessed < maxPages) {
+      const current = queue.shift()!;
+      const currentCanonical = canonicalizeUrl(current.url);
+      const currentHash = getCanonicalUrlHash(currentCanonical);
+
+      if (visited.has(currentCanonical)) continue;
+      visited.add(currentCanonical);
+
+      try {
+        console.log(`[Site Map Scraper] Fetching: ${currentCanonical} (Depth: ${current.depth})`);
+        
+        let responseData = "";
+        let contentType = "text/html";
+        let isDirectPdf = currentCanonical.toLowerCase().endsWith(".pdf");
+
+        if (!isDirectPdf) {
+          try {
+            const resp = await axios.get(currentCanonical, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              },
+              timeout: 8000,
+              validateStatus: (status) => status < 400,
+              httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+            });
+            responseData = resp.data || "";
+            contentType = (resp.headers['content-type'] || '').toLowerCase();
+          } catch (fetchErr: any) {
+            console.warn(`[Site Map Scraper] Failed to fetch HTML for ${currentCanonical}: ${fetchErr.message}`);
+            const classification = classifyPageUrlRole(currentCanonical, "", current.linkText, null, null);
+            const parentNode = current.parentUrl ? mapByHash.get(getCanonicalUrlHash(current.parentUrl)) : null;
+            
+            const node: SiteMapNode = {
+              id: "node_" + crypto.randomBytes(4).toString("hex"),
+              source_domain: domain,
+              source_url: current.url,
+              canonical_url: currentCanonical,
+              canonical_url_hash: currentHash,
+              parent_url: current.parentUrl,
+              depth: current.depth,
+              page_role: classification.role,
+              navigation_path: current.navPath,
+              extracted_grade: parentNode?.extracted_grade || classification.grade || "-",
+              extracted_subject: parentNode?.extracted_subject || classification.subject || "-",
+              extracted_document_type: classification.docType,
+              extracted_topic: classification.topic || "Failed-Topic",
+              action: "ignore",
+              status: "failed",
+              discovered_links_count: 0,
+              confidence: 0.1,
+              rejection_reason: `Fetch failed: ${fetchErr.message}`,
+              is_final_asset: false
+            };
+            mapByHash.set(currentHash, node);
+            continue;
+          }
+        }
+
+        pagesProcessed++;
+
+        const $ = isDirectPdf ? null : load(responseData);
+        const htmlTitle = $ ? ($('title').text() || $('h1').first().text() || "").trim() : "";
+        const bodyText = $ ? $('body').text() : "";
+
+        const parentNode = current.parentUrl ? mapByHash.get(getCanonicalUrlHash(current.parentUrl)) : null;
+
+        const classification = classifyPageUrlRole(
+          currentCanonical, 
+          bodyText, 
+          current.linkText || htmlTitle || "", 
+          parentNode?.page_role,
+          parentNode ? {
+            grade: parentNode.extracted_grade,
+            subject: parentNode.extracted_subject,
+            docType: parentNode.extracted_document_type
+          } : null
+        );
+
+        let displayTitle = current.linkText || htmlTitle || currentCanonical.split("/").filter(Boolean).pop() || "Page";
+        if (displayTitle.length > 35) displayTitle = displayTitle.slice(0, 32) + "...";
+        
+        let navPath = displayTitle;
+        if (current.depth > 0) {
+          navPath = `${current.navPath} > ${displayTitle}`;
+        } else {
+          navPath = displayTitle;
+        }
+
+        navPath = navPath.replace(/Seed > /g, "").replace(/\.pdf/gi, "");
+
+        const discoveredLinks: string[] = [];
+        if ($ && (classification.action === "crawl_children" || classification.action === "stage_asset") && current.depth < maxDepth) {
+          $('a').each((_, el) => {
+            const href = $(el).attr('href');
+            if (!href) return;
+            try {
+              const absoluteUrl = new URL(href, currentCanonical).href;
+              const childCanonical = canonicalizeUrl(absoluteUrl);
+              const childObj = new URL(childCanonical);
+              
+              const cleanDomain = domain.replace(/^www\./, "");
+              const cleanChildHostname = childObj.hostname.replace(/^www\./, "");
+              
+              if (cleanChildHostname === cleanDomain) {
+                if (!childCanonical.match(/\.(jpg|jpeg|png|gif|svg|css|js|zip|rar|tar|7z|mp3|mp4|wav|avi|woff|woff2|ttf|eot)$/i)) {
+                  discoveredLinks.push(childCanonical);
+                  if (!visited.has(childCanonical) && !queue.some(q => canonicalizeUrl(q.url) === childCanonical)) {
+                    queue.push({
+                      url: childCanonical,
+                      depth: current.depth + 1,
+                      parentUrl: currentCanonical,
+                      linkText: $(el).text().trim() || "Link",
+                      navPath: navPath
+                    });
+                  }
+                }
+              }
+            } catch {}
+          });
+        }
+
+        const node: SiteMapNode = {
+          id: mapByHash.get(currentHash)?.id || "node_" + crypto.randomBytes(4).toString("hex"),
+          source_domain: domain,
+          source_url: current.url,
+          canonical_url: currentCanonical,
+          canonical_url_hash: currentHash,
+          parent_url: current.parentUrl,
+          depth: current.depth,
+          page_role: classification.role,
+          navigation_path: navPath,
+          extracted_grade: classification.grade || parentNode?.extracted_grade || "-",
+          extracted_subject: classification.subject || parentNode?.extracted_subject || "-",
+          extracted_document_type: classification.docType,
+          extracted_topic: classification.topic || "Sequence-01",
+          action: classification.action,
+          status: "completed",
+          discovered_links_count: discoveredLinks.length,
+          confidence: classification.confidence,
+          rejection_reason: classification.rejectionReason || "",
+          is_final_asset: classification.isFinal
+        };
+
+        mapByHash.set(currentHash, node);
+      } catch (err: any) {
+        console.error(`[Site Map Scraper] Serious error during processing of ${currentCanonical}:`, err);
+      }
+    }
+
+    const resultNodes = Array.from(mapByHash.values());
+    saveSiteMap(resultNodes);
+    console.log(`[Site Map Crawl] Successfully completed. Total nodes mapped: ${resultNodes.length}`);
+    res.json(resultNodes);
   });
 
   // API Route for crawling a site for PDFs
@@ -2926,11 +6040,21 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
               const cleanUrl = urlObj.href;
               const linkText = $(el).text();
               
-              // 1. Check if it's a PDF
-              if (cleanUrl.toLowerCase().endsWith('.pdf') || 
-                  linkText.toLowerCase().includes('pdf') || 
-                  $(el).attr('type') === 'application/pdf') {
-                if (checkTopicFilter(cleanUrl, linkText)) {
+              // 1. Check if it's a PDF or an HTML lesson webpage
+              const isPdf = cleanUrl.toLowerCase().endsWith('.pdf') || 
+                            linkText.toLowerCase().includes('pdf') || 
+                            $(el).attr('type') === 'application/pdf';
+              
+              const isHtmlLesson = cleanUrl.toLowerCase().match(/\.(html|php|htm|asp|aspx)$/i) ||
+                                  cleanUrl.toLowerCase().includes("/cours/") ||
+                                  cleanUrl.toLowerCase().includes("/lesson/") ||
+                                  cleanUrl.toLowerCase().includes("/lecon/") ||
+                                  cleanUrl.toLowerCase().includes("/dars/") ||
+                                  linkText.toLowerCase().includes("cours") ||
+                                  linkText.includes("درس");
+
+              if (isPdf || (isHtmlLesson && !cleanUrl.toLowerCase().endsWith('.pdf'))) {
+                if (isValidUrlSource(cleanUrl).valid && checkTopicFilter(cleanUrl, linkText)) {
                   foundPdfs.add(cleanUrl);
                 }
               } 
@@ -2940,9 +6064,11 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
               if (isInternal && !visited.has(cleanUrl) && depth < maxDepth) {
                 // Skip obvious non-html files
                 if (!cleanUrl.match(/\.(jpg|jpeg|png|gif|svg|css|js|zip|rar|mp4|mp3|wav|avi|doc|docx|xls|xlsx|ppt|pptx)$/i)) {
-                   // Check if already in toVisit
-                   if (!toVisit.some(v => v.url === cleanUrl)) {
-                     toVisit.push({ url: cleanUrl, depth: depth + 1 });
+                   if (isValidUrlSource(cleanUrl).valid) {
+                     // Check if already in toVisit
+                     if (!toVisit.some(v => v.url === cleanUrl)) {
+                       toVisit.push({ url: cleanUrl, depth: depth + 1 });
+                     }
                    }
                 }
               }
@@ -2999,15 +6125,97 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
   app.post("/api/discover-pdfs", async (req, res) => {
     try {
       const { query, pastedUrls, topicFilter } = req.body;
-      let urlsToProcess: string[] = [];
+      let rawUrls: string[] = [];
+
+      // Helper to split accidental concatenated URLs
+      function splitConcatenatedUrls(inputStr: string): string[] {
+        const results: string[] = [];
+        const regex = /https?:\/\//gi;
+        const matches: number[] = [];
+        let match;
+        while ((match = regex.exec(inputStr)) !== null) {
+          matches.push(match.index);
+        }
+        if (matches.length === 0) {
+          if (inputStr.trim()) results.push(inputStr.trim());
+        } else {
+          for (let i = 0; i < matches.length; i++) {
+            const start = matches[i];
+            const end = i + 1 < matches.length ? matches[i + 1] : inputStr.length;
+            const sliced = inputStr.substring(start, end).trim();
+            if (sliced) results.push(sliced);
+          }
+        }
+        return results;
+      }
+
+      // Helper to extract grade, subject, and track metadata from title or slug
+      function extractMetadataFromContext(urlStr: string, htmlContent: string, pageTitle: string): { grade: string | null; subject: string | null; track: string | null } {
+        let grade: string | null = null;
+        let subject: string | null = null;
+        let track: string | null = null;
+
+        let decodedUrl = urlStr;
+        try {
+          decodedUrl = decodeURIComponent(urlStr);
+        } catch (e) {}
+
+        const combinedText = `${decodedUrl} ${pageTitle} ${htmlContent.substring(0, 5000)}`.toLowerCase();
+
+        // Grade Detection
+        if (combinedText.includes("3ac") || combinedText.includes("3eme") || combinedText.includes("3ème") || combinedText.includes("ثالثة اعدادي") || combinedText.includes("السنة الثالثة اعدادي")) {
+          grade = "3AC";
+        } else if (combinedText.includes("2ac") || combinedText.includes("ثانية اعدادي") || combinedText.includes("السنة الثانية اعدادي")) {
+          grade = "2AC";
+        } else if (combinedText.includes("1ac") || combinedText.includes("اولى اعدادي") || combinedText.includes("السنة الاولى اعدادي")) {
+          grade = "1AC";
+        } else if (combinedText.includes("tronc commun") || combinedText.includes("جذع مشترك")) {
+          grade = "Tronc Commun";
+        } else if (combinedText.includes("2bac") || combinedText.includes("ثانية باك") || combinedText.includes("البكالوريا")) {
+          grade = "2BAC";
+        } else if (combinedText.includes("1bac") || combinedText.includes("اولى باك") || combinedText.includes("الأولى بكالوريا")) {
+          grade = "1BAC";
+        }
+
+        // Subject Detection
+        if (combinedText.includes("math") || combinedText.includes("رياضيات") || combinedText.includes("الرياضيات")) {
+          subject = "Mathématiques";
+        } else if (combinedText.includes("physique") || combinedText.includes("chimie") || combinedText.includes("الفيزياء")) {
+          subject = "Physique-Chimie";
+        } else if (combinedText.includes("svt") || combinedText.includes("sciences de la vie") || combinedText.includes("الارض") || combinedText.includes("الأرض")) {
+          subject = "SVT";
+        } else if (combinedText.includes("francais") || combinedText.includes("français") || combinedText.includes("الفرنسية")) {
+          subject = "Français";
+        } else if (combinedText.includes("arabe") || combinedText.includes("العربية")) {
+          subject = "Arabe";
+        } else if (combinedText.includes("anglais") || combinedText.includes("الانجليزية") || combinedText.includes("الإنجليزية")) {
+          subject = "Anglais";
+        }
+
+        // Track Detection
+        if (combinedText.includes("biof") || combinedText.includes("خيار فرنسي") || combinedText.includes("option francais") || combinedText.includes("option français")) {
+          track = "BIOF (Option Français)";
+        } else if (combinedText.includes("خيار عربي") || combinedText.includes("option arabe")) {
+          track = "Option Arabe";
+        } else if (combinedText.includes("science") || combinedText.includes("علوم") || combinedText.includes("العلوم")) {
+          track = "Sciences";
+        } else if (combinedText.includes("lettres") || combinedText.includes("اداب") || combinedText.includes("الآداب")) {
+          track = "Lettres";
+        }
+
+        return { grade, subject, track };
+      }
 
       if (pastedUrls && Array.isArray(pastedUrls)) {
-        urlsToProcess = pastedUrls.filter((u: any) => typeof u === "string" && u.trim().length > 0);
+        for (const u of pastedUrls) {
+          if (typeof u === "string" && u.trim().length > 0) {
+            rawUrls.push(...splitConcatenatedUrls(u));
+          }
+        }
       } else if (query && query.trim().length > 0) {
         console.log(`[Discover] Querying search grounding for: ${query}`);
-        // Use gemini-3.5-flash as specified for text/search grounding tasks
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
+        const response = await callGeminiWithRetry({
+          model: "gemini-2.5-flash",
           contents: `Find educational resources, articles, lessons, exams or direct PDF files related to the search query: "${query}". Specify the full direct URLs from legitimate sources and educational webpages starting with http or https.`,
           config: {
             tools: [{ googleSearch: {} }],
@@ -3018,22 +6226,21 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         if (chunks && Array.isArray(chunks)) {
           for (const chunk of chunks) {
             if (chunk.web?.uri) {
-              urlsToProcess.push(chunk.web.uri);
+              rawUrls.push(...splitConcatenatedUrls(chunk.web.uri));
             }
           }
         }
 
-        // Enrich by extracting any potential URLs found inside the generated response text itself
         const text = response.text || "";
         const urlRegex = /(https?:\/\/[^\s$,;?#()\[\]"']+)/g;
         let match;
         while ((match = urlRegex.exec(text)) !== null) {
-          urlsToProcess.push(match[1]);
+          rawUrls.push(...splitConcatenatedUrls(match[1]));
         }
       }
 
-      // De-duplicate, resolve redirect trails, and normalize URLs
-      urlsToProcess = Array.from(new Set(urlsToProcess.map(u => resolveUrl(u.trim()))));
+      // De-duplicate initial set of URLs to process
+      rawUrls = Array.from(new Set(rawUrls.map(u => u.trim())));
 
       // Resolve topic filter against dictionary
       const activeDict = normalizeDictionary(await getActiveDictionary());
@@ -3049,25 +6256,48 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         }
       }
 
-      const results = urlsToProcess.map(urlStr => {
+      const results: any[] = [];
+      const discoveredPdfSet = new Set<string>();
+      let anyPdfsFoundOnAtLeastOnePage = false;
+
+      for (const rawUrl of rawUrls) {
+        // Step 3: Normalize - trim, remove hash, keep query params
+        const trimmed = rawUrl.trim();
+        if (!trimmed) continue;
+
+        let cleanUrl = trimmed;
+        if (cleanUrl.includes("#")) {
+          cleanUrl = cleanUrl.split("#")[0];
+        }
+
+        // Decode safely only for display inside logging
+        let normalizedDisplayUrl = cleanUrl;
         try {
-          const validationInfo = isValidUrlSource(urlStr);
+          normalizedDisplayUrl = decodeURIComponent(cleanUrl);
+        } catch (e) {}
+
+        // Resolve redirects
+        const resolvedCleanUrl = resolveUrl(cleanUrl);
+
+        try {
+          const validationInfo = isValidUrlSource(resolvedCleanUrl);
           if (!validationInfo.valid) {
-            return {
-              url: urlStr,
+            results.push({
+              url: resolvedCleanUrl,
               isDirectPdf: false,
               accepted: false,
               reason: `Rejected: ${validationInfo.reason || "Malformed or unsupported source URL"}`
-            };
+            });
+            continue;
           }
 
-          const parsed = new URL(urlStr);
+          const parsed = new URL(resolvedCleanUrl);
           const pathname = parsed.pathname.toLowerCase();
           const hostname = parsed.hostname.toLowerCase();
 
+          // Step 4: Detect if the cleaned URL is a direct PDF
           const isDirectPdf = pathname.endsWith(".pdf");
 
-          // Filter out obvious noise domains to satisfy criteria [App rejects unrelated links]
           const isNoisy = hostname.includes("facebook.com") || 
                           hostname.includes("twitter.com") || 
                           hostname.includes("instagram.com") || 
@@ -3080,7 +6310,6 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
                           hostname === "google.com" ||
                           hostname === "www.google.com";
 
-          // Educational indicators (curriculum pathways, schools, pdf indicators)
           const isEduPage = hostname.includes("talamidi") || 
                             hostname.includes("moutamadris") || 
                             hostname.includes("alloschool") || 
@@ -3093,81 +6322,261 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
                             pathname.includes("download") ||
                             pathname.includes("drive.google.com");
 
-          let accepted = false;
-          let reason = "";
+          if (isDirectPdf) {
+            anyPdfsFoundOnAtLeastOnePage = true;
+            const pdfUrlNormalized = resolvedCleanUrl;
 
-          // Apply strict user request matching rules
-          if (topicFilter && topicFilter.trim().length > 0) {
-            if (!topicFilterMatched) {
-              accepted = false;
-              reason = "Rejected: topic filters do not match Supabase dictionary";
-            } else {
-              // Filters matched, check if URL matches any expanded keyword
-              const normUrl = normalizeMatchText(urlStr);
-              let matchedTerm = false;
-              for (const term of expandedFilterTerms) {
-                if (normUrl.includes(term)) {
-                  matchedTerm = true;
-                  break;
-                }
-              }
+            if (!discoveredPdfSet.has(pdfUrlNormalized)) {
+              discoveredPdfSet.add(pdfUrlNormalized);
 
-              if (!matchedTerm) {
-                accepted = false;
-                reason = "Rejected: URL does not match any of the resolved topic keywords";
-              } else {
-                // If it matched, apply typical acceptance logic
-                if (isDirectPdf) {
-                  accepted = true;
-                  reason = "Direct PDF document link detected";
-                } else if (isNoisy) {
+              // 10. Add clear logging
+              console.log(`[Discover] Direct PDF Target Logged:`, {
+                raw_url: trimmed,
+                normalized_url: normalizedDisplayUrl,
+                url_type: "direct_pdf",
+                pdf_count: 1,
+                discovered_pdf_urls: [pdfUrlNormalized]
+              });
+
+              const meta = extractMetadataFromContext(resolvedCleanUrl, "", parsed.pathname);
+              const mappingEntry = {
+                source_page_url: resolvedCleanUrl,
+                pdf_url: pdfUrlNormalized,
+                metadata: meta,
+                url_type: "direct_pdf"
+              };
+              updateReport("discovery-mapping.json", mappingEntry);
+
+              // Apply topic filter
+              let accepted = true;
+              let reason = "Direct PDF document link detected";
+
+              if (topicFilter && topicFilter.trim().length > 0) {
+                if (!topicFilterMatched) {
                   accepted = false;
-                  reason = "Rejected: Noisy domain (social utility or search engine)";
-                } else if (isEduPage) {
-                  accepted = true;
-                  reason = "Accepted: Educational domain or URL path parameter suggestive of academic documents";
+                  reason = "Rejected: topic filters do not match Supabase dictionary";
                 } else {
-                  accepted = true;
-                  reason = "Accepted: Link likely contains educational indexes or PDF downloads";
+                  const normUrl = normalizeMatchText(pdfUrlNormalized);
+                  let matchedTerm = false;
+                  for (const term of expandedFilterTerms) {
+                    if (normUrl.includes(term)) {
+                      matchedTerm = true;
+                      break;
+                    }
+                  }
+                  if (!matchedTerm) {
+                    accepted = false;
+                    reason = "Rejected: URL does not match any of the resolved topic keywords";
+                  }
                 }
               }
+
+              results.push({
+                url: pdfUrlNormalized,
+                isDirectPdf: true,
+                accepted,
+                reason,
+                source_page_url: resolvedCleanUrl,
+                pdf_url: pdfUrlNormalized,
+                metadata: meta
+              });
             }
           } else {
-            // No topic filter applied
-            if (isDirectPdf) {
-              accepted = true;
-              reason = "Direct PDF document link detected";
-            } else if (isNoisy) {
-              accepted = false;
-              reason = "Rejected: Noisy domain (social utility or search engine)";
-            } else if (isEduPage) {
-              accepted = true;
-              reason = "Accepted: Educational domain or URL path parameter suggestive of academic documents";
+            // Step 5: Treat it as an HTML source page. Fetch and parse.
+            let pageHtml = "";
+            let pageTitle = "";
+            try {
+              console.log(`[Discover] Fetching educational page HTML for extraction limit check: ${resolvedCleanUrl}`);
+              const htmlRes = await axios.get(resolvedCleanUrl, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                  "Accept-Language": "fr,en-US;q=0.7,en;q=0.3"
+                },
+                timeout: 15000
+              });
+              pageHtml = typeof htmlRes.data === "string" ? htmlRes.data : "";
+              if (pageHtml) {
+                const $ = load(pageHtml);
+                pageTitle = $("title").text().trim();
+              }
+            } catch (fetchErr: any) {
+              console.error(`[Discover] Failed to read HTML source page: ${resolvedCleanUrl}, error: ${fetchErr.message}`);
+            }
+
+            const pagePdfLinks: string[] = [];
+            const pageSubHtmlLinks: string[] = [];
+            if (pageHtml) {
+              const $ = load(pageHtml);
+              $("a").each((_, el) => {
+                const href = $(el).attr("href");
+                if (!href) return;
+                try {
+                  const absoluteObj = new URL(href, resolvedCleanUrl);
+                  const absoluteStr = absoluteObj.href.split("#")[0]; // Normalise - remove hash fragments
+
+                  const isDocAsset = [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls"].some(ext => absoluteObj.pathname.toLowerCase().endsWith(ext));
+                  if (isDocAsset) {
+                    pagePdfLinks.push(absoluteStr);
+                  } else {
+                    // Collect potential sub-pages on the same hostname to dig into
+                    if (absoluteObj.hostname === parsed.hostname && absoluteStr !== resolvedCleanUrl) {
+                      const pathLower = absoluteObj.pathname.toLowerCase();
+                      const nonHtmlExtensions = [".png", ".jpg", ".jpeg", ".gif", ".css", ".js", ".zip", ".rar", ".mp3", ".mp4"];
+                      const isAsset = nonHtmlExtensions.some(suffix => pathLower.endsWith(suffix));
+                      if (!isAsset) {
+                        pageSubHtmlLinks.push(absoluteStr);
+                      }
+                    }
+                  }
+                } catch {
+                  // Skip invalid href targets
+                }
+              });
+            }
+
+            const uniquePagePdfLinks = Array.from(new Set(pagePdfLinks));
+            const uniqueSubHtmlLinks = Array.from(new Set(pageSubHtmlLinks)).slice(0, 8); // Dig to up to 8 sub-URLs
+
+            console.log(`[Discover] HTML Page Content Base Analysis:`, {
+              url: resolvedCleanUrl,
+              direct_pdfs_found: uniquePagePdfLinks.length,
+              candidate_sub_urls_found: uniqueSubHtmlLinks.length,
+              dig_targets: uniqueSubHtmlLinks
+            });
+
+            // Perform parallel deep dig into up to 8 sub-URLs to discover more PDFs!
+            const extraPdfLinksFromSubPages: string[] = [];
+            if (uniqueSubHtmlLinks.length > 0) {
+              console.log(`[Discover] Initiating "deep dig" into ${uniqueSubHtmlLinks.length} sub-URLs for page: ${resolvedCleanUrl}`);
+              const subPagePromises = uniqueSubHtmlLinks.map(async (subUrl) => {
+                try {
+                  const subHtmlRes = await axios.get(subUrl, {
+                    headers: {
+                      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                      "Accept-Language": "fr,en-US;q=0.7,en;q=0.3"
+                    },
+                    timeout: 10000 // Snell speed timeout limit per sub-page
+                  });
+                  const subHtml = typeof subHtmlRes.data === "string" ? subHtmlRes.data : "";
+                  if (subHtml) {
+                    const $sub = load(subHtml);
+                    const subPdfLinks: string[] = [];
+                    $sub("a").each((_, el) => {
+                      const href = $sub(el).attr("href");
+                      if (!href) return;
+                      try {
+                        const absoluteObj = new URL(href, subUrl);
+                        const absoluteStr = absoluteObj.href.split("#")[0];
+                        const isSubDocAsset = [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls"].some(ext => absoluteObj.pathname.toLowerCase().endsWith(ext));
+                        if (isSubDocAsset) {
+                          subPdfLinks.push(absoluteStr);
+                        }
+                      } catch {}
+                    });
+                    return subPdfLinks;
+                  }
+                } catch (subErr: any) {
+                  console.warn(`[Discover] Deep dig warning: failed to fetch sub-URL: ${subUrl}, error: ${subErr.message}`);
+                }
+                return [];
+              });
+
+              const resolvedSubPdfsArrays = await Promise.all(subPagePromises);
+              for (const arr of resolvedSubPdfsArrays) {
+                if (arr) {
+                  extraPdfLinksFromSubPages.push(...arr);
+                }
+              }
+            }
+
+            const allDiscoveredPdfs = Array.from(new Set([...uniquePagePdfLinks, ...extraPdfLinksFromSubPages]));
+
+            // Step 10: Clear console logging
+            console.log(`[Discover] HTML Page Content Logged:`, {
+              raw_url: trimmed,
+              normalized_url: normalizedDisplayUrl,
+              url_type: "source_page",
+              pdf_count: allDiscoveredPdfs.length,
+              discovered_pdf_urls: allDiscoveredPdfs
+            });
+
+            if (allDiscoveredPdfs.length > 0) {
+              anyPdfsFoundOnAtLeastOnePage = true;
+
+              for (const pdfLink of allDiscoveredPdfs) {
+                if (!discoveredPdfSet.has(pdfLink)) {
+                  discoveredPdfSet.add(pdfLink);
+
+                  const meta = extractMetadataFromContext(pdfLink, pageHtml, pageTitle || parsed.pathname);
+                  const mappingEntry = {
+                    source_page_url: resolvedCleanUrl,
+                    pdf_url: pdfLink,
+                    metadata: meta,
+                    url_type: "source_page"
+                  };
+                  updateReport("discovery-mapping.json", mappingEntry);
+
+                  // Apply topic filter if present
+                  let accepted = true;
+                  let reason = `Extracted from educational index/sub-page: ${resolvedCleanUrl}`;
+
+                  if (topicFilter && topicFilter.trim().length > 0) {
+                    if (!topicFilterMatched) {
+                      accepted = false;
+                      reason = "Rejected: topic filters do not match Supabase dictionary";
+                    } else {
+                      const normUrl = normalizeMatchText(pdfLink);
+                      let matchedTerm = false;
+                      for (const term of expandedFilterTerms) {
+                        if (normUrl.includes(term)) {
+                          matchedTerm = true;
+                          break;
+                        }
+                      }
+                      if (!matchedTerm) {
+                        accepted = false;
+                        reason = "Rejected: Extracted link does not match any of the resolved topic keywords";
+                      }
+                    }
+                  }
+
+                  results.push({
+                    url: pdfLink,
+                    isDirectPdf: true,
+                    accepted,
+                    reason,
+                    source_page_url: resolvedCleanUrl,
+                    pdf_url: pdfLink,
+                    metadata: meta
+                  });
+                }
+              }
             } else {
-              accepted = true;
-              reason = "Accepted: Link likely contains educational indexes or PDF downloads";
+              // Step 9: No PDFs found on this page or its sub-URLs
+              const meta = extractMetadataFromContext(resolvedCleanUrl, pageHtml, pageTitle || parsed.pathname);
+              results.push({
+                url: resolvedCleanUrl,
+                isDirectPdf: false,
+                accepted: true, // Keep the source page for manual review
+                reason: "No educational PDFs found on page or its first 8 sub-pages. Staged for manual review.",
+                source_page_url: resolvedCleanUrl,
+                pdf_url: resolvedCleanUrl,
+                metadata: meta,
+                url_type: "source_page_no_pdfs"
+              });
             }
           }
-
-          if (!accepted && topicFilter && topicFilterMatched) {
-            console.log(`[Crawler] Rejected by dictionary topic filter: URL: "${urlStr}"`);
-          }
-
-          return {
-            url: urlStr,
-            isDirectPdf,
-            accepted,
-            reason
-          };
-        } catch (err) {
-          return {
-            url: urlStr,
+        } catch (err: any) {
+          results.push({
+            url: resolvedCleanUrl,
             isDirectPdf: false,
             accepted: false,
-            reason: "Rejected: Invalid malformed URL structure"
-          };
+            reason: `Error during processing: ${err.message}`
+          });
         }
-      });
+      }
 
       let topicFilterReport = null;
       if (topicFilter && topicFilter.trim().length > 0 && resolvedTopicFilters) {
@@ -3179,9 +6588,24 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         };
       }
 
-      res.json({ results, topicFilterReport });
+      const responseStatus = anyPdfsFoundOnAtLeastOnePage ? "success" : "no_pdf_found";
+      res.json({ results, topicFilterReport, status: responseStatus });
     } catch (err: any) {
       console.error("[Discover Error]", err);
+      // Fallback rate limiting handler
+      const errMsg = err.message || "";
+      const isRateLimit = errMsg.includes("429") || 
+                         errMsg.toLowerCase().includes("quota exceeded") || 
+                         errMsg.toLowerCase().includes("rate limit") || 
+                         errMsg.toLowerCase().includes("resource exhausted") || 
+                         errMsg.toLowerCase().includes("too many requests") ||
+                         JSON.stringify(err).toLowerCase().includes("quota");
+
+      if (isRateLimit) {
+        return res.status(429).json({
+          error: "Gemini API Quota/Rate Limit Exceeded. You have exceeded your current API quota limit for 'gemini-2.5-flash'. Please check your current API rate limits or billing plan at https://ai.google.dev/gemini-api/docs/rate-limits, or try again later."
+        });
+      }
       res.status(500).json({ error: err.message || "Failed during PDF discovery" });
     }
   });
@@ -3323,6 +6747,328 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     } catch (error: any) {
       console.error(`[Proxy Download] Error downloading ${req.body.url}:`, error.message);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Google Drive Integration Helper Functions
+  async function getOrCreateDriveFolderServer(accessToken: string, folderName: string, parentId?: string): Promise<string> {
+    const safeFolderName = folderName.replace(/'/g, "\\'");
+    let q = `name = '${safeFolderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    if (parentId) {
+      q += ` and '${parentId}' in parents`;
+    }
+    
+    const searchRes = await axios.get("https://www.googleapis.com/drive/v3/files", {
+      params: { q },
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    const files = searchRes.data.files;
+    if (files && files.length > 0) {
+      return files[0].id;
+    }
+    
+    const createBody: any = {
+      name: folderName,
+      mimeType: "application/vnd.google-apps.folder"
+    };
+    if (parentId) {
+      createBody.parents = [parentId];
+    }
+    
+    const createRes = await axios.post("https://www.googleapis.com/drive/v3/files", createBody, {
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }
+    });
+    return createRes.data.id;
+  }
+
+  async function uploadToDriveServer(
+    accessToken: string,
+    filename: string,
+    mimeType: string,
+    fileBuffer: Buffer,
+    folderId: string
+  ) {
+    const safeFilename = filename.replace(/'/g, "\\'");
+    const q = `name = '${safeFilename}' and '${folderId}' in parents and trashed = false`;
+    const existRes = await axios.get("https://www.googleapis.com/drive/v3/files", {
+      params: { q, fields: "files(id)" },
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    const existingFiles = existRes.data.files;
+    if (existingFiles && existingFiles.length > 0) {
+      const existingFileId = existingFiles[0].id;
+      await axios.patch(
+        `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`,
+        fileBuffer,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": mimeType
+          }
+        }
+      );
+      return { id: existingFileId, updated: true };
+    } else {
+      const boundary = "boundary_string_pipeline_gdrive";
+      const metadata = {
+        name: filename,
+        parents: [folderId]
+      };
+      
+      const metadataPart = 
+        `--${boundary}\r\n` +
+        `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+        JSON.stringify(metadata) + `\r\n`;
+        
+      const fileHeaderPart = 
+        `--${boundary}\r\n` +
+        `Content-Type: ${mimeType}\r\n\r\n`;
+        
+      const fileFooterPart = `\r\n--${boundary}--`;
+      
+      const payload = Buffer.concat([
+        Buffer.from(metadataPart, 'utf8'),
+        Buffer.from(fileHeaderPart, 'utf8'),
+        fileBuffer,
+        Buffer.from(fileFooterPart, 'utf8')
+      ]);
+      
+      const res = await axios.post(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": `multipart/related; boundary=${boundary}`
+          }
+        }
+      );
+      return { id: res.data.id, updated: false };
+    }
+  }
+
+  app.post("/api/gdrive/sync", async (req, res) => {
+    try {
+      const { accessToken, category, filepath, filename, fileBufferBase64, mimeType } = req.body;
+      if (!accessToken) {
+        return res.status(400).json({ error: "Access token is required" });
+      }
+
+      const rootFolderId = await getOrCreateDriveFolderServer(accessToken, "AI Studio Curriculum Pipeline Workspace");
+      
+      let categoryFolderName = "misc";
+      if (category === "downloads") categoryFolderName = "Original-PDFs";
+      else if (category === "clean-pdfs") categoryFolderName = "Clean-PDFs";
+      else if (category === "dataset") categoryFolderName = "Datasets";
+      else if (category === "reports") categoryFolderName = "Reports";
+      
+      const targetFolderId = await getOrCreateDriveFolderServer(accessToken, categoryFolderName, rootFolderId);
+
+      let destFilename = filename;
+      let buffer: Buffer;
+      let targetMimeType = mimeType || "application/pdf";
+
+      if (fileBufferBase64) {
+        buffer = Buffer.from(fileBufferBase64, "base64");
+      } else if (filepath) {
+        const fullLocalPath = path.isAbsolute(filepath) ? filepath : path.join(LOCAL_OUTPUT_DIR, filepath);
+        if (!fs.existsSync(fullLocalPath)) {
+          return res.status(404).json({ error: `Local file not found at ${fullLocalPath}` });
+        }
+        buffer = fs.readFileSync(fullLocalPath);
+        if (!destFilename) {
+          destFilename = path.basename(fullLocalPath);
+        }
+        if (destFilename.endsWith(".txt")) targetMimeType = "text/plain";
+        else if (destFilename.endsWith(".json") || destFilename.endsWith(".jsonl")) targetMimeType = "application/json";
+      } else {
+        return res.status(400).json({ error: "filepath or fileBufferBase64 is required" });
+      }
+
+      console.log(`[Google Drive Sync] Syncing ${destFilename} (${categoryFolderName}) to Drive...`);
+      const result = await uploadToDriveServer(accessToken, destFilename, targetMimeType, buffer, targetFolderId);
+      
+      res.json({
+        success: true,
+        fileId: result.id,
+        updated: result.updated,
+        folderName: categoryFolderName,
+        filename: destFilename
+      });
+    } catch (err: any) {
+      console.error("[Google Drive Sync Error]", err.response?.data || err.message);
+      res.status(500).json({ error: err.response?.data?.error?.message || err.message });
+    }
+  });
+
+  app.post("/api/gdrive/gemini-sync", async (req, res) => {
+    try {
+      const { accessToken, category, filepath, filename, fileBufferBase64, mimeType } = req.body;
+      if (!accessToken) {
+        return res.status(400).json({ error: "Access token is required" });
+      }
+
+      let buffer: Buffer;
+      let destFilename = filename;
+      let targetMimeType = mimeType || "application/pdf";
+
+      if (fileBufferBase64) {
+        buffer = Buffer.from(fileBufferBase64, "base64");
+      } else if (filepath) {
+        const fullLocalPath = path.isAbsolute(filepath) ? filepath : path.join(LOCAL_OUTPUT_DIR, filepath);
+        if (!fs.existsSync(fullLocalPath)) {
+          return res.status(404).json({ error: `Local file not found at ${fullLocalPath}` });
+        }
+        buffer = fs.readFileSync(fullLocalPath);
+        if (!destFilename) {
+          destFilename = path.basename(fullLocalPath);
+        }
+        if (destFilename.endsWith(".txt")) targetMimeType = "text/plain";
+        else if (destFilename.endsWith(".json") || destFilename.endsWith(".jsonl")) targetMimeType = "application/json";
+      } else {
+        return res.status(400).json({ error: "filepath or fileBufferBase64 is required" });
+      }
+
+      // Read a text snippet from PDF to help Gemini categorize
+      let textSnippet = "";
+      if (targetMimeType === "application/pdf") {
+        try {
+          const pdfData = await pdf(buffer);
+          textSnippet = pdfData.text ? pdfData.text.substring(0, 1500) : "";
+        } catch (pdfErr) {
+          console.warn("[Gemini Drive Sync] PDF parsing failed, using name only", pdfErr);
+        }
+      }
+
+      const prompt = `You are a helpful assistant for Google Drive file structure organization.
+Analyze this educational file:
+Original Filename: "${destFilename}"
+Content Snippet: "${textSnippet}"
+
+Based on the title, language, and subject matter of this Moroccan or general educational document:
+1. Generate an elegant, descriptive, clean, structured filename (e.g., "Math_3AC_Equations_Et_Inequations.pdf" or "SVT_1AC_Systeme_Digestif_Exercices.pdf"). Avoid timestamps, spammy characters, or website footprints. Ensure it ends with the appropriate file extension.
+2. Determine up to 3 levels of highly relevant folders to organize this content inside Google Drive:
+- Level 1 (Parent Folder): Broad subject (e.g., "Mathématiques", "SVT", "Physique-Chimie", "Français", "Datasets").
+- Level 2 (Child Folder): Educational level/grade or theme (e.g., "3ème Année Collège", "1ère Année Collège", "Tronc Commun", "BAC Sciences").
+- Level 3 (Grandchild Folder, optional): Specific unit, chapter, or type of document (e.g., "Équations et Inéquations", "Exercices et Contrôles", "Leçons", "Résumé").
+
+Return your response strictly as a JSON object of the following format:
+{
+  "suggestedFilename": "Systematic_Descriptive_Name.pdf",
+  "parentFolder": "Name of Parent Folder",
+  "childFolder": "Name of Child Folder",
+  "grandchildFolder": "Name of Grandchild Folder or empty/null"
+}
+
+Do not include any markdown format blocks or conversational text, specify valid JSON only.`;
+
+      // Call Gemini 2.5 Flash as requested
+      const response = await callGeminiWithRetry({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      const geminiResult = response.text ? JSON.parse(response.text.trim()) : null;
+      if (!geminiResult) {
+        throw new Error("Gemini 2.5 Flash did not return a valid configuration.");
+      }
+
+      const { suggestedFilename, parentFolder, childFolder, grandchildFolder } = geminiResult;
+      console.log(`[Gemini Drive Sync] Suggested structure: ${parentFolder} / ${childFolder} / ${grandchildFolder || ""} -> ${suggestedFilename}`);
+
+      const rootFolderId = await getOrCreateDriveFolderServer(accessToken, "Gemini Automated Curriculums");
+      
+      let currentParentId = rootFolderId;
+      if (parentFolder) {
+        currentParentId = await getOrCreateDriveFolderServer(accessToken, parentFolder, currentParentId);
+      }
+      if (childFolder) {
+        currentParentId = await getOrCreateDriveFolderServer(accessToken, childFolder, currentParentId);
+      }
+      if (grandchildFolder) {
+        currentParentId = await getOrCreateDriveFolderServer(accessToken, grandchildFolder, currentParentId);
+      }
+
+      const finalName = suggestedFilename || destFilename;
+      const result = await uploadToDriveServer(accessToken, finalName, targetMimeType, buffer, currentParentId);
+
+      res.json({
+        success: true,
+        fileId: result.id,
+        updated: result.updated,
+        folderPath: `Gemini Automated Curriculums / ${parentFolder || ""} / ${childFolder || ""} / ${grandchildFolder || ""}`,
+        filename: finalName
+      });
+    } catch (err: any) {
+      console.error("[Gemini Drive Sync Error]", err.response?.data || err.message);
+      res.status(500).json({ error: err.response?.data?.error?.message || err.message });
+    }
+  });
+
+  app.post("/api/gdrive/sync-all", async (req, res) => {
+    try {
+      const { accessToken } = req.body;
+      if (!accessToken) {
+        return res.status(400).json({ error: "Access token is required" });
+      }
+
+      const rootFolderId = await getOrCreateDriveFolderServer(accessToken, "AI Studio Curriculum Pipeline Workspace");
+
+      const categories = [
+        { dir: "downloads", label: "Original-PDFs", mime: "application/pdf", suffix: "original.pdf" },
+        { dir: "clean-pdfs", label: "Clean-PDFs", mime: "application/pdf", suffix: null },
+        { dir: "dataset", label: "Datasets", mime: "application/json", suffix: null },
+        { dir: "reports", label: "Reports", mime: "application/json", suffix: null }
+      ];
+
+      const syncedFiles: Array<{ filename: string, folderName: string, updated: boolean, id: string }> = [];
+
+      for (const cat of categories) {
+        const fullDir = path.join(LOCAL_OUTPUT_DIR, cat.dir);
+        if (!fs.existsSync(fullDir)) continue;
+
+        const files = fs.readdirSync(fullDir);
+        if (files.length === 0) continue;
+
+        const folderId = await getOrCreateDriveFolderServer(accessToken, cat.label, rootFolderId);
+
+        for (const file of files) {
+          if (cat.suffix && !file.endsWith(cat.suffix)) continue;
+          if (file.startsWith(".")) continue;
+
+          const filepath = path.join(fullDir, file);
+          const stat = fs.statSync(filepath);
+          if (!stat.isFile()) continue;
+
+          const buffer = fs.readFileSync(filepath);
+          let mime = cat.mime;
+          if (file.endsWith(".jsonl")) mime = "application/x-jsonlines";
+          else if (file.endsWith(".txt")) mime = "text/plain";
+
+          console.log(`[GDrive Sync-All] Syncing ${file}...`);
+          const uploadRes = await uploadToDriveServer(accessToken, file, mime, buffer, folderId);
+          syncedFiles.push({
+            filename: file,
+            folderName: cat.label,
+            updated: uploadRes.updated,
+            id: uploadRes.id
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        count: syncedFiles.length,
+        files: syncedFiles
+      });
+    } catch (err: any) {
+      console.error("[Google Drive Sync-All Error]", err.response?.data || err.message);
+      res.status(500).json({ error: err.response?.data?.error?.message || err.message });
     }
   });
 

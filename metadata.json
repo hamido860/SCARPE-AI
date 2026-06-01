@@ -1,6 +1,6 @@
 {
   "name": "Remix: Remix: ScrapeAI",
-  "description": "A powerful web scraping tool with AI-powered content analysis and extraction.",
+  "description": "A powerful curriculum ingestion engine supporting deep PDF extraction and first-class HTML web lesson parsing.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
