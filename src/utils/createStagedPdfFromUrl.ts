@@ -1,7 +1,11 @@
 import { StagedPdf } from "../types/pdf";
 
 export function createStagedPdfFromUrl(url: string): StagedPdf {
-  let originalName = url.split("/").pop() || "scraped_document.pdf";
+  const segments = url.split(/[?#]/)[0].split("/").filter(Boolean);
+  let originalName = segments.length > 0 ? segments[segments.length - 1] : "scraped_document.pdf";
+  if (!originalName.toLowerCase().endsWith(".pdf") && !originalName.toLowerCase().endsWith(".html")) {
+    originalName += url.toLowerCase().split(/[?#]/)[0].endsWith(".pdf") ? ".pdf" : "";
+  }
   try {
     originalName = decodeURIComponent(originalName);
   } catch {}

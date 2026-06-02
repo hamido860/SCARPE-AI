@@ -1,0 +1,516 @@
+{
+  "id": "job_q7i4gly",
+  "name": "Batch Job (35 PDFs)",
+  "scope": {
+    "gradeId": null,
+    "subjectId": null,
+    "topicId": null,
+    "documentTypeId": null,
+    "status": null
+  },
+  "totalItems": 35,
+  "pending": 0,
+  "running": 0,
+  "completed": 0,
+  "blocked": 0,
+  "failed": 3658,
+  "skipped": 64,
+  "status": "queued",
+  "createdAt": "2026-06-01T13:49:48.688Z",
+  "updatedAt": "2026-06-01T13:51:28.589Z",
+  "processedItems": 0,
+  "items": [
+    {
+      "id": "item_0_znt3c04",
+      "url": "https://zoneduca.com/wp-content/uploads/2024/07/Examen-regionaux-2023-PQ.pdf",
+      "filename": "Examen-regionaux-2023-PQ.pdf",
+      "originalName": "Examen-regionaux-2023-PQ.pdf",
+      "status": "skipped",
+      "currentStep": "done",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      },
+      "hash": "a553ce9eb538f6624b9b59d7e317dc24d0e396098a96d5f0c7bb5fe756c1fdb7",
+      "blockReason": "Duplicate item hash skipped"
+    },
+    {
+      "id": "item_1_zk9b1qe",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2019-1-avec-correction.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-1-avec-correction.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-1-avec-correction.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_2_euj8v6f",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2019-2-avec-correction.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-2-avec-correction.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-2-avec-correction.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_3_fuwiwy6",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2019-3-avec-correction.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-3-avec-correction.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-3-avec-correction.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_4_qptdrph",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2019-4.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-4.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-4.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_5_gp6pfwl",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2019-4-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-4-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-4-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_6_nuzrttn",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2019-5.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-5.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2019-5.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_7_4mehrrl",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-1.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-1.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-1.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_8_uh0x0z5",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-1-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-1-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-1-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_9_dwh9p1w",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-2.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-2.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-2.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_10_fguz91e",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-2-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-2-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-2-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_11_78gkage",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-3.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-3.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-3.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_12_3hrdql2",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-3-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-3-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-3-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_13_emehrlj",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-5.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-5.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-5.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_14_wakwmec",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-5-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-5-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-5-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_15_2phhqfa",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2018-4.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-4.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2018-4.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_16_xmimsfh",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2017-1.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2017-1.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2017-1.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_17_xeedcau",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2017-1-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2017-1-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2017-1-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_18_pk2pk0r",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2016-1.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-1.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-1.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_19_jilrz2h",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2016-1-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-1-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-1-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_20_b2l2bwo",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2016-3.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-3.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-3.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_21_eezq4dz",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2016-3-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-3-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-3-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_22_lw7m9dr",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2016-4.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-4.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-4.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_23_0mehdud",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2016-4-corrige.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-4-corrige.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-4-corrige.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_24_m98a4jv",
+      "url": "https://dyrassa.com/wp-content/uploads/2023/04/Examen-regional-Tanger-Tetouan-Al-houceima-2016-2.pdf",
+      "filename": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-2.pdf",
+      "originalName": "Examen-regional-Tanger-Tetouan-Al-houceima-2016-2.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_25_hdbtu57",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM1cours.pdf",
+      "filename": "3eM1cours.pdf",
+      "originalName": "3eM1cours.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_26_ole91mp",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM2cours.pdf",
+      "filename": "3eM2cours.pdf",
+      "originalName": "3eM2cours.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_27_mf8512m",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM3-cours.pdf",
+      "filename": "3eM3-cours.pdf",
+      "originalName": "3eM3-cours.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_28_irjukb2",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM4cours.pdf",
+      "filename": "3eM4cours.pdf",
+      "originalName": "3eM4cours.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_29_kcggpzh",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM5-cours2.pdf",
+      "filename": "3eM5-cours2.pdf",
+      "originalName": "3eM5-cours2.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_30_9ipmi9k",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM6cours-energie.pdf",
+      "filename": "3eM6cours-energie.pdf",
+      "originalName": "3eM6cours-energie.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_31_sr3p98p",
+      "url": "https://college-montaigne.fr/wp-content/uploads/Choc-50-km-par-h-4e-etage.pdf",
+      "filename": "Choc-50-km-par-h-4e-etage.pdf",
+      "originalName": "Choc-50-km-par-h-4e-etage.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_32_sclran9",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM7cours-1.pdf",
+      "filename": "3eM7cours-1.pdf",
+      "originalName": "3eM7cours-1.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_33_m8h7ub7",
+      "url": "https://college-montaigne.fr/wp-content/uploads/activite-energie-bouilloire-plaque.pdf",
+      "filename": "activite-energie-bouilloire-plaque.pdf",
+      "originalName": "activite-energie-bouilloire-plaque.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    },
+    {
+      "id": "item_34_n7utqcs",
+      "url": "https://college-montaigne.fr/wp-content/uploads/3eM8-cours.pdf",
+      "filename": "3eM8-cours.pdf",
+      "originalName": "3eM8-cours.pdf",
+      "status": "queued",
+      "currentStep": "download",
+      "stepProgress": {
+        "downloaded": false,
+        "ocrDone": false,
+        "classified": false,
+        "cleanBuilt": false
+      }
+    }
+  ]
+}

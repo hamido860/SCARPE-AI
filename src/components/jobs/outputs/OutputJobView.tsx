@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Merge,
   FolderArchive,
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { StagedPdf } from "../../../types/pdf";
 import { JobWorkspaceLayout } from "../../layout/JobWorkspaceLayout";
 import { User } from "firebase/auth";
+import axios from "axios";
 
 interface OutputJobViewProps {
   selectedPdfUrls: string[];
@@ -88,6 +89,49 @@ export function OutputJobView({
   const [geminiSyncStatus, setGeminiSyncStatus] = useState<
     Record<string, "idle" | "syncing" | "success" | "error">
   >({});
+
+  useEffect(() => {
+    const fetchSyncStatus = async () => {
+      try {
+        const res = await axios.get("/api/gdrive/sync-status");
+        if (res.data && Object.keys(res.data).length > 0) {
+          const loadedStatus: Record<string, "success"> = {};
+          const loadedGeminiStatus: Record<string, "success"> = {};
+          Object.keys(res.data).forEach(filename => {
+            // we assume filename maps back to id properly for generic things
+            // for pdfs it could be tricky to reverse map, but let's try
+            
+            // For standard JSON datasets and reports
+            if (filename === "index.jsonl") loadedStatus["dataset-index"] = "success";
+            if (filename === "extraction-report.json") loadedStatus["report-extract"] = "success";
+          });
+          
+          Object.entries(res.data).forEach(([filename, val]: [string, any]) => {
+            const isGemini = val.folder && val.folder.includes("Gemini Automated Curriculums");
+            stagedPdfs.forEach(pdf => {
+              const shortHash = pdf.hash.substring(0, 8);
+              const cleanFilename = pdf.renamePattern || `${pdf.gradeId || "unknown"}__${pdf.subjectId || "unknown"}__${pdf.topicId || "unknown"}__${shortHash}.pdf`;
+              if (cleanFilename === filename) {
+                if (isGemini) {
+                  loadedGeminiStatus[`pdf-${pdf.hash}`] = "success";
+                } else {
+                  loadedStatus[`pdf-${pdf.hash}`] = "success";
+                }
+              }
+            });
+          });
+          
+          setSyncStatus(prev => ({...prev, ...loadedStatus}));
+          setGeminiSyncStatus(prev => ({...prev, ...loadedGeminiStatus}));
+        }
+      } catch (err) {
+        console.warn("Failed to load drive sync status", err);
+      }
+    };
+    if (gdriveUser) {
+      fetchSyncStatus();
+    }
+  }, [gdriveUser, stagedPdfs]);
 
   const triggerSingleSync = async (
     idOfItem: string,
@@ -386,10 +430,10 @@ export function OutputJobView({
             </span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto w-full">
             <table className="w-full text-left font-sans text-xs border-collapse">
-              <thead>
-                <tr className="bg-neutral-100 border-b border-neutral-300 font-mono text-[9.5px] text-neutral-600 uppercase">
+              <thead className="sticky top-0 z-10 bg-neutral-100 border-b border-neutral-300 font-mono text-[9.5px] text-neutral-600 uppercase">
+                <tr>
                   <th className="p-3">Asset Details</th>
                   <th className="p-3">Category</th>
                   <th className="p-3">Local Sync Path</th>
@@ -398,6 +442,7 @@ export function OutputJobView({
               </thead>
               <tbody className="divide-y divide-neutral-200">
                 {/* Dataset JSONL Row */}
+
                 <tr className="hover:bg-neutral-50/50">
                   <td className="p-3 font-mono text-[10.5px] font-bold text-neutral-800">
                     classroom_curriculum_dataset.jsonl
@@ -492,7 +537,6 @@ export function OutputJobView({
                 {/* Display 5 classified staging PDFs as direct sync rows */}
                 {stagedPdfs
                   .filter((p) => p.status === "classified")
-                  .slice(0, 8)
                   .map((pdf, idx) => {
                     const shortHash = pdf.hash.substring(0, 8);
                     const cleanFilename =
@@ -524,7 +568,24 @@ export function OutputJobView({
                           /{localPath}
                         </td>
                         <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                           <div className="flex items-center justify-end gap-2">
+                             <a
+                               href={`/api/pipeline/download-clean/${pdf.hash}?inline=true`}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               title="Open PDF in new tab"
+                               className="inline-flex items-center justify-center h-7 rounded-none px-2 text-[9px] font-mono border border-blue-500 text-blue-700 hover:bg-blue-50 bg-white"
+                             >
+                               👁️ View
+                             </a>
+                             <a
+                               href={`/api/pipeline/download-clean/${pdf.hash}`}
+                               download
+                               title="Download PDF"
+                               className="inline-flex items-center justify-center h-7 rounded-none px-2 text-[9px] font-mono border border-emerald-500 text-emerald-700 hover:bg-emerald-50 bg-white"
+                             >
+                               ⬇️ Download
+                             </a>
                             {gdriveUser ? (
                               <div className="flex gap-2">
                                 <Button

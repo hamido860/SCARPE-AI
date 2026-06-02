@@ -57,8 +57,8 @@ import { createStagedPdfFromUrl } from "./utils/createStagedPdfFromUrl";
 export default function WorkstationDashboard() {
   // App states
   const [crawlUrl, setCrawlUrl] = useState("https://talamidi.com/%D8%AF%D8%B1%D9%88%D8%B3-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6%D9%8A%D8%A7%D8%AA-%D9%84%D9%84%D8%B3%D9%86%D8%A9-%D8%A7%D9%84%D8%A7%D9%88%D9%84%D9%89-%D8%A7%D8%B9%D8%AF%D8%A7%D8%AF%D9%8A/");
-  const [maxPages, setMaxPages] = useState(30);
-  const [maxDepth, setMaxDepth] = useState(2);
+  const [maxPages, setMaxPages] = useState(9999);
+  const [maxDepth, setMaxDepth] = useState(15);
   const [topicFilter, setTopicFilter] = useState(""); // User custom crawling topic filter
   
   const [isCrawling, setIsCrawling] = useState(false);
@@ -71,9 +71,16 @@ export default function WorkstationDashboard() {
     const loadSiteMap = async () => {
       try {
         const res = await axios.get("/api/site-map");
-        setSiteMapNodes(res.data);
+        if (Array.isArray(res.data)) {
+          setSiteMapNodes(res.data);
+        } else if (res.data && Array.isArray(res.data.nodes)) {
+          setSiteMapNodes(res.data.nodes);
+        } else {
+          setSiteMapNodes([]);
+        }
       } catch (e) {
         console.warn("Failed to load existing site map", e);
+        setSiteMapNodes([]);
       }
     };
     loadSiteMap();
@@ -997,6 +1004,11 @@ export default function WorkstationDashboard() {
       confidenceScore: Math.round((classData.confidenceScore || 0) * 100)
     };
     setBatchJobItems(updatedItems);
+    
+    if (classData && classData.renamePattern) {
+        const rawName = classData.renamePattern.replace(".pdf", "_raw.pdf");
+        triggerAutoSyncIfEnabled("downloads", rawName, `downloads/${hash}.original.pdf`);
+    }
 
     setStagedPdfs(prev => {
       return prev.map(p => {
@@ -1131,21 +1143,31 @@ export default function WorkstationDashboard() {
   const processBatchItem = async (index: number, item: BatchJobItem) => {
     updateItemStep(index, "download");
     let parseRes;
-    try {
-      parseRes = await axios.post("/api/pipeline/parse", {
-        url: item.url,
-        title: item.filename,
-        topicFilter: activeBatchJob?.scope.topicId || topicFilter
-      });
-    } catch (e: any) {
-      throw new Error(`Parse failed: ${e.message}`);
+    
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        parseRes = await axios.post("/api/pipeline/parse", {
+          url: item.url,
+          title: item.filename,
+          topicFilter: activeBatchJob?.scope.topicId || topicFilter
+        });
+        break; // Success!
+      } catch (e: any) {
+        if (e.response?.status === 429 && retries > 1) {
+          retries--;
+          await new Promise(r => setTimeout(r, 6000)); // Wait 6s and retry
+          continue;
+        }
+        throw new Error(`Parse failed: ${e.message}`);
+      }
     }
 
     if (!parseRes.data.success) {
-      if (parseRes.data.status === "rejected") {
-        return rejectItem(index, item, parseRes.data.reason || "Malformed URL or unsupported source");
+      if (parseRes.data.status === "rejected" || parseRes.data.status === "blocked") {
+        return rejectItem(index, item, parseRes.data.reason || parseRes.data.blockReason || "Malformed URL or unsupported source");
       }
-      throw new Error(parseRes.data.error || "Failed to download/parse PDF");
+      throw new Error(parseRes.data.error || parseRes.data.reason || "Failed to download/parse PDF");
     }
 
     const { hash, isDuplicate, needsOcr, textLength, textQualityScore } = parseRes.data;
@@ -1318,85 +1340,70 @@ export default function WorkstationDashboard() {
       return;
     }
 
-    toast.info("Applying resolution & building clean stamped copy...");
+    toast.info("Applying resolution & saving classified standard raw PDF...");
     const renamePattern = computeRenamePattern(gradeId, subjectId, topicId, documentTypeId, cleanTitle);
     const hash = item.hash || "manual_" + Math.random().toString(36).substring(2, 9);
+    const rawName = renamePattern.replace(".pdf", "_raw.pdf");
 
     try {
-      const cleanRes = await axios.post("/api/pipeline/clean-copy", {
+      const updatedItems = [...batchJobItems];
+      updatedItems[itemIndex] = {
+        ...item,
+        status: "classified",
+        currentStep: "done",
         hash,
-        gradeId,
-        subjectId,
-        topicId,
-        documentTypeId,
-        title: cleanTitle,
-        url: item.url,
-        text: blockedDetails[item.url]?.textPreview || ""
+        requiresUserAction: false,
+        blockReason: null
+      };
+      setBatchJobItems(updatedItems);
+
+      triggerAutoSyncIfEnabled("downloads", rawName, `downloads/${hash}.original.pdf`);
+
+      setStagedPdfs(prev => {
+        return prev.map(p => {
+          if (p.url === item.url) {
+            return {
+              ...p,
+              status: "classified",
+              hash,
+              gradeId,
+              subjectId,
+              topicId,
+              documentTypeId,
+              cleanTitle,
+              renamePattern,
+              confidenceScore: 1.0,
+              cleanCopyStatus: "pending",
+              datasetRowStatus: "pending",
+              cleanFilename: undefined,
+              datasetId: undefined
+            };
+          }
+          return p;
+        });
       });
 
-      if (cleanRes.data.success) {
-        const updatedItems = [...batchJobItems];
-        updatedItems[itemIndex] = {
-          ...item,
-          status: "clean_copy_done",
-          currentStep: "done",
-          hash,
-          requiresUserAction: false,
-          blockReason: null
+      setActiveBatchJob(prev => {
+        if (!prev) return null;
+        const job = {
+          ...prev,
+          blocked: Math.max(0, prev.blocked - 1),
+          completed: prev.completed + 1,
+          updatedAt: new Date().toISOString()
         };
-        setBatchJobItems(updatedItems);
+        axios.post("/api/pipeline/batch-job", { ...job, items: updatedItems });
+        return job;
+      });
 
-        setStagedPdfs(prev => {
-          return prev.map(p => {
-            if (p.url === item.url) {
-              return {
-                ...p,
-                status: "classified",
-                hash,
-                gradeId,
-                subjectId,
-                topicId,
-                documentTypeId,
-                cleanTitle,
-                renamePattern,
-                confidenceScore: 1.0,
-                cleanCopyStatus: "success",
-                datasetRowStatus: "success",
-                cleanFilename: cleanRes.data.cleanName,
-                datasetId: cleanRes.data.datasetId
-              };
-            }
-            return p;
-          });
-        });
+      setBlockedDetails(prev => {
+        const c = { ...prev };
+        delete c[item.url];
+        return c;
+      });
+      setSelectedBatchItemId(null);
 
-        // Auto-sync resolved clean PDF to Google Drive in background
-        triggerAutoSyncIfEnabled("clean-pdfs", cleanRes.data.cleanName, `clean-pdfs/${cleanRes.data.cleanName}`);
-
-        setActiveBatchJob(prev => {
-          if (!prev) return null;
-          const job = {
-            ...prev,
-            blocked: Math.max(0, prev.blocked - 1),
-            completed: prev.completed + 1,
-            updatedAt: new Date().toISOString()
-          };
-          axios.post("/api/pipeline/batch-job", { ...job, items: updatedItems });
-          return job;
-        });
-
-        setBlockedDetails(prev => {
-          const c = { ...prev };
-          delete c[item.url];
-          return c;
-        });
-        setSelectedBatchItemId(null);
-
-        toast.success(`Successfully resolved and approved: ${cleanRes.data.cleanName}`);
-        setIsBatchJobRunning(true);
-      } else {
-        toast.error(`Resolution building failed: ${cleanRes.data.error || "Unknown server error"}`);
-      }
+      toast.success(`Successfully resolved and approved classification!`);
+      setIsBatchJobRunning(true);
     } catch (e: any) {
       toast.error(`Resolution exception: ${e.message}`);
     }
@@ -1409,7 +1416,11 @@ export default function WorkstationDashboard() {
     let isSubscribed = true;
     
     const runNext = async () => {
-      const nextIndex = batchJobItems.findIndex(item => item.status === "queued" || item.status === "running");
+      if (batchJobItems.some(item => item.status === "running")) {
+        return; // Wait for current item to finish
+      }
+
+      const nextIndex = batchJobItems.findIndex(item => item.status === "queued");
       if (nextIndex === -1) {
         const hasBlocked = batchJobItems.some(item => item.status === "blocked");
         const finalStatus = hasBlocked ? "completed_with_blocks" as const : "completed" as const;
@@ -1435,6 +1446,7 @@ export default function WorkstationDashboard() {
       setBatchJobItems(updated);
       
       try {
+        await new Promise(r => setTimeout(r, 2500)); // Rate limit protection
         await processBatchItem(nextIndex, item);
       } catch (err: any) {
         console.error("Item crash in batch runner:", item.url, err);
@@ -1559,7 +1571,12 @@ export default function WorkstationDashboard() {
         fresh: true
       });
 
-      const nodes = res.data || [];
+      let nodes = [];
+      if (Array.isArray(res.data)) {
+        nodes = res.data;
+      } else if (res.data && Array.isArray(res.data.nodes)) {
+        nodes = res.data.nodes;
+      }
       setSiteMapNodes(nodes);
 
       // Filter only nodes that are detected as verified final assets as requested In Task 2,7
@@ -1618,7 +1635,9 @@ export default function WorkstationDashboard() {
       const exists = initialStagedList.some(s => s.url === asset.url);
       if (exists) return;
 
-      const baseOriginal = asset.url.split("/").pop() || "scraped_document.pdf";
+      const segments = asset.url.split(/[?#]/)[0].split("/").filter(Boolean);
+      let baseOriginal = segments.length > 0 ? segments[segments.length - 1] : "scraped_document.pdf";
+      try { baseOriginal = decodeURIComponent(baseOriginal); } catch {}
       
       const gradeId = asset.grade ? asset.grade.toLowerCase() : "1ac";
       const subjectId = asset.subject ? asset.subject.toLowerCase() : "math";
@@ -1869,6 +1888,9 @@ export default function WorkstationDashboard() {
         
         // Auto-sync built clean PDF to Google Drive in background
         triggerAutoSyncIfEnabled("clean-pdfs", data.cleanName, `clean-pdfs/${data.cleanName}`);
+        if (data.rawName) {
+           triggerAutoSyncIfEnabled("downloads", data.rawName, `downloads/${data.rawName}`);
+        }
         
         fetchPipelineStats();
       } else {
@@ -2646,6 +2668,11 @@ export default function WorkstationDashboard() {
                         <option value={1}>1 (Current)</option>
                         <option value={2}>2 (Standard)</option>
                         <option value={3}>3 (Deep)</option>
+                        <option value={5}>5 (Deeper)</option>
+                        <option value={10}>10 (Extreme)</option>
+                        <option value={15}>15 (Unbounded)</option>
+                        <option value={50}>50 (Insane)</option>
+                        <option value={999}>999 (Infinite)</option>
                       </select>
                     </div>
                     <div className="space-y-1">

@@ -358,6 +358,11 @@ export function IntakeJobView({
                   <option value={1}>1 (Current)</option>
                   <option value={2}>2 (Standard)</option>
                   <option value={3}>3 (Deep)</option>
+                  <option value={5}>5 (Deeper)</option>
+                  <option value={10}>10 (Extreme)</option>
+                  <option value={15}>15 (Unbounded)</option>
+                  <option value={50}>50 (Insane)</option>
+                  <option value={999}>999 (Infinite)</option>
                 </select>
               </div>
               <div className="space-y-1">
@@ -717,7 +722,24 @@ export function IntakeJobView({
                       Automatically maps subjects, grade codes and topics into standard workspace fields to avoid any missing data.
                     </p>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      disabled={selectedSiteMapUrls.length === 0}
+                      onClick={() => {
+                        const finalAssetNodes = siteMapNodes.filter(n => n.is_final_asset);
+                        const targets = finalAssetNodes.filter(n => selectedSiteMapUrls.includes(n.canonical_url));
+                        const targetUrls = targets.map(t => t.canonical_url);
+                        
+                        const current = (discoverPastedUrls || "").trim() ? (discoverPastedUrls || "").trim() + "\n" : "";
+                        setDiscoverPastedUrls(current + targetUrls.join("\n"));
+                        setActiveTab("discover");
+                        setSelectedSiteMapUrls([]);
+                      }}
+                      variant="outline"
+                      className="border-[#141414] text-[#141414] hover:bg-neutral-100 rounded-none font-mono text-[10px] uppercase h-9 px-4 shadow-[2px_2px_0px_rgba(0,0,0,1)] disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Promote to Crawler Job
+                    </Button>
                     <Button
                       id="sitemapping-stage-selected-btn"
                       disabled={selectedSiteMapUrls.length === 0}

@@ -1,0 +1,5041 @@
+PHYSIQUEPHYSIQUE
+CHIMIECHIMIE
+Bonne préparation
+Prof : OMAR BANANI
+Examens régionauxExamens régionaux
+résolus 2023résolus 2023
+Physique Chimie
+2023
+01 - Tanger-Tétouan-Al Hoceïma
+05 - Béni Mellal-Khénifra
+09 - Souss-Massa
+02 - L’Oriental
+06 - Casablanca-Settat
+10 - Guelmim-Oued Noun
+03 - Fès-Meknès
+07 - Marrakech-Safi
+11 - Laâyoune-Sakia El Hamra
+04 - Rabat-Salé-Kénitra
+08 - Drâa-Tafilalet
+12 - Dakhla-Oued Ed-Dahab
+Examens Régionaux
+3APIC
+2
+Objectifs dapprentissage (CDR*)
+Objectif 1 : Connaître le référentiel
+Objectif 2 : Connaître l'état de mouvement et de repos d'un solide
+par rapport à un corps de référence
+Objectif 3 : Connaître la trajectoire
+Objectif 4 : Connaître les deux types de mouvements d'un solide
+(translation et rotation) et distinguer entre eux.
+Objectif 5 : Connaître l'expression de la vitesse moyenne et son
+unité dans le système international (S.l) : m.s
+-1
+. et calculer sa
+valeur en m/s et en km/h.
+Objectif 6 : Savoir et déterminer la nature du mouvement d'un so-
+lide en mouvement de translation (uniforme, accéléré et retardé}
+Objectif 7 : Connaître quelques facteurs influençant la distance de
+freinage.
+Objectif 8 : Connaître les dangers dus aux excès de vitesses et y
+être sensible.
+Objectif 9 : Connaître quelques règles de sécurité routière et les
+appliquer.
+Mouvement et repos - Vitesse (23%)
+Objectif 10 : Connaître les actions mécaniques et déterminer leurs
+effets .
+Objectif 11 : Connaître et les deux types d'actions mécaniques.
+Objectif 12 : Distinguer l'action de contact de l'action à distance .
+Objectif 13 : Savoir qu'une action mécanique est associée à une
+force.
+Objectif 14 : Connaître et déterminer les caractéristiques d'une
+force .
+Objectif 15 : Mesurer l'intensité d'une force à l'aide d'un dynamo-
+mètre .
+Objectif 16 : Représenter, en adoptant une échelle adéquate, une
+force par un vecteur.
+Actions mécaniques et forces (23%)
+Objectif 28 : Savoir que l'énergie électrique consommée par un ap-
+pareil de chauffage est convertie totalement en énergie thermique ;
+Objectif 29 : Connaître l'énergie électrique et ses unités internatio-
+nale et pratique(joule, watt-heure);
+Objectif 30 : Connaître et exploiter la relation : E = P × t
+Objectif 31 : Déterminer l'énergie électrique consommée par un
+appareil de chauffage;
+Objectif 32 : Connaître le rôle du compteur électrique dans une
+installation électrique domestique;
+Objectif 33 : Déterminer l'énergie électrique consommée dans une
+installation électrique domestique à partir de la facture
+d'électricité ou des données du compteur d'énergie électrique
+* Source : Cadre de référence de l'examen régional unifié 2022
+Objectif 22 : Connaître la loi d'ohm U = R × I d'un conducteur
+ohmique et son application.
+L'énergie électrique (15%)
+Résistance électrique et loi d’Ohm (8%)
+PARTIE D’ÉLECTRICITÉ (38%) (≈8Pt)PARTIE DE MÉCANIQUE (62%) (≈12Pt)
+Objectif 19 : Connaître les caractéristiques du poids d'un solide
+Objectif 20 : Distinguer poids et masse ;
+Objectif 21 : Connaître et exploiter la relation P = m × g
+Poids et masse (9%)
+Objectif 23 : Connaître la puissance électrique et son unité (watt);
+Objectif 24 : Connaître certains ordres de grandeurs de puissance
+électrique;
+Objectif 25 : Connaître les caractéristiques nominales d'un appa-
+reil électrique;
+Objectif 26 : Déterminer la puissance électrique consommée oar
+un appareil de chauffage;
+Objectif 27 : Connaître et exploiter la relation P = U × I
+La puissance électrique (15%)
+Objectif 17 : Connaître et appliquer la condition d'équilibre.
+Objectif 18 : Connaître et déterminer les caractéristiques du poids
+d'un solide ;
+L’équilibre d’un corps soumis à 2 forces (8%)
+3
+
+
+
+C’est le corps dont on va
+étudier le mouvement
+C’est une ligne continue qui relie les
+positions successives à partir desquels
+passe cet objet en mouvement.
+Tous les points du solide sont en
+mouvement selon des trajectoires
+circulaires de même axe de rotation.
+Tout segment reliant deux points de
+corps en mouvement conserve la même
+
+Translation
+Translation
+Translation
+Circulaire CurviligneRectiligne
+
+
+
+
+A
+B
+O
+C
+A
+A
+A
+B
+B
+B
+4
+
+
+
+
+
+
+	
+
+
+
+La vitesse instantanée  : c’est la vitesse à un
+instant précis, elle est indiquée par le comp-
+teur de vitesse d’une voiture ou le radar des
+gendarmes.
+Le non-respect du code de la route peut
+provoquer des accidents graves et même
+mortels. Pour éviter ces accidents, il faut.
+- Respectez les limitations de vitesse.
+- Ne pas utiliser un téléphone en condui-
+sant.
+- Respectez les panneaux de signalisation.
+- Surveiller l'état mécanique du véhicule
+avant de l'utiliser, (les roues et les
+freins...)
+- Porter la ceinture de sécurité ou un
+casque pour les conducteurs des motos
+instantanée
+La vitesse moyenne (v) d’un point d’un
+mobile est le rapport de la distance (d)
+parcourue par ce point par une durée de
+parcours (t).
+La vitesse du
+mobile  est
+constante
+La vitesse du
+mobile
+augmente
+La vitesse du
+mobile
+diminue
+Uniforme
+Vitesse du
+véhicule
+Réexes du
+conducteur
+État des pneus
+et des freins
+État de la route
+Vitesse du
+véhicule
+moyenne
+AccéléréRetardé
+O
+n
+d
+i
+v
+i
+s
+e
+p
+a
+r
+3
+.
+6
+O
+n
+m
+u
+l
+t
+i
+p
+l
+i
+e
+p
+a
+r
+3
+.
+6
+km/h
+m/s
+m.s
+-1
+ms
+La distance d’arrêt DA est la distance
+parcourue par un véhicule entre le
+moment où le conducteur perçoit un
+obstacle et l’arrêt complet du véhicule.
+D
+A
+= D
+R
++ D
+F
+Dr : la distance parcourue
+pendant le temps de réaction tR
+D
+R
+= v
+R
+× t
+R
+Df : la distance parcourue
+par un véhicule entre le moment où le
+conducteur commence à freiner et le
+moment où le véhicule s’arrête
+D
+F
+= K × v
+2
+d = v
+×
+t
+v : Vitesse moyenne
+d : l
+a dis
+ta
+n
+c
+e
+t : d
+ur
+é
+e d
+u p
+a
+r
+c
+o
+ur
+s
+5
+2N
+A
+B
+G
+T
+2cm
+P
+2cm
+
+
+
+Le déformer
+d'un corps
+Maintenir
+l'équilibre
+d'un corps
+Modi	cation de
+trajectoire
+Mouvement
+d'un corps
+
+Point
+d'application
+Droite d'action
+(la direction)
+SensIntensité
+Actions
+mécaniques
+et forces
+
+
+Dé	nir le
+corps étudié.
+Bilan des
+actions de
+contact
+Bilan des
+actions à
+distance
+Actions de
+contact
+localisées
+Actions de
+contact
+réparties
+surface de contact
+très petite .
+surface de contact
+plus large.
+Actions de
+contact
+Toujours
+réparties
+Actions à
+distances
+L’origine du vecteur
+La direction du vecteur
+Le sens du vecteur
+La longueur du vecteur
+Le point d'application
+La direction de force
+Le sens de force
+L'intensité de force
+Caractéristiques vecteurCaractéristiques force
+
+6
+Un solide est en équilibre sous l'action de deux
+forces FA, et FB, ces deux forces ont :
+Exemples
+F
+A
+F
+B
+dynamomètre B
+dynamomètre A
+Corps (S)
+CD
+L’équilibre d’un
+corps solide sous
+l’action de deux
+forces
+Même droite
+d'action
+Sens
+inverses
+Même
+intensité
+F
+A
++ F
+B
+= 0
+Ressort
+Support
+Support
+Ressort
+Corps en
+polystyrène de
+faible masse
+F2
+F1
+F
+1
++ F
+2
+= 0
+P
+R
+Corps (S)
+R + P = 0
+P
+T
+Fil
+Corps (S)
+Support
+T + P = 0
+Exemple 1
+Exemple 2
+Exemple 3
+Exemple 4
+F
+A
+F
+B
+Corps (S)
+Table
+F
+A
++ F
+B
+= 0
+7
+٢
+١
+٠
+٤
+٥
+٣
+Direction : le vertical
+passant par le centre
+de gravité (G).
+Sens : vers le centre
+de la Terre, ou vers le
+bas.
+Point d'application :
+centre de gravité (G)
+du corps.
+Intensité : mesurée avec un
+dynamomètre ou calculée,
+P en Newton (N).
+Caractéristiques
+du poids
+Relation entre
+poids et masse
+Poids et
+masse
+Le poids d’un corps est la force exercée par la
+gravitation de la terre sur un corps ,  est un
+grandeur variable en fonction  du lieu
+( latitude et altitude ), le symbole de l’inten-
+sité de poids est P et l'unité de mesure c'est
+le newton de symbole N et se mesure avec le
+dynamomètre.
+Poids
+La masse est une grandeur constante de
+symbole m et d’unité internationale
+kilogramme de symbole kg et se mesure
+aves une balance .
+Masse
+Plus l’altitude augmente, plus
+l’intensité du pesanteur diminue.
+- Plus en se dirige de l’équateur
+vers les pôles, plus l’intensité du
+pesanteur augmente
+g qui s’appelle l’intensité du champ de pesanteur
+P
+mg
+NkgN.kg
+-1
+G
+P
+8
+480
+Un conducteur ohmique est un dipôle électrique
+qui s’oppose au passage du courant électrique,
+caractérisé par sa résistance notée (R) et expri-
+mée dans (SI) en Ohm (Ω), le symbole normali-
+sé d’un conducteur ohmique est
+Le conducteur
+ohmique diminue
+l’intensité du
+courant électrique
+Pour mesurer la valeur de la résistance
+électrique on utilise l'ohmmètre  qui se
+branche en dérivation avec le conducteur
+ohmique
+Mesure de
+la résistance
+Résistance
+électrique
+Loi
+d’Ohm
+Résistance
+électrique et loi
+d’Ohm
+Unités de
+resistance
+- L’unité universelle de
+résistance est l’ohm .
+- les multipjes de l’ohm sont :
+- Le kilo-ohm (kΩ) avec
+1kΩ = 1000 Ω
+- Le mega-ohm (MΩ) avec
+1MΩ = 1000 kΩ
+U
+RI
+Loi d’Ohm : la tension U aux borne du
+conducteur ohmique est égale au produit
+de sa résistance électrique R avec l’intensité
+du courant électrique I qui le traverse.
++-
+K
+A
+R
+V
+Montage expérimentale
+U (V)
+I(A)
+V
+Ω
+A
+9
+1
+0
+0
+W
+7
+5
+W
+6
+0
+W
+4
+0
+W
+Puissance
+électrique
+La puissance électrique, symbolisée par la lettre P,
+est une grandeur physique qui renseigne l’utilisa-
+teur sur l’importance de l’eet produit par un
+appareil électrique (éclairage, chauage...). Sa unité
+dans le système internationale (SI) est le Watt,
+notée W.
+Dénition
+Unités de la
+puissance
+L'unité internationale de puissance est le Watt
+Multiples  de Watt :
+- Kilowatt (kW) 1kW = 1000W = 10
+3
+W
+- Mégawatt (MW) 1MW = 1000000W = 10
+6
+W
+- Gigawatt (GW) 1GW = 1000000000W = 10
+9
+W
+Sous multiples de Watt :
+- Miliwatt (mW) 1mW = 0.001 W = 10
+-3
+W
+Notion de la
+puissance
+La puissance électrique consommée par un appareil
+électrique en courant continu DC est égale au
+produit de la tension appliquée entre ses deux
+bornes et de l'intensité du courant qui la traverse
+Dans un appareil
+électrique
+Dans un appareil
+électrique de chauage
+La puissance électrique P consommée
+par un appareil électrique de chauage
+qui contient un conducteur ohmique
+de résistance R est :
+Expression de
+la puissance
+Tension
+nominale
+en (V)
+Puissance
+nominale
+en (W)
+Intensité
+nominale
+en (A)
+Caractéristiques
+nominales
+Disjoncteur
+La puissance totale Pt = P1 + P2 + P3 + P4
+Dans l’installation électrique de la maison, plus il y a d’appareils
+branchés en dérivation, plus l’intensité du courant augmente(It=Pt/U)
+WVA
+P
+UI
+P = R ×  I
+2
+= U
+2
+/R
+10
+Energie
+électrique
+Dénition
+Unités de
+l’énergie
+L'énergie électrique est une grandeur physique
+symbolisée par la lettre E, et mesurée par le comp-
+teur électrique, l'unité de mesure dans le système
+international (SI) des unités est le joule de
+symbole J.
+- L'unité universelle de mesure d'énergie électrique
+est le joule (J) .
+- On utlise aussi le Kilojoule, avec 1 kJ = 1000 J .
+- On utlise aussi le Watt-heure (Wh) , si la puissance
+exprimée en watt W et l’unité de la durée de temps
+est exprimée en heure (h), avec 1Wh = 3600 J .
+- On utlise aussi le Kilo Watt-heure (kWh) , avec
+1kWh =1000Wh= 3,6 × 10
+6
+J .
+Notion d’énergie
+électrique
+Dans une installation
+domestique
+Energie électrique
+consommée
+Formule d'énergie
+électrique
+Energie consommée
+totale dans une
+installation domestique
+DisjoncteurCompteur
+t
+1
+t
+2
+t
+3
+t
+4
+L’énergie totale Et = E1 + E2 + E3 + E4
+L’énergie totale Et = P
+1
+×t
+1
++ P
+2
+×t
+2
++ P
+3
+×t
+3
++ P
+4
+×t
+4
+JWs
+L'énergie électrique E consommée par un appareil électrique est égal
+au produit de sa puissance électrique (P) et de la durée de son
+fonctionnement (t),
+E
+Pt
+Dans un appareil
+électrique de chauage
+Un appareil élecrique de chauage est un
+appareil constitué d’un un conducteur ohmique
+de résistance R qui transforme presque la
+totalité de l’énergie électrique (E) consommée
+en énergie thermique (Q) telle que Q≈E
+L'énergie électrique(E)consommée dans une
+installation domestique lorsque le compteur
+eectue n tours est :
+Whtr
+Wh.tr
+-1
+E
+nC
+12870
+C=2.5Wh/tr
+kWh
+11
+Résumé des cours de 2eme semestre
+- Pour décrire un mouvement, il est nécessaire de définir précisément le corps dont on
+va étudier le mouvement : ce corps s’appelle le corps de référence ou le référentiel.
+- La trajectoire d’un objet en mouvement est une ligne continue qui relie les positions
+successives à partir desquels passe cet objet en mouvement.
+il existe 3 types de trajectoire : rectiligne , circulaire , curviligne .
+-Les mouvements sont classés en deux types : mouvement de translation (si tout vec-
+teur de solide conserve la même direction et même sens), et mouvement de rotation
+(si tous les points du solide ont des trajectoires circulaires).
+La vitesse moyenne (v) d’un point d’un mobile est le rapport de la
+distance (d) parcourue par ce point par une durée de parcours (t), et
+on écrit :
+L'unité de vitesse dans le système international est (m.s
+-1
+) et on utilise
+aussi l'unité usuelle (km.h
+-1
+) ,  avec : (1m.s
+-1
+= 3.6 × km.h
+-1
+)
+- La vitesse instantanée : c’est la vitesse à un instant précis, ou la vitesse immédiate.
+indiquée par le compteur de vitesse d’une voiture ou le radar des gendarmes .
+- Nature du mouvement
+Distances parcourues pendant des
+intervalles de temps égaux
+Nature du mouvement
+ConstanteÉgalesUniforme
+AugmenteDe plus en plus grandesAccéléré
+DiminueDe plus en plus petites
+Retardé
+- La distance d’arrêt D
+A
+est la distance parcourue par un véhicule entre le moment où
+le conducteur perçoit un obstacle et l’arrêt complet du véhicule.
+La distance d’arrêt D
+A
+est la somme de la distance de réaction D
+R
+et la distance de
+freinage D
+F
+. et on écrit:                                           avec D
+R
+= V × t
+R
+et DF = k × V
+2
+tR : temps de réaction                                               V : vitesse de véhicule en (m/s)
+k : facteur dépend de l’état des pneus et des freins et de la route.
+Mouvement et repos - Vitesse
+- L'acteur applique une action mécanique sur le receveur, avec les effets suivants :
+Effet statique : maintenir l'équilibre d'un corps ou déformer d'un corps.
+Effet dynamique : mouvement ou modification de la trajectoire d'un mobile.
+- Les types d'actions mécaniques :
+Actions de contact : l'acteur et le receveur sont en contact.(localisées+ réparties)
+Actions à distances : il n'y a pas de contact entre l'acteur et le receveur.(réparties)
+- Bilan des actions mécaniques consiste de passer par les étapes suivantes :
+Définir précisément le corps ou le système étudié, puis faire le bilan des actions
+mécaniques de contact , puis faire le bilan des actions mécaniques à distance.
+- La force est caractérisée par quatre caractéristiques :
+* Le point d'application : c'est le point de contact entre l'acteur et le receveur , et le
+centre de gravité (G) de l’objet pour une force à distance.
+* La droite d'action (la direction) : c'est la droite qui a la même direction que la force
+et qui passe par son point d’application.
+* Le sens : Le sens d’une force coïncide avec celui de l’action modélisée
+* L'intensité  : Elle se mesure avec un instrument appelé le dynamomètre, son unité
+internationale est le Newton (N).
+- On représente une force par un vecteur appelé vecteur-force.
+Actions mécaniques et forces
+- L'énergie électrique est une grandeur physique symbolisée par la lettre E, et mesurée
+par le compteur électrique, l'unité de mesure dans le système international (SI) des
+unités est le joule de symbole J.
+Multiples(J) :(1Wh = 3600 J , 1kWh = 10
+3
+Wh = 1000Wh = 3600 000J , 1Cal = 4.18J)
+- L'énergie électrique E consommée par un appareil électrique est égal au produit de
+sa puissance électrique (P) et de la durée de son fonctionnement (t), et
+nous écrivons :
+L'énergie électrique(E)consommée lorsque le compteur de constance C
+effectue n tours est :
+- Un appareil électrique de chauffage de résistance R qui transforme
+l’énergie électrique (E) consommée en énergie thermique (Q) telle que
+Q≈E , avec : E = Q = R × I
+2
+× t = (U
+2
+/R) × t
+- Un conducteur ohmique est un dipôle électrique qui s’oppose au passage du courant
+électrique, caractérisé par sa résistance notée (R) et exprimée dans (SI) en Ohm (Ω).
+(1kilohm = 1kΩ = 10
+3
+Ω = 1000 Ω , 1Méga-ohm = 1MΩ = 10
+6
+Ω = 1000000 Ω)
+- Pour mesurer la valeur de la résis-
+tance électrique on utilise  l'ohm-
+mètre qui se banche en dérivation
+avec le conducteur ohmique, ou les
+codes des couleurs.
+avec Noir(0),Marron(1), Rouge(2),
+Orange(3), Jaune(4), Vert(5),
+Bleu(6), Violet(7), Gris(8), Blanc(9)
+Mémo : Ne Mangez Rien Ou Je Vous Bloque Votre Grande Bouche.
+- Loi d’Ohm : la tension U aux borne du conducteur ohmique est égale
+au produit de sa résistance électrique R avec l’intensité du courant
+électrique I qui le traverse,
+cette loi est modélisée par la relation :
+L'énergie électrique
+Résistance électrique et loi d’Ohm
+-  La masse est une grandeur constante de symbole m et d’unité internationale
+kilogramme de symbole kg et se mesure avec une balance .
+- Le poids d’un corps est la force exercée par la gravitation de la terre sur un corps ,
+est un grandeur variable en fonction  du lieu ( latitude et altitude ), le symbole de l’in-
+tensité de poids est P et l'unité de mesure c'est le newton de symbole N et se mesure
+avec le dynamomètre.
+- la relation entre l'intensité de poids et la masse est :
+avec g qui c'est l’intensité du champ de pesanteur et qui s’exprime en
+( N/Kg ), g est variable en fonction  du lieu ( latitude et altitude )
+plus l’altitude augmente, plus l’intensité du poids diminue, plus en se
+dirige de l’équateur vers les pôles, plus l’intensité du poids augmente.
+Poids et masse
+- La puissance électrique, symbolisée par la lettre P, est une grandeur physique qui
+renseigne l’utilisateur sur l’importance de l’effet produit par un appareil électrique
+(éclairage, chauffage...). Sa unité dans le système (SI) est le Watt, notée W.
+Miliwatt (mW)watt (W)kilowatt (kW)Mégawatt (MW)
+- La puissance électrique consommée par un appareil électrique en
+courant continu DC est égale au produit de la tension appliquée entre
+ses deux bornes et de l'intensité du courant qui la traverse, et on écrit :
+Pour un appareil de chauffage on écrit :
+P = U × I = R × I
+2
+= U
+2
+/ R .
+- Les caractéristiques nominales électriques sont : la tension nominale en volt,
+l’intensité électrique nominale en ampère, la puissance nominale  en watt.
+La puissance électrique
+vt
+d
+m
+g
+P
+RI
+U
+UI
+P
+Pt
+E
+nC
+E
+- Lorsque un corps(S) est en équilibre sous l'action de deux forces F
+A
+, et F
+B
+, ces deux
+forces :  ont la même droite d'action (même direction), et  ont des sens inverses .
+(F
+A
+=  - F
+B
+) , et  ont la même intensité. (F
+A
+= F
+B
+), et on écrit :
+L’équilibre d’un corps soumis à de deux forces
+F
+A
+F
+B
+Corps (S)
+CD
+Nombres des zéro
+2eme Chiffre
+1er Chiffre
+Tolérance
+12
+- Complète le tableau suivant en précisant pour chaque action
+mécanique, sa nature et son effet (statique ou dynamique).(1pt)
+Effet de l'actionNature de l’actionL'action mécanique
+................................................................Action du support sur le fil
+................................................................Action de la Terre sur la boule
+- Coche la bonne réponse : (1pt)
+- La valeur de l'intensité de la force F est :
+- Énonce la condition d'équilibre d’un solide soumis à l'action de deux
+forces. (1.5pt)
+-Applique la condition d'équilibre sur le fil, et complète le tableau suivant
+en précisant les caractéristiques de   . (1pt)
+IntensitéSensDroite d'actionPoint d'application
+.................................................................
+- Calcule, en m/s, la vitesse moyenne de G entre G
+0
+et G
+6
+. (1pt).
+- Quelle est la nature du mouvement de G ? Justifie la réponse. (1pt)
+Ahmed chauffe de l’eau quotidiennement à l’aide d’un appareil électrique portant les
+indications suivantes : (2.2kW ; 220V). Cet appareil est équipé d’un fil chauffant qui
+se comporte comme un conducteur ohmique de résistance électrique R.
+- Mets une croix (x) dans la case convenable.
+(0.25pt × 4)
+FauxVrai
+La résistance d'un conducteur ohmique sous la tension U.
+Et parcourue par un courant d'intensité I, s'exprime par : R
+= U × I
+L'unité universelle de la puissance électrique est le kWh
+Seulement une partie de l’énergie électrique consommée par
+un appareil de chauffage est convertie en énergie thermique
+Un compteur électrique dans une installation domestique
+permet de mesurer l'énergie électrique consommée.
+Un parc de 84 éoliennes est installé dans une
+région fortement ventée située à 10 km de
+la ville de Tétouan. Chaque éolienne fournit
+une puissance électrique de 1190kW. Le site
+fonctionne 5000 heures par an.
+- Calcule, en kW, la puissance électrique
+totale P fournie par les 84 éoliennes. (1pt)
+- Calcule, en kWh l’énergie électrique totale E produite par ces éoliennes
+pendant une année. (1pt)
+- Sachant que la ville de Tétouan compte 402118 habitants, et que la
+consommation annuelle moyenne par habitant est de 1100 kWh , Peut-on
+satisfaire la demande en électricité de la ville avec l'énergie produite ? Justifie
+la réponse. (2pt)
+Le poids du fil étant négligé, le fil est pratiquement en
+équilibre sous l’action de deux forces :
+•    : La force exercée par la boule au point A ;
+•    : La force exercée par le support au point B Elle est
+représentée sur le schéma de la figure 1 a l'échelle
+1cm       1.5N.
+On donne l'intensité de pesanteur g = 10 N/kg
+Une boule de fer en équilibre, de masse m, est suspen-
+due par un fil de masse négligeable fixé à un support au
+point B (voir figure 1 ).
+Examen régional (Tanger - Tétouan - Al Hoceïma - 2023)
+Exercice 1
+10pts
+Exercice 2
+6pts
+Exercice 3
+4pts
+11
+22
+- Coche la bonne réponse : (0.5pt)
+Le poids d’un solide de masse m s'exprime par :
+- Sachant que P = T, calcule m la masse de la boule. (1pt)
+On coupe le fil et à l’aide de la chronophotographie, on enregistre les posi-
+tions G
+i
+du centre de gravité G de la boule. La durée entre deux enregistre-
+ments successifs est 20 ms (voir figure 2).
+- Coche la bonne réponse :
+1.1. L'état de repos ou de mouvement d’un corps dépend : (0.5pt)
+1.2. La vitesse moyenne d’un mobile s'exprime par  : (0.5pt)
+1.3. La relation de conversion entre le (m/s) et le (km/h) est :
+(0.5pt)
+1.4. La trajectoire de centre de gravite G de la boule est  : (0.5pt)
+33
+44
+55
+66
+22
+11
+11
+33
+11
+33
+22
+F = 2cmF = 2NF = 3cmF = 3N
+P = m × gP = m / gP = g / mP = m ×10
+De sa masse
+Du référentiel
+De son poids
+De son entourage
+v
+m
+= t / d
+v
+m
+= d × t
+v
+m
+= d + t
+v
+m
+= d / t
+1m/s = 3600 km/h
+1km/h = 3.6 m/s
+1km/h = 3600 m/s
+Horizontale
+Première partie.
+Deuxième partie.
+- Calcule l’intensité du courant efficace I qui parcourt l'appareil de
+chauffage lorsqu’il fonctionne d’une façon normale. (1pt)
+- Calcule la valeur de la résistance électrique R du fil chauffant. (1pt)
+- Quelle est la signification physique des indications 220V et 2.2kW. (1pt)
+220V   : .................................................................................................
+2.2kW : .................................................................................................
+- Sachant que la durée d'usage quotidien de l'appareil de chauffage est 15
+minutes, Calcule en kWh l’énergie électrique consommée par cet appareil
+pendant un moi (30 jours) lorsque fonctionne normalement. (1pt)
+- Ahmed a remplacé le fil chauffant
+de cet appareil par un autre fil ayant
+une résistance R' égale à celle d'un
+conducteur ohmique dont la caracté-
+ristique est représentée sur la figure 3.
+- En justifiant la réponse, compare la
+valeur de R' avec celle de R. (1pt)
+33
+44
+22
+55
+66
+B
+G
+Support
+Figure 1
+Fil
+2cm
+Figure 2
+0  1
+0
+10
+U(V)
+I (A)
+Figure 3
+F
+T
+T
+13
+- Recopier le numéro de l’affirmation et répondre par Vrai ou Faux : (2 pt)
+1-1- La puissance électrique nominale est identique pour tous les appareils élec-
+triques.
+1-2- Le disjoncteur est l’appareil qui mesure l’énergie électrique consommée par les
+appareils d’une installation électrique.
+4-3-Donner la condition d’équilibre d’un corps solide sous l’effet de deux
+forces. (0,5 pt)
+4-4-Déduire la droite d’action, le sens et l’intensité de la force     exercée par
+la portion inclinée de la route sur le système (S). (1,5 pt)
+Le tableau ci-dessous représente les valeurs de la distance de réaction et de la
+distance de freinage pour différentes valeurs de la vitesse pour un conducteur
+de voiture en situation normale où la durée de réaction est t
+R
+= 1s.
+Vitesse de la voiture en km/h5080110
+Distance de réaction D
+R
+en m142230
+Distance de freinage D
+F
+en m143567
+- En se basant sur les données du tableau et sur la distance d’arrêt
+D
+A
+= D
+R
++ D
+F
+, montrer que l’excès de vitesse peut causer des accidents de la
+route. (2 pt)
+- Montrer que pour une même vitesse V=110 km/h de la voiture, le
+dédoublement de la durée de réaction (t
+R
+=2s) augmente considérablement le
+risque d’accidents de circulation. (2 pt)
+- On a pris en photo, à intervalles de temps égaux, le motard le long de la
+route (Figure2).
+Indiquer en justifiant la nature du mouvement (retardé ou uniforme ou accé-
+léré) du motard. (1 pt)
+La photo de la figure 1 représente un motard se déplaçant sur une route
+rectiligne.
+-Recopier et compléter les phrases suivantes par la proposition conve-
+nable parmi les propositions suivantes : (1,5 pt)
+en mouvement -rotation -immobile -translation -rectiligne - uniforme.
+1-1-Le motard est ................................. par rapport à la moto.
+1-2-La roue avant est en mouvement de .........................par rapport à son axe.
+1-3-La lampe avant de la moto est en mouvement de .............................. par
+rapport à la route.
+Examen régional (L’Oriental - 2023)
+Exercice 3
+4pts
+11
+22
+- Ce motard a parcouru la distance D qui sépare la ville d’Oujda de la
+ville de Saidia en une durée ∆t=50min avec une vitesse moyenne v=72km/h.
+3-1-Exprimer la vitesse moyenne v en unité m/s. (0,5pt)
+3-2-Trouver la distance D. (1,5 pt)
+Figure 1
+- Le motard s’arrête sur une portion de route inclinée d’un angle α par
+rapport au plan horizontal. On représente la situation par le schéma de
+la figure3. G étant le centre de gravité du système (S) de masse m= 180kg
+constitué par le motard et sa moto.
+4-1- Déterminer les caractéristiques du poids    du système (S). (1 pt)
+On donne : L’intensité de la pesanteur g=10N/kg.
+4-2- Représentes alors, sur ta copie, le poids     de (S) en utilisant l’échelle :
+1cm       600N. (1 pt)
+33
+44
+11
+11
+22
+- Recopier le numéro de la question et choisir la bonne réponse parmi les
+réponses proposées :(1 pt)
+2-1- Le symbole de l’unité de la puissance électrique dans le système interna-
+tional des unités est :
+D)         ΩAC)         WB)          QA)          J
+2-2- La formule U=R.I qui traduit la loi d’Ohm pour un conducteur ohmique
+de résistance R soumis à une tension électrique U et parcouru par un courant
+électrique d’intensité I, peut aussi s’écrire :
+D)    R = I / UC)    R = U × IB)    I = R / UA)    I = U / R
+-Un four électrique de résistance R=40Ω est branché sur une prise dont la
+tension à ses bornes est U=220V.
+3-1- En appliquant la loi d’Ohm pour un conducteur ohmique, calculer l’inten-
+sité I du courant électrique qui traverse le four électrique.(l,5 pt)
+3-2- Déterminer la puissance électrique P consommée par le four électrique.
+(1,5 pt)
+3-3-Trouver l’énergie électrique E , en unité Wh, consommée par le four pen-
+dant la durée ∆t=30min de son fonctionnement.(1,5 pt)
+22
+33
+Exercice 1
+8.5pts
+Exercice 1
+7.5pts
+Figure 2
+α
+Système (S)
+Motard + moto
+Plan horizontale
+Figure 3
+Route inclinée
+P
+P
+R
+14
+1.1. Compléter les phrases ci-dessous parce qui convient de la liste des
+expressions suivantes : corps de référence - relatif - translation - rotation -
+repos . (1pt)
+- La description du mouvement du corps (S) nécessite le choix d’un ................
+car son mouvement est .........................
+- Lorsque le corps (S) monte, il est animé d’un mouvement de ..........................
+alors qu’il est en état de .............................. pendant son état d’équilibre.
+1.2. Lier par des flèches les éléments du tableau suivant, décrivant la nature
+du mouvement pour chacune des 3 étapes « On prend le sol comme corps de
+référence » (1.5pt)
+1.3. Cochons la case qui correspond à la proposition correcte pour exprimer
+la vitesse moyenne V
+m
+du corps (S) entre les positions G
+0
+et G
+6
+, (on désigne
+par d la distance entre ces 2 positions d= G
+0
+G
+6
+) : (1pt)
+1.4. Calculer la vitesse moyenne V
+m
+du corps (S) entre les positions G
+0
+et
+G
+6
+en (m.s
+-1
+)  puis en (km.h
+-1
+) (1pt)
+En (m.s
+-1
+) : ..................................................................................................................
+En (km.h
+-1
+) : ...............................................................................................................
+T est ln durée entre deux positions consécutives enregistrées de G : (T = 1s ).
+- Parmi les expressions ci-dessous :
+2.1. Cocher les cases de celles qui sont correctes : (0.75pt)
+2.2. Laquelle de ces expressions traduit la loi d'Ohm : ......................
+2.3. Énoncer la condition d'équilibre d'un corps soumis à l'action de deux
+forces. (1pt)
+2.4.Parmi les figures ci-dessous, cocher la représentation correcte de la condi-
+tion d'équilibre de (S). (1pt)
+2.5. Calculer l'intensité F de la force exercée par le câble sur (S) ; on donne
+m= 100kg et g = 9,8(SI) . (1.5pt)
+b - Le corps (S) est soumis à l'action de la Terre :  (0.5pt)
+Rim est une collégienne qui souhaite utiliser ses connaissances en électricité pour
+répondre à cette question : « Puis-je faire fonctionner mes trois appareils simultané-
+ment sans danger ? ». Les appareils en question sont : un séchoir (500W ; 220V), un
+fer à repasser (1000W ; 220V) et un chauffage (2000W ; 220V).
+- Relier par des flèches chaque grandeur à son symbole et à son unité :
+(2pt)
+- La grue soulève le corps étudié (S) de
+centre de gravité G, de la position de départ
+G
+0
+à la position d’arrivée G
+10
+, et ceci en 3
+étapes de mouvement : voir (figure 2).
+Les différentes positions du centre de gravité
+du corps sont repérées au bout de chaque durée T (T=1s).
+Les grues (الرافعات) sont des machines
+utilisées dans les chantiers (أوراش البناء) pour
+soulever les corps lourds (الحمولات) (voir
+figure 1).
+Cette situation vise l’étude mécanique d’un
+corps solide (S) de masse m=100kg «suspen-
+du à l’extrémité d’un câble » en deux parties
+différentes: partie (1) « le corps (S) en mou-
+vement » et la partie (2) «(S) en équilibre ».
+Examen régional (Fès - Meknès - 2023)
+Exercice 1
+10pts
+Exercice 2
+6pts
+11
+11
+N / kgN / gkg / Ng / N
+P = U × IR = P / UU = R × tR = U / I
+seulement aux
+étapes 1 et 3
+pendant les
+3 étapes
+seulement en G
+10
+(à l'équilibre)
+Partie2 : Etude de l'équilibre  de (S)
+Partie1:étude du mouvement du corps (S)
+22
+Etape 1
+Etape 2
+Etape 3
+Etape
+Rectiligne retardé
+Rectiligne accéléré
+Rectiligne uniforme
+Nature du mouvement
+Les distances parcourues pendant la
+même durée T augmentent
+Les distances parcourues pendant la
+même durée T restent constantes
+Les distances parcourues pendant la
+même durée T diminuent
+Justification
+Unités
+W
+A
+Ω
+V
+Symboles
+U
+R
+P
+I
+Puissance électrique
+Tension électrique
+Intensité du courant électrique
+Résistance électrique
+Grandeurs
+(S)
+A
+G
+F
+(S)
+A
+G
+F
+(S)
+A
+G
+F
+(S)
+A
+G
+F
+Charge
+حمولة()
+Figure 1
+1m
+Etape 1Etape 2Etape 3
+Figure 2
+- Le corps (S) s'arrête à la position G
+10
+, et devient en équilibre sous
+l'action de deux forces.
+22
+- Calculer I
+1
+l'intensité efficace du courant électrique qui circule dans le
+séchoir en marche . (0.75pt)
+33
+2.1.Répondre par vrai ou faux aux propositions suivantes :
+(1pt)
+FauxVrai
+La balance électronique est l'instrument de mesure du poids
+d'un corps.
+L'action mécanique exercée par le câble sur (S) est une
+action à distance.
+L'action du câble sur (S) en équilibre a un effet statique.
+La valeur de l'intensité de pesanteur g dépend de la position.
+2.2. Cocher la bonne réponse pour chacune des deux propositions suivantes :
+a - L'unité de l' intensité de pesanteur g dans le système international (SI)
+est : (0.5pt)
+- Le conducteur dans l'état fatigué peut-il éviter l'obstacle? justifier ta
+réponse. (1.5pt)
+- Proposer au moins deux conseils à donner aux conducteurs ? (1pt)
+Pour étudier l'effet de la fatigue du conducteur sur la sécurité routière, un(e)
+enseignant(e) a proposé la situation suivante : «un conducteur roulant à
+une vitesse V=90 km.h
+-1
+peut-il éviter un obstacle perçu devant lui, à une
+distance d=81m ?»
+Données: - La distance de freinage de la voiture roulant à la vitesse V=90
+km.h-1 est D
+F
+=50m
+- Le temps de réaction d'un conducteur à l'état normal est t
+R
+= 1s
+- Le temps de réaction d'un conducteur fatigué est t'
+R
+= l.5s
+- Déterminer la distance d'arrêt D
+A
+de la voiture (pour un conducteur à
+l'état normal). Que peut-on déduire? (1.5pt)
+Exercice 3
+4pts
+22
+11
+33
+- Rim a utilisé son séchoir pendant t = 20 minutes. Calculer l'énergie
+électrique consommée par le séchoir en Joule puis en kWh. (1pt)
+- En Joule : ............................................................................................................
+- En kWh: ............................................................................................................
+- Calculer le la valeur efficace de l'intensité du courant électrique principal
+entrant lorsque Rim utilise ses trois appareils simultanément . (1pt)
+- Sachant que « la valeur efficace maximale Imax = 10A » du courant
+électrique principal qui alimente la maison de Rim. Est ce que Rim
+parviendra-t-elle à utiliser en même temps ses trois appareils sans risques?
+Justifier ? (0.5pt)
+44
+55
+66
+15
+L'intensitéLa droite d'actionLe sensLe point d'application
+................................................................................
+- Pour mesurer la résistance d’un conducteur ohmique, on
+réalise le montage de la figure ci-dessous :
+a. Relier chaque dipôle électrique au nom correspondant :
+(1pt)
+b. Mettre une croix " X "devant la bonne réponse : (0.5pt)
+Sachant que l'intensité du courant dans le circuit est I = 500mA et la tension entre
+les bornes du conducteur ohmique est U= 24V. la valeur de la résistance R est :
+- L'énergie électrique consommée par un appareil de chauffage de puissance P est
+exprimée par :
+(0.5pt)
+- Relier par une flèche chaque grandeur physique à l'unité correspondante
+: (1pt)
+Une voiture A roule à une vitesse de 100 km.h
+-1
+derrière une seconde voi-
+ture B qui roule à la même vitesse sur l'autoroute en respectant la distance de
+sécurité sur l'autoroute qui vaut d=70m. Voir la figure ci-dessous.
+A un certain instant le conducteur de la voiture A aperçoit la lumière des
+freins de la voiture B, il décide alors de s'arrêter pour éviter la collision.
+le temps de réaction d'un conducteur fatigué est t
+R
+=2s, Les deux voitures ont
+la même distance de freinage d
+F
+.
+- Calculer la distance de réaction de la voiture A si le conducteur est
+fatigué. (1.5pt)
+- Est-ce que la voiture A va heurter la voiture B ? justifier votre réponse.
+(1pt)
+- Depuis que le conducteur de la voiture A a remarqué l'éclairage des
+lampes de frein de la voiture B, sa voiture a parcouru la distance 85.6m avant
+de s'arrêter, calculer D
+F
+. (1.5pt)
+- Répondre aux affirmations suivantes par "Vrai" ou "Faux" : (4×0.5pt).
+a- La masse d'un corps à Rabat est 2,0kg et sa masse A Paris est l,8Kg .............
+b- La trajectoire du mouvement d'un point de l'aiguille d’une montre est
+curviligne ...............
+c- La force exercée par l'aimant sur un clou en fer est une action mécanique à
+distance répartie ..............
+d- La vitesse d'un véhicule Influe sur sa distance de freinage d
+R
+................
+- Cocher la bonne proposition : (4x0.5pt).
+a) L'unité internationale de la vitesse moyenne est :
+b) La durée du temps effectuée par un mobile est exprimée par sa vitesse
+moyenne V et la distance parcourue d par la relation :
+c) La masse m d'un corps du poids P, g l'intensité de pesanteur, est exprimée
+par la relation : :
+d) L'instrument de mesure de l'intensité de la force est :
+Examen régional (Rabat - Salé - Kénitra - 2023)
+Exercice 1
+10pts
+Exercice 2
+6pts
+Exercice 3
+4pts
+11
+22
+- Compléter les phrases ci-dessous par les expressions de la liste suivante :
+(4×0.25pt) (uniforme-newton-ralentie-relatives- N.Kg
+-1
+- un corps référentiel- Kg).
+a - Le mouvement et le repos sont des notions ........................
+b - L'unité de l'intensité de pesanteur dans le système International est .......................
+c - Lors du freinage, la nature du mouvement du véhicule est ...............................
+d - Pour décrire le mouvement ou le repos d'un corps. Il faut définir .........................
+Un corps solide(S) homogène de masse m=120Kg. est en équilibre sur la surface
+d'une camionnette de transport comme le montre la figure ci-contre. L'intensité de
+pesanteur est g = 10 N.Kg
+-1
+. la vitesse limite est 60Km/h .
+- Faire le bilan des forces
+exercées sur le corps (S) en les
+classant en force de contact et
+force à distance. (1pt)
+- Calculer P l'intensité du poids du corps (S). (0.75pt)
+- En exploitant la condition d'équilibre d'un corps solide soumis à deux forces,
+compléter le tableau ci-dessous par les caractéristiques de la force R exercée par la
+camionnette sur le corps (S). (1pt)
+- Représenter R le vecteur de la force exercée par la surface de la camionnette
+sur le corps (S), la figure ci-dessus en utilisant l'échelle 1cm       600N. (0.5pt)
+- La camionnette commence son voyage au point de départ à 8h00min, et
+arrive au point de déchargement à 8h25min en parcourant, sans arrêt, une distance
+d=30km.
+5.1. Cocher la proposition Juste.  (0.25pt)
+5.2. Calculer la vitesse moyenne de la camionnette en km.h
+-1
+et en m.s
+-1
+. (1pt)
+5.3. Le conducteur a-t-il respecté la vitesse limite ? Justifier. (0.5pt)
+33
+11
+22
+33
+44
+55
+11
+22
+33
+11
+22
+33
+Partie 2 : Mouvement et équilibre d'un corps (5pts)
+Partie 1 : Restitution des connaissances du cours (5pts)
+- Un montage électrique domestique est composé d'un chauffage électrique
+portant les indications (220V ; 2.2 kW), d'un lave-vaisselle et d'un four élec-
+trique. Ces appareils fonctionnent en même temps et d'une façon normale
+pendant une durée t =1,25h.
+4.1. Donner la signification physique de chacune des indications indiquées sur
+le chauffage : (0.5pt)
+220V : ........................................................................................
+2.2kW : ......................................................................................
+4.2. Calculer I l'intensité du courant électrique qui traverse le chauffage
+électrique lors de son fonctionnement normal. (0.75pt)
+4.3. Vérifier que énergie électrique consommée par le chauffage électrique
+lors de son fonctionnement normal pendant t=1,25h est Ec = 2750Wh.
+(0.75pt)
+4.4. Juste avant le fonctionnement, le compteur élec-
+trique Indique la valeur de l’énergie comme le montre la
+figure ci-contre. Sachant que l'énergie totale consom-
+mée par les appareils du circuit pendant t=1,25h est
+Er=5kWh. Déterminer l'indication du compteur à la fin
+du fonctionnement. (1pt)
+44
+km.h
+-1
+km.s
+-1
+m.s
+-1
+m.h
+-1
+∆t = d × V∆t = V / d∆t = d / V∆t = V - d
+m = P × gm = P / gm = g / Pm = P - g
+BaromètreDynamomètreAmpèremètre
+- Le corps (S) est en mouvement par rapport à la camionnette.
+- Le corps (S) est au repos par rapport au panneau de limitation de vitesse.
+- Le corps (S) est au repos par rapport à la camionnette.
+Ampèremètre
+Générateur électrique
+Voltmètre
+Conducteur ohmique
+Ohm (Ω)
+Joule (J)
+Watt (W)
+Ampère (A)
+Puissance électrique
+Intensité électrique
+La résistance électrique
+Énergie électrique
+R = 48ΩR = 12ΩR = 0.048Ω
+E = U × IE = P × tE = P × I
+Voiture AVoiture B
+SUR AUTOROUTE
+2 TRAITS = SECURITE
+16
+L'intensitéLa directionLe sensLe point d'application
+.................................................................
+2.3. Déduire la masse du sauteur sachant que l’intensité du champ de pesan-
+teur est g = 10 N.kg
+-1
+(0.5pt).
+2.2. En appliquant la condition d’équilibre, Déterminer les
+caractéristiques du poids du sauteur (2pt).
+-Mettre croix (X) devant la réponse juste (4×0.5pt).
+a - On exprime la loi d'Ohm entre les bornes d'un conducteur ohmique par la
+relation :
+b - La puissance électrique s’exprime par la relation :
+c - La relation entre le watt-heure et le joule (J) est :
+d - On exprime l'énergie électrique consommée par un appareil de chauffage par la
+relation :
+L'atelier de Saïd dispose des équipements électriques suivants : un chauffe-
+eau portant les indications : (2500W - 230V), deux fers à souder portant
+chacun les indications : (100W - 230V) et un appareil de chauffage portant
+les indications : (1500W - 230V). Saïd fait fonctionner tous ces appareils en
+même temps pendant trois heures par jour durant un mois (30 jours).
+Données :
+• La tension efficace de l'atelier est de 230 V.
+• L'atelier est équipé d'un disjoncteur automatique, qui coupe le courant élec-
+trique de l'atelier lorsque l'intensité du courant électrique dépasse 20 A.
+• Selon l'Office National de l’Electricité : « la première tranche de consomma-
+tion mensuelle est fixé entre 0 et 100 kWh ».
+- Est-ce que le disjoncteur utilisé permet le fonctionnement de tous les
+appareils électriques de l'atelier en même temps sans interruption d'électricité
+? Justifier la réponse. (2pt)
+- Est-ce que Saïd dépassera la première tranche de consommation pen-
+dant ce mois ? Justifier la réponse. (2pt)
+- Répondre par vrai ou faux (3×0.5pt).
+a- L'unité de la vitesse dans le système international est le m.s
+-1
+.............
+b- Un corps immobile n'est soumis à aucune action mécanique. ..............
+c- L'effet du vent sur la voile d'un bateau est une action à distance ..............
+- Compléter par ce qui convient parmi les mots suivants : (4×0.5pt)
+masse - rotation - poids - uniforme
+a- L'intensité du ....................... d'un corps varie selon le lieu et l'altitude tandis
+que sa ................................ reste constante.
+b- On dit qu'un corps solide est en mouvement de ............................. autour
+d'un axe fixe lorsque tous les points de ce corps effectuent des trajectoires
+circulaires autour de cet axe.
+c- On dit qu'un corps est en mouvement ............................. lorsque celui-ci
+parcourt des distances égales dans la même durée du temps.
+Examen régional (Béni mellal - Khénifra - 2023)
+Exercice 1
+10pts
+Exercice 2
+6pts
+Exercice 3
+4pts
+11
+22
+- Un conducteur roule à une vitesse constante :V= 54 km.h
+-1
+. Une
+seconde après avoir aperçu le panneau "Stop", le conducteur appuie sur la
+pédale de frein pour arrêter sa voiture.
+Relier chaque distance à sa valeur correspondante (3×0.5pt).
+La corde à sauter est un sport
+qui consiste à sauter en étant
+suspendu par une corde
+élastique depuis une hauteur.
+L'objectif de cet exercice est
+d'étudier le mouvement et
+l'équilibre du sauteur pendant
+deux phases de saut.
+- Étude du mouvement du
+sauteur pendant la chute :
+La technique de
+la chronophoto-
+graphie permet
+de déterminer les
+positions du centre
+de gravité G du
+sauteur pendant la phase de chute (voir figure 1).
+La dure entre deux positions successives reste constante et elle
+est égale à 2s.
+1.1. Déterminer la nature du mouvement du sauteur pendant
+cette phase. Justifier la réponse (1pt).
+1.2. Calculer, dans le système international des unités, la vitesse
+moyenne du centre de gravité du sauteur entre les positions G1,
+et G5. (1pt)
+- Étude de l'équilibre du sauteur.
+Après la phase de chute, le sauteur est suspendu en état d'équi-
+libre (voir figure 2).
+Donnée : l'intensité de la force exercée par la corde sur le sauteur
+est : T= 600 N.
+2.1.Rcprésenter, sur la figue 2, la force T en utilisant l'échelle
+suivante: 1cm        300 N
+33
+11
+22
+11
+11
+22
+U = R × IU = R × I
+2
+I = R × U
+P = U / IP = R × IP = U × I
+1Wh = 3.6 J1J = 36000 Wh1Wh = 3600 J
+E = R × I
+2
+× tE = R × I × t
+2
+E = R × I
+2
+Partie 2
+Partie 1
+La distance de réaction
+La distance de freinage
+La distance d'arrêt
+La distance
+25
+15
+10
+Sa valeur en mètre
+- Dans une installation domestique, Mohamed a fait fonctionner un fer à
+repasser pendant deux heures (2h), en fonctionnement normal, sous une ten-
+sion alternative efficace de 220V.
+(Les ampoules et les autres appa-
+reils  électriques  étaient  éteints).
+Le  fer  à  repasser  se  comporte
+comme  un  conducteur  ohmique
+de  résistance  R.  Le  graphique
+ci-dessous  montre  la  variation
+de la tension entre ses bornes en
+fonction de l'intensité du courant.
+2.1 - Déterminer, graphiquement,
+la valeur de la résistance R. (1pt)
+2.2 - Montrer que la puissance no-
+minale de ce fer à repasser a une
+valeur de  1,1 kW. (1pt)
+2.3 - Calculer en watt-heure (Wh), l’énergie électrique E consommée par le fer
+a repasser pendant deux heures de fonctionnement normal. (1pt)
+2.4  -  Déduire  le  nombre  de  tours  du  disque  du  compteur  sachant  que  la
+constante  du  compteur  est  :  C=2,5  Wh/trs.  (1pt)
+22
+0.20.40.60.8
+0
+8
+16
+22
+0.5
+24
+32
+U(V)
+I (A)
+17
+Pour chauffer de l’eau, Monsieur "Omar" utilise
+une bouilloire électrique (Figure 2), munie
+d’une plaque signalétique (Figure 3).
+- Déterminer les deux caractéristiques nomi-
+nales de cette bouilloire. (1pt)
+- Déterminer la valeur de m la masse du corps (S). (1pt)
+-Représenter sur la figure 1, les deux forces P et F, en utilisant l’échelle :
+1cm          0,5 N. (1pt)
+Pendant que Madame "Leila" conduisait sa voiture sur une route rectiligne
+avec une vitesse constante V = 72 km/h, elle a aperçu à la distance d= 80m
+un obstacle (حاجز) immobile sur sa trajectoire. Pour éviter la collision
+(الاصطدام) avec cet obstacle elle appuyait sur les freins.
+Données :
+•  La durée de réaction de Madame "Leila" est t
+R
+=1s.
+•  L’expression de la distance de freinage, exprimée en mètre (m), sur une
+route sèche est : d
+F1
+= 0,08xV
+2
+.
+•  L’expression de la distance de freinage, exprimée en mètre (m), sur une
+route mouillée est : d
+F2
+= 0,17xV
+2
+.
+• Dans les deux expressions précédentes, la vitesse V est exprimée en mètre
+par seconde (m/s).
+- Montrer que la voiture de Madame "Leila" ne va pas heurter l’obstacle si
+la route est sèche. (1,5pt).
+- Montrer que la voiture de Madame "Leila" va heurter l’obstacle si la
+route est mouillée. (1,5pt)
+- Quel conseil donneriez-vous à Madame "Leila " lors de la conduite de sa
+voiture sur la route mouillée, afin d’éviter la collision avec l’obstacle ? (1pt)
+- Relier chaque grandeur physique (groupe (1)) avec son unité dans le
+système international des unités (groupe (2)) . (2pt)
+- Répondre par «vrai» ou «faux» : (2pt)
+a- La masse et l’intensité du poids d’un corps sont exprimés avec la même
+unité : Le kilogramme (kg). ...............
+b- La distance de freinage est égale à la somme de la distance d’arrêt et de la
+distance de réaction. .................
+c- Le compteur électrique d’une installation électrique domestique permet de
+mesurer  l’énergie électrique consommée. ..............
+d- Tout solide en rotation autour d’un axe fixe, il est en translation circulaire.
+.....................
+Examen régional (Casablanca - Settat - 2023)
+Exercice 1
+8pts
+Exercice 2
+8pts
+Exercice 3
+4pts
+11
+22
+- Mettre une croix (X) dans le cercle   qui correspond à la proposition
+correcte. (2pt)
+- 4. Compléter les phrases ci-dessous par les mots convenables suivants :
+(2pt)  - thermique - nominales - repos - dynamomètre
+a- L’intensité d’une force se mesure par un .................................
+b- Un appareil électrique fonctionne normalement sous ses caractéristiques ...
+...........................................
+c- Lorsqu’un chauffeur d’un bus est en mouvement par rapport à la route,
+alors il est au  ............................................ par rapport à ce bus.
+d- L'énergie électrique consommée par un appareil de chauffage se trans-
+forme en énergie ........................................
+a- Si la valeur de la vitesse d'un mobile augmente, alors son mouvement est :
+c- La relation liant la tension électrique U aux bornes d'un conducteur
+ohmique de résistance électrique R et l'intensité I du courant électrique qui le
+traverse, est:
+b- On représente la force modélisant une action mécanique par :
+d- La description de l'état du mouvement d'un solide ou l'état de son repos
+nécessite le choix d'un autre corps, appelé le corps de :
+33
+44
+44
+11
+55
+11
+22
+33
+- Calculer la valeur efficace I de l’intensité du
+courant  électrique  circulant  dans  la  bouilloire
+lorsqu’elle fonctionne d’une façon normale. (1pt)
+- Monsieur Omar a utilisé cette bouilloire
+pendant six minutes (t = 6 min).
+Calculer  en  kilowattheure  (kWh)  l'énergie
+consommée par cette bouilloire pendant la du-
+rée  t.  (1pt)
+22
+33
+L’énergie électrique
+La puissance électrique
+L'intensité d'une force
+La vitesse moyenne
+Newton (N)
+Watt (W)
+Kilogramme (kg)
+Joule (J)
+mètre par seconde (m.s
+-1
+)
+groupe 1groupe 2
+AccéléréUniformeRetardé
+I = R × UU = R × IR = U × I
+Une ligneUne droiteUn vecteur
+DynamiqueStatiqueRéférence
+Deuxième partie. (3pts)
+On considère un corps (S) de masse m suspendu
+à l'extrémité libre M d'un fil vertical accroché à
+un support fixe (Figure 1). Le corps (S) est en
+équilibre sous l’action de son poids P d’intensité
+P = 1 N et la force F exercée par le fil.
+On donne la valeur de l’intensité de la pesanteur
+g = 10 N/kg.
+- Classifier les deux actions mécaniques
+exercées sur le corps (S) en action à distance ou
+de contact. (0,5pt)
+11
+Première partie. (5pts)
+- Déterminer les caractéristiques de P (le poids du corps (S)). (1pt)
+- En justifiant votre réponse, déduire les caractéristiques de F (la force
+exercée par le fil sur le corps (S). (1,5pt)
+22
+33
+18
+2.5. Représenter sur la figure 2 ci-dessus les vecteurs forces appliquées sur le
+compartiment en utilisant l’échelle : 1cm          2000N. (1pt)
+Le smartphone d'un élève est tombé par terre. Son afficheur
+(0,4W ; 3,8 V) s'est fissuré (تشقق) (figure 3) . Il souhaite
+alors le réparer lui-même, mais il hésite (تردد) entre
+2 afficheurs dont les caractéristiques sont :
+Il se souvient d'avoir étudié, en 3eme année collégiale, la formule reliant la
+puissance électrique, l'intensité du courant et la tension électrique, mais il
+hésite entre les 4 formules suivantes :
+- Donner la signification des valeurs indiquées sur l’afficheur fissuré. (1pt)
+0.4W : ...................................................   /    3.8V : ....................................................
+- Pour déterminer la formule correcte de la puissance électrique, l’élève ré-
+alise le montage de la figure 4 comportant : Un générateur de tension conti-
+nue 12V ; Une lampe L
+1
+(0,6W ; 12V) ; Un ampèremètre A et un voltmètre V.
+2.1. Dessiner dans le cadre ci-dessus le schéma du montage expérimental
+réalisé. (1pt)
+2.2. L'élève effectue, en suite, la manipulation expérimentale suivante :
+- Il ferme le circuit et relève les valeurs indiquées par les deux appareils de
+mesure .
+Afficheur 2Afficheur 1
+U
+2
+=3,8 VU
+1
+=3,8 VTension électrique
+I
+2
+=0,105 AI
+1
+=0.530 AIntensité du courant électrique
+- Le compartiment (S) s’arrête à
+la station d’arrivée. On étudie l’équi-
+libre du compartiment suspendu par
+un support fixé au point A (figure 2).
+1.3. Déterminer en justifiant votre réponse la nature du mouvement du com-
+partiment (S) par rapport à la terre. (0.5pt)
+• Nature du mouvement : ..........................................................................................
+• Justification : .............................................................................................................
+1.2.
+a - Ecrire l'expression de la vitesse moyenne et son unité internationale. (1pt)
+- Expression de la vitesse moyenne : ......................................
+- Unité internationale : .............................................
+b - Calculer, en m.s
+-1
+, puis en km.h
+-1
+, la vitesse moyenne du compartiment
+(S) entre les deux positions M
+1
+et M
+3
+. (1pt)
+Donnés : - La distance entre les deux positions M
+1
+et M
+3
+est : d=25m.
+- La durée séparant deux photos consécutives est : 2,5s
+La ville d'Agadir a lancé son projet touristique de téléphérique
+النقل بالمقصورات المعلقة() qui renforce le tourisme dans cette ville. C'est un
+moyen de transport par câble métallique.
+- On réalise la chronophotographie (التصوير المتتالي) du mouvement
+ascendant (حركة الصعود)d’un compartiment (S), et on obtient le document
+ci-contre (Figure 1).
+Examen régional (Marrakech - Safi - 2023)
+Exercice 1
+9.5pts
+Exercice 2
+6.5pts
+11
+22
+ClassificationForces appliquées au compartiment (S)
+......................................
+......................................
+......................................
+.................................................................................
+.................................................................................
+.................................................................................
+2.1. Faire l’inventaire (bilan) des forces
+appliquées au compartiment (S) et les
+classer. (1pt)
+P = U + I
+P = U . IP = U / IP = U - I
+11
+22
+FauxVrai
+- Le passager est au repos par rapport au compartiment (S).
+- Le passager est au repos par rapport à la terre.
+- Le compartiment (S) est en mouvement de translation
+rectiligne par rapport à la terre.
+- La trajectoire est la ligne liant les positions occupées par le
+point M du compartiment (S)
+1.1. Répondre par vrai ou faux à chacune des proposi-
+tions en cochant la case convenable, (1pt)
+L'intensitéLe sensLa ligne d'actionLe point d'application
+................................................................................
+2.3. Ecrire l'énonce de la condition d équilibre d’un corps solide soumis à
+deux forces, (1pt)
+2.4. Déduire les caractéristiques de la force exercée par le support sur le
+compartiment (S) . (1pt)
+2.2.
+a- Définir le poids d'un corps et donner son unité internationale. (1pt)
+• La définition : ................................................................................................
+• L’unité internationale : ...................................................
+b. Compléter le tableau suivant en déterminant les caractéristiques du poids
+du compartiment (S).(1pt) On donne : Masse du compartiment (S) : m=400
+kg et intensité de la pesanteur : g=10 N/kg.
+L'intensitéLe sensLa ligne d'actionLe point d'application
+................................................................................
+Figure 4
+Figure 3
+19
+Examen régional (Marrakech - Safi - 2023)
+En exploitant les résultats indiqués dans le tableau ci-dessus, cocher l’expres-
+sion de la puissance électrique. Justifier votre réponse. (1,5pt)
+2.3. Cocher la case correspondant à l'afficheur convenable que l’élève doit
+choisir pour son smartphone. (1pt)
+a. Expression :
+b. Justification : ............................................................................................................
+.........................................................................................................................................
+Justification : .................................................................................................................
+...........................................................................
+- Pour réparer son smartphone, l'élève utilise un fer
+à souder (55W-220V) de résistante R pendant 30min
+(figure 5).
+3.1. Cocher la case correspondant à la relation qui
+exprime la loi d'Ohm. (0,5pt)
+3.2. Déterminer en cochant la  case convenable, l'expression de la résistance
+R. ( 1pt)
+3.3. Déduire la valeur de la résistance R. (0.5pt)
+Intensité du courant
+électrique l(A)
+Tension
+électrique U(V)
+Puissance
+nominale P(W)
+0.0512.030.6Lampe L
+1
+0.41125.0Lampe L
+2
+P = U + I
+P = U . IP = U / IP = U - I
+U = R . IU = R / II = R . UU = R + I
+R = P . UR = U
+2
+/ PR = P . U
+2
+R = U / P
+Afficheur 1Afficheur 2
+- Il recommence l'expérience avec une autre lampe L
+2
+(5W , 12V).
+Il obtient les résultats notés dans le tableau suivant :
+Une étudiante souhaite acheter une moto électrique pour se déplacer de
+sa maison à l'université. Alors, elle l'interroge sur le coût de ses déplacements.
+les données :
+- La distance parcourue pour chaque déplacement quotidien (aller + retour)
+est : d=20 km .
+- Le nombre de déplacement pendant un mois est : n=20 ;
+- L'etudiante estime (تقدر) la vitesse moyenne de son déplacement par : V=30
+km.h
+-1
+.
+- La puissance électrique moyenne de moto est : 1,5kW
+- Le coût ( )تكلفةd'un kilowattheure (1kWh) est de 1.20 Dirhams.
+- Déterminer la durée t nécessaire pour chaque déplacement de l’étu-
+diante. (1.5pt)
+- Calculer le coût mensuel (التكلفة الشهرية) de déplacement de l'étudiante
+par la moto électrique (2.5pt)
+Exercice 3
+4pts
+11
+22
+33
+20
+Le graphique ci-dessous (Figure 3) représente la variation de vitesse de la
+charge au cours de son mouvement (le levage) en fonction du temps :
+- A t=10s, Décrire l'état de la charge (en mouvement/au repos) par rap-
+port à la terre. (0,25pt)
+- Quel est le type de mouvement de la charge et celui de la poulie. (0,5 pt)
+- Déterminer la nature du mouvement de la charge pendant chaque phase.
+(0,75 pt)
+- Déterminer la distance parcourue par la chargé pendant la phase 2.
+(0,75 pt)
+La fiche signalétique du moteur de la grue porte les indications suivantes :
+(10kW - 220V). Le moteur fonctionne pendant une durée de 6h
+- Donner la signification des indications (10kW et 220V). (1pt)
+- Calculer en kWh l'énergie consommée par le moteur pendant sa durée
+de fonctionnement. (1pt)
+- Calculer le coût mensuel (30 jours) à payer sachant que le prix de 1kWh
+est 1DH (1pt).
+En raison d'une l'élévation de température pendant l'été, Mr Ali a acheté un
+climatiseur. Une coupure du courant électrique se produit immédiatement,
+dès qu'il met le climatiseur en marche avec les autres appareils de l'installa-
+tion cités ci-dessous :
+- En se basant sur les données ci-dessous, expliquer à Mr Ali la cause de
+cette panne d'électricité (3pts)
+- Déterminer le plus grand nombre de lampes pouvant fonctionner en
+même temps avec le climatiseur, le fer à repasser et le réfrigérateur sans que
+le disjoncteur coupe le courant électrique (1pt)
+Données :
+AppareilClimatiseurFer à repasserLampeRéfrigérateur
+Puissance nominale3,2 KW920 W30 W180 W
+• Cas de la coupure de courant : Fonctionnement de 7 lampes, climatiseur,
+fer à repasser et le réfrigérateur.
+• Intensité efficace maximale Imax =20A et tension d'alimentation U = 220 V
+- Répondre par vrai ou faux .(2pt)
+1-1) On représente une force par un vecteur ................
+1-2) le mouvement et le repos d'un corps solide sont relatifs, car ils
+dépendent du corps de référence. ...............
+1-3) La distance d'arrêt est calculée par la relation suivante : dA = dR + dF .
+................
+1-4) La distance de réaction dépend de la vitesse et de l'état du conducteur.
+...............
+Examen régional (Drâa - Tafilalet - 2023)
+Exercice 1
+8pts
+Exercice 2
+8pts
+Exercice 3
+4pts
+11
+- Choisir la bonne réponse : (2pt)
+2-1) Le point d’application d'une force de contact localisée est :
+2-2) L'action d'un aimant sur un clou en fer est une action :
+2-3) Lorsqu’un corps solide est en équilibre sous l’action de deux force T et P,
+alors :
+2-4) Pour mesurer l'intensité d'une force, on utilise :
+- Définir le poids d'un corps solide. (1pt)
+4)  - Donner la relation de la loi d'Ohm. (1pt)
+5)- Copier puis Compléter le tableau suivant : (2pt)
+La grue électrique est un
+appareil de levage et de ma-
+nutention réservé aux lourdes
+charges. Elle est constituée
+d'un moteur électrique et
+d'un cylindre avec une corde
+liée à la charge. Cette corde
+est passée à travers une pou-
+lie (Voir figure 1) :
+On considère que la charge de masse m=500 kg est en équilibre. On donne
+g=10 N/kg
+- Faire le bilan des forces exercées sur la charge (1pt)
+- En appliquant les conditions d'équilibre d'un solide
+soumis à deux forces, déterminer les caractéristiques de la
+force appliquée par la corde sur la charge (1,25pt)
+- Recopie le schéma (Figure 2) ci-contre et représenter
+toutes les forces appliquées sur la charge avec l'échelle:
+1cm         2500N (0,5pt)
+Grandeur physiqueSymboleUnité internationale
+La puissance électrique
+L'énergie électrique
+22
+33
+44
+55
+11
+22
+33
+11
+33
+22
+44
+11
+22
+33
+11
+22
+Le point de contact
+à distanceDe contact répartie
+Une balanceUn dynamomètre
+Le centre de surface du contact
+T + P = 0T - P = 0
+Première partie : Étude de l'équilibre de la charge
+Deuxième partie : Étude de mouvement de la charge
+Troisième partie : Étude de la consommation mensuelle
+21
+-Achraf hakimi tape une « Panenka » contre l'Espagne et qualifie le Ma-
+roc en quart de final du mondial 2022.
+3.1. Quel effet provoque le pied de hakimi sur le ballon au moment du tir :
+(0.5pt)
+- Entourer la relation qui exprime la puissance électrique consommée par le
+grille-pain : (0.5pt)
+- Relier chaque grandeur physique au symbole de l'unité qui lui convient :
+(3×0.25pt)
+- La figure 4 représente la
+caractéristique U=f(I) du grille-pain.
+4.1. Déterminer la  valeur de la
+résistance R du grille-pain? (0,5pt)
+4.2. Calculer l’intensité  I du courant
+électrique qui traverse la résistance
+du grille -pain quand il est soumis à
+une tension U = 220V. (0,5 pt)
+- Achraf Hakimi, dépose le ballon au point de
+penalty (figure 1).
+Le ballon est en équilibre sous l'action de son
+poids P et l'action du sol
+modélisée par  la force F.
+Donnée : L'intensité de pesanteur : g = 10 N.kg
+-1
+.
+Le Maroc a réalisé un exploit historique en devenant la première nation
+africaine à se qualifier pour une demi-finale de Coupe du monde.
+- Le ballon de la coupe du monde 2022 est caractérisé par une
+grandeur de valeur 450 grammes.
+Choisir la bonne réponse : (4×0.5pt)
+• La valeur 450g représente :
+• On mesure cette valeur par :
+• La relation entre le poids et
+la masse d'un corps est  :
+• La masse du ballon change
+en fonction du lieu :
+Examen régional (Souss - Massa - 2023)
+Exercice 1
+10pts
+Exercice 3
+4pts
+11
+22
+2.1. Mettre une croix (X) devant la ou les bonne(s) réponse(s) :
+33
+22
+33
+44
+P = U / IP = I / UP = U × I
+Mécanique : La Gloire d'une Nation
+- Calculer la puissance
+électrique consommée par le
+grille-pain sous la tension 220V.
+(1.25pt)
+- En quelle forme d'énergie,
+l'énergie électrique consommée
+est-elle convertie, par le grille-pain ? (0,5 pt)
+- Une famille fait fonctionner chaque jour le grille-pain et d'autres  appa-
+reils, la  compteur électrique domestique indique au début d'une journée la
+valeur 05242 kWh et a la fin de cette journée la valeur 05246 kWH.
+Calculer l’énergie électrique consommée pendant cette journée. (1,5 pt)
+Un élève, souhaite utiliser sa nou-
+velle trottinette électrique (figure
+5) pour aller de chez lui au collège
+(D=6km). Il n'a pas la possibilité
+de charger sa trottinette au collège.
+Il se pose la question suivante :
+Suis-je sûr de ne tomber en panne
+de batterie en rentrant du collège ?
+-Convertir les valeurs suivantes en unité internationale  : (1pt)
+E = 175Wh = ........................................
+V = 15 km.h
+-1
+= ......................................
+-Déterminer le temps t que peut durer la batterie ? (1pt)
+-En déduire la distance d que peut parcourir l’élève pendant la durée t.
+(1.5pt)
+-L’élève arrive-t-il à parcourir le trajet -collège-maison-aller-retour sans
+tomber en panne? Justifier la réponse (0,5pt)
+55
+66
+77
+11
+44
+22
+33
+44
+La masse m
+P = m × g
+Vrai
+Le poids P
+P = m + g
+Faux
+Un dynamomètreUne balance
+• F est une force : (0.5pt)
+• P est une force : (0.5pt)
+• Les deux forces F et P ont : (1pt)
+de contact
+de contact localise
+deux sens opposes
+de pesanteur
+de contact réparti
+même droite d'action
+à distance
+à distance
+même sens
+DynamiqueStatique
+2.2. Calculer l’intensité F de la force F . Justifier votre réponse : (1.5pt)
+2.3 Représenter sur la figure 1, les deux forces P et F en prenant l'echelle :
+1cm        2.25N (1.5pt)
+3.2. La trajectoire du ballon est représentée en pointillé sur la figure 2.
+a. Indiquer la nature de la
+trajectoire. (0,5 pt)
+b. La forme de la trajectoire
+du ballon  apparait-elle :
+la même pour les deux obser-
+vateurs 1 et 2.
+Justifier votre réponse. (1pt)
+- Les marocains ont célé-
+bré cette victoire en sortant
+dans les rues. Citer deux
+règles de la sécurité routière
+que doivent respecter les
+conducteurs de voitures dans
+une telle situation. (1pt)
+W
+J
+Ω
+Résistance électrique
+Puissance électrique
+Énergie électrique
+- La vitesse recommandée est: 15km.h
+-1
+- La puissance électrique correspondant à
+cette vitesse est : P =250W .
+- L'énergie électrique stockée par la batterie
+de la trottinette est: E=175Wh.
+Doc1 : Caractéristiques techniques d'une
+trottinette électrique
+Un grille-pain (figure 3) est composé d'une résis-
+tance R pour faire griller le pain.
+- Compléter la phrase suivante avec les mots ou
+le groupe de mots convenables parmi les suivants
+: loi d'Ohm - résistance R - conducteur ohmique
+(0,5 pt)
+La tension U aux bornes d’un ......................................
+.............. est égale au produit de sa ........................ par
+l'intensité I du courant électrique qui le traverse.
+Exercice 2
+6pts
+11
+0.20.40.60.8
+1
+0
+10
+20
+30
+40
+50
+U(V)
+I (A)
+22
+- En appliquant les conditions d'équilibre, déterminer les
+caractéristiques de la force F appliquée par le genou sur le
+ballon : (1pt)
+33
+- Représenter sur le schéma (document 1) les deux forces
+en utilisant
+l’échelle : 1cm pour 2N . (0.5pt)
+- Lorsque le joueur jongle avec le ballon, ces positions
+successives sont
+représentées ci-contre ( document 2).
+la durée entre deux positions successives est t= 0,10s.
+5.1) Quelle est la nature du mouvement du Ballon : (0.5pt)
+5.2) Calculer la vitesse moyenne entre les positions
+M1 et M2 : (1pt)
+FauxVrai
+L’indication 6v représente l’intesité nominale
+L’indication 0,6W représente la puissance nominale
+Si cette lampe reçoit une puissance supérieure à 0,6W, donc
+l’éclat de la lampe est normal
+Si cette lampe reçoit une puissance inférieure à 0,6W, donc
+l’éclat de la lampe est faible
+Parmi les défis du football, maintenir le
+ballon en équilibre sur le genou. Comme le
+montre l’image ci-contre.
+Données :
+- Intensité de pesanteur g = 10 N/kg ;
+- La masse du ballon m = 400g.
+- Faire le bilan des forces appliquées sur le
+ballon, et les classifier. (1pt)
+La figure ci-contre représente une lampe qui porte les indications sui-
+vantes : (6V ; 0,6W)
+- Réponds par vrai ou faux :
+(4×0.25pt)
+Dans une maison, les appareils électriques suivants sont en fonctionnement normal :
+• Une bouilloire électrique (220V – 2200W)
+• Un ventilateur (220V – 500W)
+• Un fer à repasser (220V – 1800W)
+- Calculer l’intensité de courant électrique I traversant la bouilloire électrique
+pendant son fonctionnement normal. (0.5pt)
+- Calculer la résistance électrique R de cette bouilloire électrique. (0.5pt)
+- On utilise tous ces appareils en même temps pendant une durée t=30 min.
+a- Calculer la puissance électrique totale Pt consommée par ces appareils. (0.5pt)
+b- Calculer (en Wh) l’énergie électrique totale Et consommée par ces appareils pen-
+dant la durée de fonctionnement. (0.75pt)
+c- Calculer le nombre de tours n effectués par le disque du compteur électrique pen-
+dant cette durée. Sachant que la constante du compteur est : C=2,5 Wh/tr. (0.75pt)
+Lors du passage de Saïd et son père dans la rue menant à la maison de sa fa-
+mille depuis l'école, Saïd souhaite déterminer l'énergie électrique consommée
+par l'éclairage public de cette rue éclairée d'un seul côté pendant le temps du
+passage de leur voiture. Le père affirme que la vitesse moyenne de la voiture
+est v=50 km/h, alors que Saïd a fait une recherche sur Internet et il a trouvé :
+- Cocher la bonne réponse : (3×0.5pt)
+a- La relation entre la vitesse moyenne , la distance et le temps est :
+b- La relation entre le poids et la masse est :
+c- La distance d’arrêt D
+A
+est déterminée par la relation suivante :
+- Compléter les phrases suivantes par les mots convenables : (6×0.25pt)
+droite d’action ; référence ; intensité ; mouvement ; localisée ; action méca-
+nique.
+- On dit qu’ un corps est en ..................... lorsqu’ il se déplace et change sa
+position par rapport à un ...............................
+- Quand un corps est en équilibre sous l’action de deux forces,
+alors ces forces ont, même .................., sens opposés, et même
+......................................
+- Une action mécanique de contact peut être :
+............................................. ou répartie.
+- On modélise une .....................................par une force qu’on note F
+- Relier par une flèche chaque grandeur dans le groupe 1 à son unité
+internationale dans le groupe 2 : (4×0.25pt)
+Examen régional (Guelmim - Oued Noun - 2023)
+Exercice 1
+10pts
+Exercice 2
+6pts
+Exercice 3
+4pts
+11
+22
+33
+11
+55
+44
+11
+La longueur de la rue ,du premier au dernier poteaux, est : d= 280m ;
+- La distance entre deux poteaux d’éclairage public est 35m ;
+- La puissance de chaque lampe utilisée dans l’éclairage public est P= 3000W .
+Aider Saïd à résoudre le problème en répondant aux questions suivantes :
+- Calculer la durée t mise pour parcourir la rue (du premier au dernier
+poteaux). (1pt)
+- Déterminer en Wh l’énergie totale Et consommée par toutes les lampes
+utilisées dans cette rue pendant la durée t de passage de la voiture. (3pt)
+11
+22
+11
+22
+33
+- Donner les caractéristiques du poids  P du ballon : (1pt)
+22
+m.s
+-1
+kg
+N
+N.kg
+-1
+Groupe 2
+L’intensité de la pesanteur
+L’intensité d’une force
+La masse
+Groupe 1
+v = d / tv = t / dv = d × t
+D
+A
+= D
+F
++ D
+R
+D
+A
+= D
+F
+- D
+R
+D
+A
+= D
+R
+- D
+F
+P = m / gP = g / mP = m × g
+- Complétez les phrases suivantes par ce qui convient : (2×0.5pt)
+a- L’unité de l’énergie électrique dans le système international des unités est
+.......................... de symbole ..............
+b- Les appareils de chauffage se caractérisent par la transformation de l’énergie élec-
+trique en énergie .......................................
+- Choisir la bonne réponse :
+(2×0.5pt)
+a- L’expression de la résistance R d’un conducteur ohmique s’écrit :
+b- L’énergie électrique consommée dans une maison se mesure à l’aide d’un :
+22
+33
+R = I / UR = U / IR = U × I
+wattmètrevoltmètrecompteur électrique
+FauxVrai
+- Le mouvement d’un corps est dit uniforme, lorsque sa vitesse
+augmente.
+- Une action mécanique peut modifier la trajectoire du
+mouvement d’un corps.
+La masse d’un corps est une grandeur physique qui dépend du
+lieu.
+On mesure l’intensité du poids d’un corps par la balance.
+44
+- Réponds par vrai ou faux : (4×0.25pt)
+Partie 1
+Partie 2
+Partie 1
+Partie 2
+d=280m
+35m
+23
+Oussama et sa sœur Fatima circulent tous les deux avec leurs bicyclettes à même
+vitesse sur une route droite, les bicyclettes sont équipées chacune d'une lampe de 6V
+et de puissance électrique inconnue. Oussama a dit: "regarde, les arbres se déplacent
+en arrière". Fatima a répondu : "comment se déplacent-ils alors qu'ils sont fixés
+au sol ?". Et elle a ajouté : "la roue de ma bicyclette a fait 100 tours pendant une
+minute".
+• Le rayon de la roue de la bicyclette de
+Fatima est : r = 0,25m
+• Le périmètre de la roue est: 2πr (π = 3,14)
+• Chaque tour de la roue lui correspond une distance égale à son périmètre.
+Matériel disponible : générateur réglable - ampèremètre - voltmètre - conducteur
+ohmique.
+- Répondre d'une façon claire à la question de Fatima. Et calculer en km.h
+-1
+la
+vitesse moyenne de la bicyclette sachant qu'elle roule sans glissement.
+- Fatima veut déterminer la valeur de la puissance nominale de la lampe de sa
+bicyclette.
+Représenter - en choisissant le matériel adéquat - le schéma du montage électrique
+pour cela.
+- Ahmed reste debout
+dans un ascenseur qui se
+déplace vers le
+haut et Khalid attend au 4
+étage comme le montre la
+figure :
+on donne la vitesse
+moyenne de l'ascenseur
+V = 0,5m.s
+-1
+a - Déterminer en justifiant
+votre réponse le type du
+mouvement de cet ascen-
+seur lors de ce déplacement.
+(0.5pt)
+b - Compléter ce qui suit: (0.5pt)
+• L'ascenseur est ................................... par rapport à Khalid.
+• L'ascenseur est au repos par rapport à ....................................
+c - Calculer la distance parcourue par cet ascenseur pendant 9,5s. (0.75pt)
+- Répondre par vrai(V) ou faux(F) (2pt).
+- La nature du mouvement d'un ballon du foot lors de sa chute libre est uniforme.
+.................
+- L'effet d'une action mécanique est toujours dynamique. ...........
+- L'intensité du poids d'un corps et sa masse sont reliées par la relation : P = m × g
+..........
+- Un corps soumis à une seule force peut être en équilibre. ...........
+- Compléter par ce qui convient des mots suivants : sens - La force - d'équilibre
+- la vitesse - l'intensité - véhicule - droite d'action . (1.5pt)
+• La distance du freinage dépend de ................................ et de l’état du ..........................
+puis de l'état de la route.
+• ...................................... a quatre caractéristiques, parmi eux .................................... de
+celle-ci qui se mesure avec un dynamomètre.
+• Les deux forces ................................. ont même intensité, même .................................
+et sens opposés.
+Examen régional (Laâyoune-Sakia El Hamra - 2023)
+10pts
+Exercice 3
+4pts
+11
+22
+- Cocher la bonne réponse (1.5pt)
+33
+44
+11
+22
+a) Le vent exerce sur un cerf-volant une force :
+De contact localiséeDe contact répartieÀ distance
+b) Plus on s'éloigne de la surface de la terre, plus l'intensité du poids :
+AugmenteDiminueNe varie pas
+c) Le temps de la réaction dépend de :
+L'état des rouesL'état de la routeL'état du conducteur
+- Mustapha a tracé la caractéris-
+tique d'un dipôle électrique et il a
+obtenu la courbe ci-contre:
+a - Donner en justifiant votre
+réponse le nom de ce dipôle. Et
+déduire la signification physique du
+coefficient directeur.
+b - En appliquant la loi d'Ohm,
+déterminer la valeur de la résistance
+de ce dipôle.
+- La plaque signalétique d'un
+sèche-cheveux porte les indications
+(220V - 2kW).
+a - Quelle est la signification de chacune de ces indications.
+b - Calculer l'intensité nominale de ce sèche-cheveux.
+c - Calculer en Wh puis en J, l'énergie consommée par ce sèche-cheveux pendant 15
+minutes de son fonctionnement.
+22
+33
+- Le corps (S) est suspendu au crochet d'un dynamomètre
+et en équilibre.
+On donne : l'intensité de la pesanteur g = 10 N/Kg
+a -  Faire le bilan des forces exercées sur le corps (S). (1pt)
+b - Déterminer les caractéristiques de la force      exercée par le
+dynamomètre. (1pt)
+c - Représenter la force    sur le schéma en utilisant l’échelle:
+1cm pour 1N. (0.25pt)
+d - En appliquant la loi d'équilibre, calculer la masse du corps
+(S). (1pt)
+55
+T
+T
+- Répondre par vrai ou faux : (1pt)
+- L'unité internationale de la puissance électrique est le Joule J. ..............
+- Pour calculer l'énergie électrique consommée par un appareil électrique, on ap-
+plique la relation: E = P.t  ..............
+- L'appareil de chauffage convertit l'énergie électrique en énergie thermique. ...............
+- Le compteur électrique est utilisé pour mesurer la résistance électrique. ................
+6pts
+11
+20406080
+0
+3
+6
+9
+12
+U(V)
+I (mA)
+24
+Lors de l’arrêt de la cabine de l’ascenseur. La cabine est en équi-
+libre sous l’effet de deux actions mécaniques comme le montre le
+schéma ci-contre.
+On donne l’intensité de pesanteur : g =10N /kg
+- Faire le bilan des forces exercées sur la cabine. (0.5pt)
+- Calculer l’intensité du poids de la cabine, sachant que sa
+masse est m =500 kg.  (1pt)
+- Déterminer les caractéristiques de la force    exercée par le câble sur la cabine
+: (1pt)
+- Représenter sur le schéma ci-dessus les deux forces    et    exercées sur la
+cabine en utilisant l’échelle : 1cm         2500N . (1pt)
+Une agricultrice monte jusqu'au sommet du montagne Toubkal pour vendre aux
+touristes ses pommes de terre produites en culture biologique. Elle dispose de deux
+balances différentes. La première balance, munie d'un plateau, est à affichage numé-
+rique direct des prix. Elle repose sur un ressort et mesure la variation de longueur
+de ce ressort qui dépend de la valeur de l’intensité de pesanteur. La deuxième est
+une balance romaine avec masses marquées.
+Lorsqu’elle fait des mesures des pommes de terre, l’agricultrice trouve que l’une de
+ces balances donne des mesures différentes selon qu'elle est au pied ou au sommet
+du montagne Toubkal.
+Mohsin, un élève de 3ème année collégiale, passe près de là. Cette dame lui de-
+mande d’expliquer cette situation.
+En utilisant un dynamomètre, Mohsin effectue les manipulations suivantes sur une
+quantité de masse m de pommes de terre :
+- Il mesure l'intensité du poids de cette quantité au pied du montagne Toubkal et il
+trouve : P
+0
+= 58,8N.
+- Il mesure l'intensité du poids de cette quantité au sommet du montagne Toubkal et
+il trouve P = 58,68N.
+On donne l’intensité de pesanteur au pied du montagne Toubkal : g
+0
+= 9,8 N/kg.
+- Calculer la masse m. (1pt)
+- Trouver l'intensité de pesanteur g au sommet du montagne Toubkal. (1.5pt)
+- Quelle balance doit-on recommander à l’agricultrice ? justifies ta réponse.
+(1.5pt)
+- Répondre par vrai(V) ou faux(F) (5 × 0.25pt).
+- La nature de la trajectoire d'un point mobile dépend du référentiel choisi ...........
+- L’unité de la vitesse moyenne dans le système international est le km/h ........
+- Le sens d’une force est toujours le même sens que le sens du mouvement d’un
+corps ...........
+- La droite d’action d’une force ne passe pas nécessairement par son point d’action.
+.............
+- Le poids d’un objet est une action mécanique à distance ............
+- Remplir le tableau suivant : (6 × 0.5pt)
+GrandeurUnité de mesureInstrument de mesure
+Varie selon le lieu
+(oui/non)
+Masse
+Pois
+Examen régional (Dakhla - Oued Ed-Dahab - 2023)
+10pts
+Exercice 3
+4pts
+11
+22
+Une cabine d’un ascenseur monte d’un étage A vers un
+étage B avec une vitesse constante V= 2,5 m /s comme le
+montre le schéma suivant ci-contre.
+- Par rapport à quel référentiel la cabine de l’ascen-
+seur est en mouvement.(0.75pt)
+- Lors de déplacement de la cabine de l’ascenseur.
+Préciser la trajectoire et le type du mouvement de la
+cabine ? (0.5pt)
+La trajectoire : ..........................................
+Type du mouvement : .................................
+- Déterminer la nature du mouvement de la cabine.
+Justifier votre réponse. (0.5pt)
+- Sachant que la distance AB entre les deux étages A et B est de 5m.
+Calculer la durée mise par la cabine pour parcourir cette distance ? (0.5pt)
+11
+22
+33
+44
+11
+22
+33
+44
+11
+22
+33
+EXERCICE 1 (4.25pts)
+EXERCICE 2 (3pts)
+EXERCICE 2 (5.75pts)
+Partie A (2,25 pts)
+Partie B (3,5 pts)
+P
+F
+F
+- Entourer la lettre de la proposition juste. (0.25pt × 4)
+- La tension aux bornes d’un conducteur ohmique de résistance électrique
+R = 50Ω si elle est traversée par un courant électrique d'intensité I = 190 mA est :
+- 1 joule est égal à :
+- L’unité internationale de la puissance électrique est :
+- La puissance électrique P reçue par un appareil électrique en courant électrique
+continu est donnée par la relation :
+- Écrire la lettre de la réponse juste. (0.5pt)
+Sur la notice d’un four électrique, on trouve
+les indications suivantes  (220V, 3,5kW).
+L’intensité du courant électrique qui traverse ce
+four électrique est :
+La lettre de la réponse juste est : .........
+Un ascenseur fonctionne par un moteur électrique qui porte les indications sui-
+vantes (220V ; 5kW).
+- Quelle est la signification physique des indications : (220V ; 5kW) . (0.5pt)
+- Sachant que le moteur fonctionne normalement 3h par jours, calculer l’énergie
+consommée par ce moteur pendant un mois en Wh et en joule : (1mois =30 jours).
+(1.5pt )
+- Le moteur électrique est branché avec un compteur électrique de constante
+C = 3 Wh / tr . Calculer le nombre de tours effectué par ce compteur pendant ce
+fonctionnement . (1pt)
+U = 9.5 kVU = 0.95 VU = 9.5 V
+abc
+3600 Wh3600 Ws1 W.s
+abc
+Le wattLe voltL'ampère
+abc
+P = U × I
+2
+P = U / IP = U × I
+abc
+I = 15,90 mAI = 15,90 AI = 0.0159 A
+abc
+22
+33
+33
+22
+11
+EXERCICE 1 (3pts)
+- Compléter les phrases en utilisant le mot ou l’expression convenables dans la
+liste suivante : La puissance électrique - énergie thermique - le wattmètre - conduc-
+teur ohmique - la somme - L’énergie électrique. (0.25pt × 6)
+a - La tension U aux bornes d'un .................................. est égale au produit de sa résis-
+tance R par l'intensité I du courant électrique qui le traverse.
+b - Les appareils électriques de chauffage transforment l'énergie électrique en
+..............................
+c - ..................................... consommée dans une installation électrique domestique
+pendant une durée donnée est égale à ............................... des énergies électriques
+consommées par chaque appareil électrique en fonctionnement.
+d - ....................................consommée par un appareil de chauffage de résistance R est
+P = R × I
+2
+.
+e - Pour mesurer la puissance électrique consommée par un appareil électrique on
+utilise ..................................
+6pts
+11
+Le cable
+A
+G
+La cabine
+Le cable
+la cabine de
+l’ascenseur
+le sol
+Le cable
+Moteur
+électrique
+B
+A
+25
+- L’énoncé de la condition d’équilibre : Lorsqu'un solide soumis à deux
+forces     et      est en équilibre, alors : Les deux forces ont la même droite
+d'action , la même intensité et des sens opposés.
+T
+F
+- Complétons le tableau suivant en précisant pour chaque action
+mécanique, sa nature et son effet (statique ou dynamique).
+Effet de l'actionNature de l’actionL'action mécanique
+StatiqueAction de contactAction du support sur le fil
+DynamiqueAction à distanceAction de la Terre sur la boule
+- Cochons la bonne réponse :
+- La valeur de l'intensité de la force F est :
+X
+X
+X
+X
+X
+X
+-Appliquons la condition d'équilibre sur le fil, et complètons le tableau
+suivant en précisant les caractéristiques de la force exercée par la boule    :
+IntensitéSensDroite d'actionPoint d'application
+T=F=3NDe B vers ALa droite verticale qui
+passe par A
+Le point A
+- La nature du mouvement de G est accéléré car les distances parcourues
+par le centre G pendant des intervalles de temps égaux sont de plus en plus
+grandes, alors La vitesse augmente au cours du temps.
+- Mettons une croix (x) dans la case convenable.
+- Calculons, en kW, la puissance électrique totale P :
+la puissance électrique totale P fournie par les 84 éoliennes c'est la somme de
+des puissances de chaque éolienne
+Donc P =84 × 1190kW = 99960kW .
+- Calculons, en kWh l’énergie électrique totale E produite pendant une
+année :
+On a :  E = P
+× t .
+A.N:  E = 99960kW × 5000h  = 499 800 000 kWh
+- La consommation annuelle de tous habitants est :
+E = 1100 kWh × 402118 = 442 329 800 kWh
+Donc la valeur de la La consommation annuelle de tous habitants est
+inférieur de l’énergie électrique totale E produite pendant une année.
+Donc on peut satisfaire la demande en électricité de la ville avec l'énergie
+produite .
+Exercice 1
+10pts
+Exercice 2
+6pts
+Exercice 3
+4pts
+11
+22
+- Cochons la bonne réponse :
+Le poids d’un solide de masse m s'exprime par :
+- calculons m la masse de la boule :
+On a :   T = P = m × g      Alors    m = T / g
+Application numérique : m = 3N / 10 N.kg
+-1
+=  0.3 kg
+- Cochons la bonne réponse :
+1.1. L'état de repos ou de mouvement d’un corps dépend :
+1.2. La vitesse moyenne d’un mobile s'exprime par  :
+1.3. La relation de conversion entre le (m/s) et le (km/h) est :
+(0.5pt)
+1.4. La trajectoire de centre de gravite G de la boule est  :
+33
+44
+55
+66
+22
+11
+11
+11
+33
+22
+F = 2cmF = 2NF = 3cmF = 3N
+P = m × gP = m / gP = g / mP = m ×10
+De sa masse
+Du référentiel
+De son poids
+De son entourage
+v
+m
+= t / d
+v
+m
+= d × t
+v
+m
+= d + t
+v
+m
+= d / t
+1m/s = 3600 km/h
+1km/h = 3.6 m/s
+1km/h = 3600 m/s
+Horizontale
+Deuxième partie.
+- Calculons l’intensité du courant efficace I :
+On a :  P = U × I    Alors    I = P / U
+Application numérique :  I = 2.2kW / 220V =  2200W / 220V  = 10A
+- Calculons la valeur de la résistance électrique R du fil chauffant :
+On après la loi d'ohm :  U = R × I    Alors    R = U / I
+Application numérique :  R = 220V / 10A =  22 Ω
+- La signification physique des indications 220V et 2.2kW.
+220V   : La tension nominale.
+2.2kW : La puissance nominale.
+- Calculons en kWh l’énergie électrique consommée par cet appareil :
+L’énergie consommée par cet appareil chaque jour est :
+On a :  E = P × t   Application numérique :   E = 2200W × (1h/4) = 550 Wh.
+l’énergie électrique consommée par cet appareil pendant un moi est :
+E
+t
+= 30 × E = 30 × 550Wh = 16500 Wh = 16.5 kWh
+- Comparons la valeur de R' avec
+celle de R :
+Déterminons, graphiquement, la valeur
+de la résistance R'  :
+On a :  R' = U / I .
+A.N:  R = 60V / 4A = 15Ω .
+et on a R = 22 Ω , Donc la valeur de R'
+est inférieur de celle de R.
+33
+44
+22
+55
+66
+Figure 2
+Correction d'examen régional (Tanger - Tétouan - Al Hoceïma - 2023)
+T
+- Calculons, en m/s, la vitesse moyenne de G entre G
+0
+et G
+6
+:
+On a Vm = d / t , avec d = G
+0
+G
+6
+= 7.2cm = 0.072m
+et t = 6 × 20ms = 120ms = 0.12s.
+Application numérique : Vm = 0.072m / 0.12s =  0.6 m/s .
+33
+FauxVrai
+La résistance d'un conducteur ohmique sous la tension U.
+Et parcourue par un courant d'intensité I, s'exprime par : R
+= U × I
+L'unité universelle de la puissance électrique est le kWh
+Seulement une partie de l’énergie électrique consommée par
+un appareil de chauffage est convertie en énergie thermique
+Un compteur électrique dans une installation domestique
+permet de mesurer l'énergie électrique consommée.
+X
+X
+X
+X
+0  14
+0
+10
+60
+U(V)
+I (A)
+Figure 3
+26
+- Répondons par Vrai ou Faux :
+1-1- La puissance électrique nominale est identique pour tous les appareils élec-
+triques. Faux
+1-2- Le disjoncteur est l’appareil qui mesure l’énergie électrique consommée par les
+appareils d’une installation électrique. Faux
+4-4-Selon la la condition d’équilibre :
+- La droite d’action : La droite verticale qui passe par G .
+- Le sens : de bas vers le haut
+- L’intensité de la force R :    R = P = 1800N
+- D’après le tableau ci-dessous , si la vitesse de voiture est 50km/h la
+distance d’arrêt est 28m , mais si la vitesse de voiture est 110km/h la distance
+d’arrêt est 97m.
+Vitesse de la voiture en km/h5080110
+Distance de réaction D
+R
+en m142230
+Distance de freinage D
+F
+en m143567
+Distance d’arrêt D
+A
+en m285797
+Alors plus la vitesse est grande, le conducteur a besoin une grande distance
+pour s’arrêter ,et ne dispose pas de temps pour freiner, Donc l’excès de vitesse
+peut causer des accidents de la route.
+- Calculons la distance d’arrêt D
+A
+si t
+R
+=2s :
+On a V = 110 km/h = 110/3.6 m/s = 30.56 m/s ≈ 30 m/s
+et on a D
+R
+= V × t
+R
+= 30 m/s × 2s = 60 m , Alors D
+A
+= 67m + 60m = 127m
+mais si t
+R
+=1s on a : D
+R
+= V × t
+R
+= 30 m/s × 1s = 30 m ,
+Alors D
+A
+= 67m + 30m = 97m
+Donc si le temps de réaction augmente de 1s alors la distance d’arrêt
+augmente de (127m-97m = 30m). Donc l’augmentation de la durée de
+réaction augmente considérablement le risque d’accidents de circulation.
+- La nature du mouvement du motard :
+On a les distances parcourues par le motard pendant des intervalles de temps
+égaux sont de plus en plus grandes. Donc la vitesse augmente au cours du
+temps. Alors  la nature du mouvement du motard est accéléré.
+-Complétons les phrases suivantes par la proposition convenable :
+1-1-Le motard est immobile par rapport à la moto.
+1-2-La roue avant est en mouvement de rotation par rapport à son axe.
+1-3-La lampe avant de la moto est en mouvement de translation par rapport
+à la route.
+Exercice 3
+4pts
+11
+22
+- Ce motard a parcouru la distance D qui sépare la ville d’Oujda de la
+ville de Saidia en une durée ∆t=50min avec une vitesse moyenne v=72km/h.
+3-1-Exprimeons la vitesse moyenne v en imité m/s :
+On a 1m/s = 3.6 km/h = donc 1km/h =(1/3.6)m/s
+et on a v = 72 km/h . Alors v = 72 × (1/3.6) m/s = 20 m/s
+3-2-Calculons la distance D :
+On a v = D / ∆t = donc D = v × ∆t
+Application numérique: D = 20m/s × 50min = 20m/s × 3000s = 60 000m
+Donc D = 60 km
+- Le motard s’arrête sur une portion de route inclinée d’un angle α par
+rapport au plan horizontal. On représente la situation par le schéma de
+la figure3. G étant le centre de gravité du système (S) de masse m= 180kg
+constitué par le motard et sa moto.
+4-1- Déterminons les caractéristiques du poids     du système (S) :
+4-2- Représentons le poids     du système (S) (voir la figure3) :
+33
+44
+11
+11
+22
+- Choisissons la bonne réponse parmi les réponses proposées :
+2-1- Le symbole de l’unité de la puissance électrique dans le système interna-
+tional des unités est :
+D)         ΩAC)         WB)          QA)          J
+2-2- La formule U=R.I qui traduit la loi d’Ohm pour un conducteur ohmique
+de résistance R soumis à une tension électrique U et parcouru par un courant
+électrique d’intensité I, peut aussi s’écrire :
+D)    R = I / UC)    R = U × IB)    I = R / UA)    I = U / R
+-Un four électrique de résistance R = 40Ω est branché sur une prise dont
+la tension à ses bornes est U=220V.
+3-1- Calculons I  l’intensité du courant électrique :
+On a  :   U = R ×  I   Alors    I = U / R
+Application numérique  : I = 220V / 40Ω  = 5.5A.
+3-2- Déterminons P la puissance électrique consommée :
+On a  :   P = U ×  I   Application numérique  : P = 220V×5.5A = 1210W
+3-3-Calculons E l’énergie électrique consommée en unité Wh :
+On a  :   E = P ×  t   avec P = 1210Wh et t = 30min = 0.5h
+Application numérique  : E = 1210W × 0.5h = 605Wh .
+22
+33
+Exercice 1
+8.5pts
+Exercice 1
+7.5pts
+Figure 2
+Correction d'examen régional (L’Oriental - 2023)
+P
+P
+4-3- L’énoncé de la condition d’équilibre : Lorsqu'un solide soumis à deux
+forces     et      est en équilibre, alors : Les deux forces ont la même droite
+d'action , la même intensité et des sens opposés.
+R
+P
+RP
+=+()
+0
+L'intensitéLa directionLe sensLe point d'application
+P = m × g
+P =180kg×10N/kg
+P =1800N
+La droite verticale
+qui passe par G
+Du point
+G vers le
+bas
+Le centre de gravite G
+du système (S)
+Le centre de gravite G du système (S)Le point d'action
+La droite verticale qui passe par GLa direction
+Du point G vers le basLe sens
+P = 1800N , Selon l'échelle
+600N        1cm    Alors   1800N         3cm
+L'intensité
+α
+Système (S)
+Motard + moto
+Plan horizontale
+Figure 3
+Route inclinée
+PP
+3cm
+27
+1.1. Complétons les phrases ci-dessous parce qui convient :
+- La description du mouvement du corps (S) nécessite le choix d’un corps de
+référence car son mouvement est relatif .
+- Lorsque le corps (S) monte, il est animé d’un mouvement de translation
+alors qu’il est en état de repos pendant son état d’équilibre.
+-
+1.2. Lions par des flèches les éléments du tableau suivant :
+1.3. Cochons la case qui correspond à la proposition correcte pour exprimer
+la vitesse moyenne V
+m
+du corps (S) entre les positions G
+0
+et G
+6
+, (on désigne
+par d la distance entre ces 2 positions d= G
+0
+G
+6
+) :
+1.4. Calculons la vitesse moyenne V
+m
+du corps (S) entre les positions G
+0
+et
+G
+6
+en (m.s
+-1
+)  puis en (km.h
+-1
+) (1pt)
+En (m.s
+-1
+) : Vm = d / 6T = 7.5m/6s = 1.25 m.s
+-1
+.
+En (km.h
+-1
+) : Vm =  1.25 m.s
+-1
+= 1.25 × 3.6 km.h
+-1
+= 4.5 km.h
+-1
+.
+T est ln durée entre deux positions consécutives enregistrées de G : (T = 1s ).
+- Parmi les expressions ci-dessous :
+2.1. Cochons les cases de celles qui sont correctes :
+2.2. L’expression traduit la loi d'Ohm c'est : R = U / I
+2.5. Calculons l'intensité F de la force exercée par le câble sur (S) :
+On a le corps (S) en équilibre sous l'action de deux forces    et      .
+Donc les deux forces ont même intensité , F = P = m × g .
+Application numérique : F = 100kg × 9.8 N.kg
+-1
+= 980 N.
+Rim est une collégienne qui souhaite utiliser ses connaissances en électricité pour
+répondre à cette question : « Puis-je faire fonctionner mes trois appareils simultané-
+ment sans danger ? ». Les appareils en question sont : un séchoir (500W ; 220V), un
+fer à repasser (1000W ; 220V) et un chauffage (2000W ; 220V).
+- Relions par des flèches chaque grandeur à son symbole et à son unité :
+Exercice 1
+10pts
+Exercice 2
+6pts
+11
+11
+P = U × IR = P / UU = R × tR = U / I
+Partie2 : Etude de l'équilibre  de (S)
+Partie1:étude du mouvement du corps (S)
+22
+Etape 1
+Etape 2
+Etape 3
+Etape
+Rectiligne retardé
+Rectiligne accéléré
+Rectiligne uniforme
+Nature du mouvement
+Les distances parcourues pendant la
+même durée T augmentent
+Les distances parcourues pendant la
+même durée T restent constantes
+Les distances parcourues pendant la
+même durée T diminuent
+Justification
+Unités
+W
+A
+Ω
+V
+Symboles
+U
+R
+P
+I
+Puissance électrique
+Tension électrique
+Intensité du courant électrique
+Résistance électrique
+Grandeurs
+-
+22
+- Calculons I
+1
+l'intensité efficace du courant électrique qui circule dans le
+séchoir en marche :
+On a : P = U × I  , Alors  I = P / U
+Application numérique : I = 500W / 220V = 2.27A
+33
+2.1.Répondons par vrai ou faux aux propositions suivantes :
+FauxVrai
+La balance électronique est l'instrument de mesure du poids
+d'un corps.
+L'action mécanique exercée par le câble sur (S) est une
+action à distance.
+L'action du câble sur (S) en équilibre a un effet statique.
+La valeur de l'intensité de pesanteur g dépend de la position.
+2.2. Cochons la bonne réponse pour chacune les propositions suivantes :
+a - L'unité de l' intensité de pesanteur g dans le système international (SI)
+est :
+- Déterminons la distance d'arrêt D
+A
+de la voiture (pour un conducteur
+à l'état fatigué) :
+On a D
+R
+= V × t
+R
+= 25 m.s
+-1
+×  1.5s = 37.5m.
+Et on a D
+A
+= D
+R
++ D
+F
+= 37.5m
++ 50m  = 87.5m.
+Alors la valeur de D
+A
+est supérieur de (d = 81m), donc le conducteur fatigué
+ne peut pas éviter l'obstacle.
+- Conseils à donner aux conducteurs pour éviter les accidents :
+-Faire des pauses de 15min toutes les 2h de conduite.
+- Évitez de conduire si vous prenez des médicaments et des substances qui
+affectent la concentration ou qui peuvent provoquer le sommeil.
+- Déterminons la distance d'arrêt D
+A
+de la voiture (pour un conducteur à
+l'état normal) :
+On a : V= 90 km.h
+-1
+= 90/3.6 m.s
+-1
+= 25 m.s
+-1
+.
+Et on a D
+R
+= V × t
+R
+= 25 m.s
+-1
+×  1s = 25m.
+Et on a D
+A
+= D
+R
++ D
+F
+= 25m
++ 50m  = 75m.
+Alors la valeur de D
+A
+est inférieur de (d = 81m), donc le conducteur normal
+va éviter l'obstacle.
+Exercice 3
+4pts
+22
+11
+33
+- Calculons l'énergie électrique consommée par le séchoir en J et en kWh:
+- En Joule : On a : E = P × t  .
+Application numérique :   E = 500W × 20min = 500W×1800s = 600000 J
+- En kWh: On a : E = P × t  .
+A.N :   E = (600000/3600)Wh = 166.67Wh ≈ 0.167 kWh.
+- Calculons le la valeur efficace de l'intensité (I
+p) du courant électrique
+principal entrant lorsque Rim utilise ses trois appareils simultanément :
+On a :  Pt = U × Ip  alors  Ip  = Pt  / U .
+avec Pt la puissance totale de tous les appareils électriques.
+On a donc Pt = 500W + 1000W + 2000W = 3500W
+A.N:  Ip = 3500W / 220V = 15.9A .
+- D’après la question 5 l'intensité du courant électrique principal est :
+Ip = 15.9A  , cette valeur est supérieur de Imax = 10A .
+Donc Rim ne parvient pas  à utiliser ses trois appareils en même temps, car le
+disjoncteur va couper le courant sur la totalité de l'installation électrique.
+44
+55
+66
+Correction d'examen régional (Fès - Meknès - 2023)
+2-3- L’énoncé de la condition d’équilibre : Lorsqu'un solide soumis à deux
+forces     et      est en équilibre, alors : Les deux forces ont la même droite
+d'action , la même intensité et des sens opposés.
+F
+P
+FP
+=+()
+0
+X
+X
+X
+X
+X
+X
+X
+X
+X
+2.4.Cochons la représentation correcte de la condition d'équilibre de (S) :
+b - Le corps (S) est soumis à l'action de la Terre :
+N / kgN / gkg / Ng / N
+seulement aux
+étapes 1 et 3
+pendant les
+3 étapes
+seulement en G
+10
+(à l'équilibre)
+(S)
+A
+G
+F
+(S)
+A
+G
+F
+(S)
+A
+G
+F
+(S)
+A
+G
+F
+FP
+28
+L'intensitéLa droite d'actionLe sensLe point d'application
+R=P=1200N
+La droite verticale qui
+passe par (C) et le
+centre de gravite (G)
+de (C) vers
+le haut
+Le centre (C) de surface
+de contact entre le corps
+(S) et la camionnette
+- a. Relions chaque dipôle électrique au nom correspondant :
+b. Mettons une croix " X "devant la bonne réponse :
+On a R = U / I = 24V / 500mA = 24V / 0.5A = 48Ω
+- L'énergie électrique consommée par un appareil de chauffage de puissance P est
+exprimée par :
+- Relions par une flèche chaque grandeur physique à l'unité
+correspondante :
+- Répondons aux affirmations suivantes par "Vrai" ou "Faux" :
+a- La masse d'un corps à Rabat est 2,0kg et sa masse A Paris est l,8Kg Faux
+b- La trajectoire du mouvement d'un point de l'aiguille d’une montre est
+curviligne Faux
+c- La force exercée par l'aimant sur un clou en fer est une action mécanique à
+distance répartie Vrai
+d- La vitesse d'un véhicule Influe sur sa distance de freinage d
+R
+Vrai
+- Cochons la bonne proposition :
+a) L'unité internationale de la vitesse moyenne est :
+b) La durée du temps effectuée par un mobile est exprimée par sa vitesse
+moyenne V et la distance parcourue d par la relation :
+c) La masse m d'un corps du poids P, g l'intensité de pesanteur, est exprimée
+par la relation : :
+d) L'instrument de mesure de l'intensité de la force est :
+Exercice 1
+10pts
+Exercice 2
+6pts
+11
+22
+- Complétons les phrases ci-dessous par les expressions convenables :
+a - Le mouvement et le repos sont des notions relatives .
+b - L'unité de l'intensité de pesanteur dans le système International est N.Kg
+-1
+.
+c - Lors du freinage, la nature du mouvement du véhicule est ralentie .
+d - Pour décrire le mouvement ou le repos d'un corps. Il faut définir un corps
+référentiel
+- Faisons le bilan des forces exercées sur le corps (S) :
+- Calculons P l'intensité du poids du corps :
+On a : P = m × g  alors  m = P / g ,
+Application numérique : P = 120kg × 10 N.kg
+-1
+= 1200 N .
+- Complétons le tableau ci-dessous par les caractéristiques de la force R exercée
+par la camionnette sur le corps (S) :
+- Représentons R le vecteur de la force exercée par la surface de la camionnette
+sur le corps (S) :
+33
+11
+22
+33
+44
+11
+22
+33
+Partie 2 : Mouvement et équilibre d'un corps (5pts)
+Partie 1 : Restitution des connaissances du cours (5pts)
+- 4.1. La signification physique de chacune des indications indiquées sur
+le chauffage :
+220V : Tension électrique nominale.
+2.2kW : Puissance électrique nominale.
+4.2. Calculons I l'intensité du courant électrique :
+On a :  P = U × I    Alors    I = P / U
+Application numérique :  I = 2.2kW / 220V =  2200W / 220V  = 10A
+4.3. Vérifier que énergie électrique consommée par le chauffage électrique
+lors de son fonctionnement normal pendant t=1,25h est Ec = 2750Wh :
+On a :   E = P × t
+Application numérique   E = 2200W × 1.25h = 2750Wh
+4.4. Déterminons l'indication du compteur à la fin du fonctionnement :
+E = 5368kWh + 5kWh = 5373 kWh
+44
+km.h
+-1
+km.s
+-1
+m.s
+-1
+m.h
+-1
+∆t = d × V∆t = V / d∆t = d / V∆t = V - d
+m = P × gm = P / gm = g / Pm = P - g
+BaromètreDynamomètreAmpèremètre
+Ampèremètre
+Générateur électrique
+Voltmètre
+Conducteur ohmique
+Ohm (Ω)
+Joule (J)
+Watt (W)
+Ampère (A)
+Puissance électrique
+Intensité électrique
+La résistance électrique
+Énergie électrique
+R = 48ΩR = 12ΩR = 0.048Ω
+E = U × IE = P × tE = P × I
+Correction d'examen régional (Rabat - Salé - Kénitra - 2023)
+Les forces appliquées sur le corps (S) sont :
+: Force appliquée par la surface de camionette (force de contact).
+: Poids de corps (S) (force à distance) .
+R
+P
+X
+X
+X
+X
+X
+X
+- 5.1. Cochons la proposition Juste :
+5.2. Calculons la vitesse moyenne de la camionnette en km.h
+-1
+et en m.s
+-1
+:
+On a : v = d / t . Avec  d = 30km et t = 8h25min - 8h00min = 25min = 5h/12
+Application numérique :  v = 30km / (5h/12) = 30km×12/5h =72 km.h
+-1
+.
+v = 72 km.h
+-1
+= (72/3.6) m.s
+-1
+= 20 m.s
+-1
+5.3. On a la vitesse limite à 60Km/h, et la la vitesse moyenne de la camionnette est
+72 km/h supérieur de la vitesse maximale autorisée, donc le conducteur n'a pas
+respecté la vitesse limite.
+55
+- Le corps (S) est en mouvement par rapport à la camionnette.
+- Le corps (S) est au repos par rapport au panneau de limitation de vitesse.
+- Le corps (S) est au repos par rapport à la camionnette.
+Le centre (C) de surface de
+contact entre le corps (S) et
+la camionnette
+Le point d'action
+La droite verticale qui
+passe par C et G
+La direction
+Du point C vers le hautLe sens
+R = 1200N , Selon
+l'échelle  600N        1cm
+Alors   1200N         2cm
+L'intensité
+R
+2cm
+X
+- Calculons la distance de réaction de la voiture A si le conducteur est
+fatigué :
+On a : V= 100 km.h
+-1
+= (100/3.6) m.s
+-1
+= 27.78 m.s
+-1
+.
+Et on a D
+R1
+= V × t
+R
+= 27.78 m.s
+-1
+×  2s = 55.56 m.
+- Calculons la distance D
+F
+:
+On a D
+A
+= D
+R1
++ D
+F
+Alors D
+F
+= D
+A
+- D
+R1
+Application numérique : D
+F
+= 85.6m - 55.56m ≈ 30m
+La situation comme le conducteur de la voiture A a aperçu un obstacle
+(voiture B) à la distance d+D
+A(B)
+avec D
+A(B)
+la distance d’arrêt de voiture B.
+On a D
+A(B)
+= D
+R2
++ D
+F2
+et on a la distance d’arrêt de la voiture A est : D
+A(A)
+= D
+R1
++ D
+F1
+comparons les deux distances (d+D
+A(B)
+) et D
+A(A)
+.
+On a les deux voitures ont la même distance de freinage (D
+F2
+= D
+F1
+).
+On a d+D
+A(B) -
+D
+A(A)
+= d+ D
+R2
++ D
+F2
+-D
+R1
+- D
+F1
+= d+ D
+R2
+-D
+R1
+> 0
+Alors
+(d+D
+A(B)
+)
+> D
+A(A)
+, Donc la voiture A n'a pas heurté la voiture B.
+Exercice 3
+4pts
+11
+22
+33
+29
+1.1. Déterminons la nature du mouvement du sauteur  :
+Puisque les distances parcourues par le sauteur pendant des intervalles de
+temps égaux sont de plus en plus grandes. Alors la vitesse augmente au cours
+du temps. Donc le mouvement est accéléré.
+1.2. Calculons la vitesse moyenne du centre de gravité du sauteur entre les
+positions G1, et G5 :
+On a : v = d / t . Avec  d = G
+1
+G
+5
+= 10m et t = 4 × 2s = 8s .
+A.N:  v = 10m / 8s = 1.25 m.s
+-1
+.
+2.1.Représentons, sur la figue 2, la force     :
+2.3. Calculons  la masse du sauteur :
+On a : P = m × g  alors  m = P / g ,
+A.N:  m = 600N / 10 N.kg
+-1
+= 60 kg.
+2.2. Déterminons les caractéristiques du poids du sauteur (en équilibre) .
+-Mettons croix (X) devant la réponse juste.
+a - On exprime la loi d'Ohm entre les bornes d'un conducteur ohmique par la
+relation :
+b - La puissance électrique s’exprime par la relation :
+c - La relation entre le watt-heure et le joule (J) est :
+d - On exprime l'énergie électrique consommée par un appareil de chauffage par la
+relation :
+X
+X
+X
+X
+- Calculons l’intensité totale It.
+On a :  Pt = U × It  alors  It  = Pt  / U .
+avec Pt la puissance totale de tous les appareils électriques.
+On a donc Pt = 2500W + 2×100W + 1500W = 4200W
+A.N:  It = 4200W / 230V = 18.26A .
+Alors la valeur It est inférieur de Imax = 30A. (It < Imax).
+Donc le disjoncteur permet le fonctionnement de tous les appareils élec-
+triques de l'atelier en même temps sans interruption d'électricité.
+- Calculons l’énergie électrique totale consommée pendant ce mois :
+On a :  Et = 30 × Pt × It  .
+A.N:  Et = 30 × 4200W × 3h = 378000Wh = 378kWh .
+Alors la consommation électrique totale est supérieur de 100kWh.
+Donc saïd a dépassé la première tranche de consommation pendant ce mois.
+- Répondons par vrai ou faux :
+a- L'unité de la vitesse dans le système international est le m.s
+-1
+Vrai
+b- Un corps immobile n'est soumis à aucune action mécanique. Faux
+c- L'effet du vent sur la voile d'un bateau est une action à distance Faux
+- Complétons par ce qui convient :
+a- L'intensité du poids d'un corps varie selon le lieu et l'altitude tandis que sa
+masse reste constante.
+b- On dit qu'un corps solide est en mouvement de rotation autour d'un axe
+fixe lorsque tous les points de ce corps effectuent des trajectoires circulaires
+autour de cet axe.
+c- On dit qu'un corps est en mouvement uniforme lorsque celui-ci parcourt
+des distances égales dans la même durée du temps.
+Exercice 1
+10pts
+Exercice 2
+6pts
+Exercice 3
+4pts
+T
+11
+11
+22
+22
+- Calculons la distance de réaction Dr :
+On a : Dr = v × tr = 54 km.h
+-1
+× 1s = 15 m.s
+-1
+× 1s = 15m
+et on la distance d'arrêt (Da) :
+Da = Dr + Df  = 15m + 10m = 25m.
+Donc Dr = 15m et Df = 10m et Da = 25m .
+33
+11
+11
+22
+U = R × IU = R × I
+2
+I = R × U
+P = U / IP = R × IP = U × I
+1Wh = 3.6 J1J = 36000 Wh1Wh = 3600 J
+E = R × I
+2
+× tE = R × I × t
+2
+E = R × I
+2
+Partie 2
+Partie 1
+La distance de réaction
+La distance de freinage
+La distance d'arrêt
+La distance
+25
+15
+10
+Sa valeur en mètre
+- 2.1 - Déterminons, graphiquement, la valeur de la résistance R :
+On a :  R = U / I .
+A.N:  R = 22V / 0.5A = 44Ω .
+2.2 - Montrons que la puissance nominale a une valeur de  1,1 kW :
+On a :  P = U
+2
+/ R .
+A.N:  P = (220V×220V) / 44Ω = 1100W = 1.1 kW.
+2.3 - Calculons l’énergie électrique E consommée :
+On a :  E = P
+× t .
+A.N:  E = 1100W × 2h  = 2200Wh.
+2.4 - Calculons le nombre de tours du disque du compteur :
+On a :  n = E / C .
+A.N:  n = 2200W / 2.5 Wh.tr
+-1
+= 880 tr.
+22
+Correction d'examen régional (Béni mellal - Khénifra - 2023)
+Le point ALe point d'action
+La droite verticale qui passe par ALa droite d'action
+Du point A vers le hautLe sens
+T = 600N , Selon l'échelle
+300N        1cm    Alors   600N         2cm
+L'intensité
+T
+2cm
+L'intensitéLa directionLe sensLe point d'application
+P=T=600N
+La droite veticale
+qui passe par G
+Du point G
+vers le bas
+Le centre de gravite de
+sauteur (G)
+DisjoncteurCompteur
+30
+L'intensitéLa directionLe sensLe point d'application
+P =1N
+La droite veticale
+qui passe par G
+Du point G
+vers le bas
+Le centre de gravite G
+de corps (S)
+- Déterminons les deux caractéristiques nominales de cette bouilloire :
+220V : Tension électrique nominale.
+1760W : Puissance électrique nominale.
+Donc les caractéristiques de la force F sont :
+- Déterminons la valeur de m la masse du corps (S) :
+On a P = m × g , alors m = P / g
+Application numérique : m = 1N / 10 N.kg
+-1
+= 0.1 kg.
+- Calculons la distance d’arrêt de la voiture si la route est sèche :
+On a : V= 72 km/h
+= (72/3.6) m.s
+-1
+= 20 m.s
+-1
+.
+et on a la distance d’arrêt D
+A
+= D
+R
++ D
+F1
+.
+avec D
+R
+= V × t
+R
+= 20 m.s
+-1
+×  1s = 20 m.
+et avec D
+F1
+= 0.08 × V
+2
+= 0.08 × 20
+2
+m
+= 32 m.
+Application numérique  D
+A
+= 20m
++ 32m = 52m.
+Alors D
+A
+< d , Donc  la voiture de Madame "Leila" ne va pas heurter l’obsta-
+cle si la route est sèche.
+- Calculons la distance d’arrêt de la voiture si la route est mouillée :
+On la distance d’arrêt D
+A
+= D
+R
++ D
+F2
+.
+avec D
+R
+= V × t
+R
+= 20 m.s
+-1
+×  1s = 20 m.
+et avec D
+F2
+= 0.17 × V
+2
+= 0.17 × 20
+2
+m
+= 68 m.
+Application numérique  D
+A
+= 20m
++ 68m = 88m .
+Alors D
+A
+> d , Donc la voiture de Madame "Leila" va heurter l’obstacle si la
+route est mouillée..
+- Le conseil qui on peut donner à Madame "Leila " lors de la conduite de
+sa voiture sur la route mouillée sont :
+- il faut réduire la vitesse de la voiture pour diminuer la distance de freinage
+ce qui réduit la distance d’arrêt de voiture, et afin d'éviter la collision avec les
+obstacles .
+- Relions chaque grandeur physique (groupe (1)) avec son unité dans le
+système international des unités (groupe (2)) :
+- Répondons  par «vrai» ou «faux» :
+a- La masse et l’intensité du poids d’un corps sont exprimés avec la même
+unité : Le kilogramme (kg). Faux
+b- La distance de freinage est égale à la somme de la distance d’arrêt et de la
+distance de réaction. Faux
+c- Le compteur électrique d’une installation électrique domestique permet de
+mesurer  l’énergie électrique consommée. Vrai
+d- Tout solide en rotation autour d’un axe fixe, il est en translation circulaire.
+Faux
+Exercice 1
+8pts
+Exercice 2
+8pts
+Exercice 3
+4pts
+11
+22
+- Mettons une croix (X) dans le cercle   qui correspond à la proposition
+correcte :
+- 4. Complétons les phrases ci-dessous par les mots convenables :
+a- L’intensité d’une force se mesure par un dynamomètre .
+b- Un appareil électrique fonctionne normalement sous ses caractéristiques
+nominales .
+c- Lorsqu’un chauffeur d’un bus est en mouvement par rapport à la route,
+alors il est au  repos par rapport à ce bus.
+d- L'énergie électrique consommée par un appareil de chauffage se trans-
+forme en énergie thermique .
+a- Si la valeur de la vitesse d'un mobile augmente, alors son mouvement est :
+c- La relation liant la tension électrique U aux bornes d'un conducteur
+ohmique de résistance électrique R et l'intensité I du courant électrique qui le
+traverse, est:
+b- On représente la force modélisant une action mécanique par :
+d- La description de l'état du mouvement d'un solide ou l'état de son repos
+nécessite le choix d'un autre corps, appelé le corps de :
+33
+44
+44
+11
+11
+22
+33
+- Calculons la valeur efficace I de l’intensité du courant électrique circulant
+dans la bouilloire lorsqu’elle fonctionne d’une façon normale :
+On a :  P = U × I    Alors    I = P / U
+Application numérique :  I = 1760W / 220V =  8A
+- Calculons en kilowattheure (kWh) l'énergie consommée :
+On a :  E = P
+× t ,
+A. N :  E = 1760W × 6min  = 1760W × (1h/10) = 176 Wh = 0.176 kWh
+22
+33
+L’énergie électrique
+La puissance électrique
+L'intensité d'une force
+La vitesse moyenne
+Newton (N)
+Watt (W)
+Kilogramme (kg)
+Joule (J)
+mètre par seconde (m.s
+-1
+)
+groupe 1groupe 2
+AccéléréUniformeRetardé
+I = R × UU = R × IR = U × I
+Une ligneUne droiteUn vecteur
+DynamiqueStatiqueRéférence
+Deuxième partie.
+-Représentons sur la figure 1, les deux forces P et F :
+Selon l’échelle : 0,5 N          1cm   ,
+alors F = P = 1N            2cm
+55
+Correction d'examen régional (Casablanca - Settat - 2023)
+X
+X
+X
+X
+11
+Première partie.
+-Les forces appliquées sur le corps (S) sont :
+: Force appliquée par le fil sur le corps (S) : (force de contact).
+: Poids de corps (S) (force à distance) .
+F
+P
+- Déterminons les caractéristiques de P (le poids du corps (S)) :
+- Les caractéristiques de la force F exercée par le fil sur le corps (S) :
+22
+33
+D’après l’énoncé de la condition d’équilibre qui dit : Lorsqu'un solide soumis
+à deux forces     et      est en équilibre, alors : Les deux forces ont la même
+droite d'action , la même intensité et des sens opposés.
+F
+P
+L'intensitéLa directionLe sensLe point d'application
+F = P =1N
+La droite veticale qui
+passe par G et M
+Du point M
+vers le haut
+Le point M de contact
+entre le fil et le corps (S)
+F
+2cm
+P
+2cm
+31
+- La signification des valeurs indiquées sur l’afficheur fissuré :
+0.4W : La puissance électrique nominale.
+3.8V : La tension électrique nominale.
+- 2.1. Dessinons le schéma du montage expérimental réalisé :
+1.3. Déterminons la nature du mouvement du compartiment (S) par rapport
+à la terre :
+• Nature du mouvement : Mouvement accéléré .
+• Justification : Car les distances parcourues par le compartiment pendant des
+intervalles de temps égaux sont de plus en plus grandes, donc la vitesse du
+compartiment augmente au cours du temps .
+1.2.
+a - Ecrivons l'expression de la vitesse moyenne et son unité internationale :
+- Expression de la vitesse moyenne :  V = d / t
+- Unité internationale : m.s
+-1
+.
+b - Calculons, en m.s
+-1
+, puis en km.h
+-1
+, la vitesse moyenne du compartiment
+(S) entre les deux positions M
+1
+et M
+3
+:
+On a V = d / t , avec d = 25 m et t = 2×2.5s = 5s .
+A.N : V = 25m / 5s = 5 m.s
+-1
+= 5 × 3.6 km.h
+-1
+= 18 km.h
+-1
+Exercice 1
+9.5pts
+Exercice 2
+6.5pts
+11
+22
+ClassificationForces appliquées au compartiment (S)
+force de contact
+force à distance
+- 2.1. Faisons le bilan des forces appliquées au compartiment (S) :
+11
+22
+FauxVrai
+- Le passager est au repos par rapport au compartiment (S).
+- Le passager est au repos par rapport à la terre.
+- Le compartiment (S) est en mouvement de translation
+rectiligne par rapport à la terre.
+- La trajectoire est la ligne liant les positions occupées par le
+point M du compartiment (S)
+- 1.1. Répondre par vrai ou faux à chacune des
+propositions en cochant la case convenable :
+Figure 4
+Correction d'examen régional (Marrakech - Safi - 2023)
+F
+2.3- L’énoncé de la condition d’équilibre : Lorsqu'un solide soumis à deux
+forces     et      est en équilibre, alors : Les deux forces ont la même droite
+d'action , la même intensité et des sens opposés.
+F
+P
+FP
+=+()
+0
+X
+X
+X
+X
+: Force appliquée par le support sur le compartiment
+: Poids du compartiment
+F
+P
+2.5. Représentons les vecteurs forces appliquées sur le compartiment (S) :
+On a l’échelle : 2000N          1cm, alors F = P = 4000N          2cm.
+2.4. Suivant la condition d’équilibre, les caractéristiques de la force      exercée
+par le support sur le compartiment :
+2.2.
+a- Définir le poids d'un corps et donner son unité internationale :
+• La définition : Le poids d’un corps est la force exercée par la gravitation de
+la terre sur un corps.
+• L’unité internationale : L'unité est le newton de symbole N .
+b. Les caractéristiques du poids du compartiment (S) :
+L'intensitéLe sens
+La ligne d'action
+Le point d'application
+P = m × g
+P =400kg×10N/kg
+P = 4000N
+Du point
+G vers le
+bas
+La droite verticale
+qui passe par G
+Le centre de gravite G
+du compartiment (S)
+L'intensitéLe sens
+La ligne d'action
+Le point d'application
+F = P = 4000N
+Du point
+A vers le
+haut
+La droite verticale
+qui passe par A
+et G
+Le point de contact A
+entre le support et le
+compartiment (S)
+P
+2cm
+2.2 - En exploitant les résultats indiqués dans le tableau , cochons l’expression
+de la puissance électrique :
+2.3. Cochons la case correspondant à l'afficheur convenable que l’élève doit
+choisir pour son smartphone :
+a. Expression :
+b. Justification : D'apres le tableau on observe que :
+- Pour la lampe L1 :  12.03V × 0.05A = 0.6015W ≈ 0.6W .
+- Pour la lampe L2 :  12V × 0.41A = 4.92W ≈ 5W .
+Donc on conclut que la bonne expression est : P = U × I.
+Justification : Pour l'afficheur 2 :
+On a P =  U
+2
+× I
+2
+= 3.8V × 0.105A = 0.399W ≈ 0.4W .
+P = U + I
+P = U . IP = U / IP = U - I
+Afficheur 1Afficheur 2
+X
+X
+X
+X
+- 3.1. Cochons la case correspondant à la relation qui exprime la loi
+d'Ohm :
+3.2. Déterminons  en cochant la case convenable, l'expression de la résistance
+R :
+3.3. Calculons la valeur de la résistance R :
+On a P =  U
+2
+/ R
+, alors R = U
+2
+/ P
+Application numérique : R = (220V)
+2
+/ 55W = 880 Ω .
+U = R . I
+U = R / II = R . UU = R + I
+R = P . UR = U
+2
+/ PR = P . U
+2
+R = U / P
+33
+32
+- Déterminons la durée t nécessaire pour chaque déplacement quotidien
+(aller + retour) de  l’étudiante :
+On V = d / t , alors t = d / V
+Application numérique : t = 20km / 30km.h
+-1
+= 2h/3 = 40min
+donc 20min pour l'aller et 20min le retour.
+- Calculons le coût mensuel de déplacement de l'étudiante par la moto
+électrique :
+- L’énergie électrique consommée pendant chaque déplacement quotidien
+(aller + retour) est :
+On a E = P × t , Application numérique  : E = 1.5kW × (2h/3) = 1kWh.
+- Calculons l’énergie électrique consommée mensuelle :
+On a le nombre de déplacement pendant un mois est : n=20
+Donc L’énergie consommée mensuelle:  E
+t
+= 20 × E = 20 × 1kWh = 20 kWh .
+Et on a le coût d'un kilowattheure (1kWh) est de 1.20 Dirhams (DH).
+Donc le coût mensuel est 20 × 1.2DH = 24 DH .
+Exercice 3
+4pts
+11
+22
+Correction d'examen régional (Marrakech - Safi - 2023)
+33
+- La poulie est en de mouvement de rotation car tous les points de la poulie
+sont en mouvement selon des trajectoires circulaires de même axe de
+rotation.
+- Déterminons la nature du mouvement de la charge pendant chaque
+phase :
+Phase 3Phase 2Phase 1Phase
+Retardé car la
+vitesse diminue
+au cours du
+temps
+Uniforme car
+la vitesse est
+constante au
+cours du temps
+Accéléré car la
+vitesse augmente
+au cours du
+temps
+Nature du
+mouvement
+- Déterminons la distance parcourue par la chargé pendant la phase 2 :
+On a : V = d / t , alors d = V × t .
+A partir de la figure3 , t = 2s et V = 4 m/s.
+Application numérique : d = 4m/s × 2s = 8m .
+- La signification des indications (10kW et 220V):
+10kW : La puissance électrique nominale .
+220V :  La tension électrique nominale .
+- Calculons en kWh l'énergie consommée par le moteur :
+On a E = P × t , Application numérique  : E = 10kW × 6h = 60 kWh.
+- Calculons le coût mensuel (30 jours) à payer :
+- L'énergie mensuelle consommée par le moteur est :
+E
+t
+= 30 × 60kWh = 1800 kWh
+et on a  le prix de 1kWh est 1DH .
+Donc le coût mensuel est : 1800 × 1DH = 1800DH
+-Expliquons à Mr Ali la cause de cette panne d'électricité :
+- Calculons l’intensité totale It de l'installation de Mr Ali .
+On a :  Pt = U × It  alors  It  = Pt  / U .
+avec Pt la puissance totale de tous les appareils électriques.
+On a donc Pt = P
+1
++P
+2
++P
+3
++P
+4
+= 3.2kW + 920W+ 7×30W  + 180W
+= 3200W + 920W + 210W + 180W = 4510W
+A.N:  It = 4510W / 220V = 20.5 A .
+Alors la valeur It est supérieur de Imax = 20A. (It > Imax).
+Donc le disjoncteur va couper le courant sur tous les appareils électriques de
+de l'installation de Mr Ali .
+-Déterminons le plus grand nombre de lampes :
+On a la puissance maximale :  Pmax = U × Imax = 220V × 20A = 4400W  .
+et Pt la puissance totale de tous les appareils électriques.
+La puissance totale doit être inférieur de la puissance maximale (Pt < Pmax)
+Donc Pt = P
+1
++P
+2
++P
+3
++P
+4
+= 3200W + 920W + (x×30W) + 180W < 4400W
+avec x c'est le nombre des lampes.
+alors (x×30W) < 100W , Donc x < 100W/30W , Donc x <3.33 .
+Donc le plus grand nombre de lampes pouvant fonctionner en même temps
+avec le climatiseur, le fer à repasser et le réfrigérateur sans que le disjoncteur
+coupe le courant électrique est égale a 3.
+- Répondons par vrai ou faux :
+1-1) On représente une force par un vecteur Vrai .
+1-2) le mouvement et le repos d'un corps solide sont relatifs, car ils
+dépendent du corps de référence. Vrai .
+1-3) La distance d'arrêt est calculée par la relation suivante : dA = dR + dF .
+Vrai .
+1-4) La distance de réaction dépend de la vitesse et de l'état du conducteur.
+Vrai .
+Exercice 1
+8pts
+Exercice 2
+8pts
+Exercice 3
+4pts
+11
+- Choisissons la bonne réponse :
+2-1) Le point d’application d'une force de contact localisée est :
+2-2) L'action d'un aimant sur un clou en fer est une action :
+2-3) Lorsqu’un corps solide est en équilibre sous l’action de deux force T et P,
+alors :
+2-4) Pour mesurer l'intensité d'une force, on utilise :
+- Définition du poids d'un corps solide : C'est la force exercée par la
+gravitation de la terre sur un corps ,  est un grandeur variable en fonction  du
+lieu ( latitude et altitude ), le symbole de l’intensité de poids est P et l'unité de
+mesure c'est le newton de symbole N et se mesure avec le dynamomètre.
+- Relation de la loi d'Ohm : U = R × I .
+- Complétons le tableau suivant :
+- Le bilan des forces exercées sur la charge sont :
+- Représentons les forces     et     appliquées sur
+la charge :
+On a l'échelle :  2500N           1cm .
+Alors F = P = 5000N              2cm .
+- Les caractéristiques de la force appliquée par la corde sur la charge :
+Grandeur physiqueSymboleUnité internationale
+La puissance électriquePWatt (W)
+L'énergie électriqueEJoule (J)
+22
+33
+44
+55
+11
+22
+33
+33
+44
+11
+22
+33
+11
+22
+Le point de contactLe centre de surface du contact
+Première partie : Étude de l'équilibre de la charge
+- A t=10s, la vitesse de charge est nulle (V=0) ,donc
+la charge est au repos par rapport à la terre.
+- La charge est en de mouvement de translation rectiligne car tout
+segment reliant deux points quelconques de charge conserve la même
+11
+22
+Deuxième partie : Étude de mouvement de la charge
+Troisième partie : Étude de la consommation mensuelle
+Correction d'examen régional (Drâa - Tafilalet - 2023)
+X
+à distanceDe contact répartie
+X
+T + P = 0T - P = 0
+X
+Une balanceUn dynamomètre
+X
+: Force appliquée par la corde sur la charge .
+: Poids de la charge .
+F
+P
+F
+P
+L'intensitéLe sens
+La ligne d'action
+Le point d'application
+F = P = m × g
+F = 500kg×10N/kg
+F = 5000 N
+Du point
+O vers le
+haut
+La droite verti-
+cale qui passe par
+O et G
+Le point de contact O
+entre la corde et
+la charge .
+P
+2cm
+DisjoncteurCompteur
+34
+2.2. Calculons l’intensité F de la force F :
+On a la ballon est en équilibre sous l'action de deux forces     et      .
+Donc les deux forces ont la même droite d'action , des sens opposés et la
+même intensité , alors F = P = mg = 0.45kg × 10N.kg
+-1
+= 4.5N
+2.3 Representons sur la figure 1, les deux forces    et    :
+-2.1. Mettons une croix (X) devant la ou les bonne(s) réponse(s) :
+- 3.1. Quel effet provoque le pied de hakimi sur le ballon au moment du
+tir :
+- Entourons la relation qui exprime la puissance électrique consommée par le
+grille-pain :
+- Relions chaque grandeur physique au symbole de l'unité qui lui convient :
+- 4.1. Déterminons la  valeur de la résistance R du grille-pain :
+Déterminons, graphiquement, la valeur de la
+résistance R  :
+On a :  R = U / I ,
+Application numérique :  R = 10V / 0.2A = 50 Ω .
+4.2. Calculons  l’intensité I du courant électrique qui
+traverse la résistance :
+On a :  U = R × I    Alors    I = U / R
+Application numérique :  I = 220V / 50Ω =  4.4 A
+- Choisissons la bonne réponse :
+• La valeur 450g représente :
+• On mesure cette valeur par :
+• La relation entre le poids et
+la masse d'un corps est  :
+• La masse du ballon change
+en fonction du lieu :
+Exercice 1
+10pts
+Exercice 3
+4pts
+11
+22
+33
+22
+33
+44
+P = U / IP = I / UP = U × I
+Mécanique : La Gloire d'une Nation
+- Calculons la puissance électrique consommée par le grille-pain :
+On a :  P = U
+2
+/ R , Application numérique :  P = (220V)
+2
+/ 50Ω =  968 W
+- Le grille-pain transforme presque la totalité de l’énergie électrique (E)
+consommée en énergie thermique .
+- Calculons l’énergie électrique consommée pendant cette journée :
+E = 5246 kWH - 5242 kWh = 4kWh .
+-Convertissons les valeurs suivantes en unité internationale  :
+E = 175 Wh = 175 × 3600J = 630 000 J
+V = 15 km.h
+-1
+= (15/3.6) m.s
+-1
+= 4.17 m.s
+-1
+-Déterminons le temps t que peut durer la batterie :
+Selon les caractéristiques techniques de la trottinette électrique :
+- L'énergie électrique stockée par la batterie de la trottinette est: E=175Wh.
+- La puissance électrique correspondant à cette vitesse est : P =250W .
+et on a : E = P × t, alors t = E / P
+Application numérique : t = 175Wh / 250W = 0.7h = 42min .
+-Calculons la distance d que peut parcourir l’élève pendant la durée t :
+On a : V = d / t , alors d = V × t
+avec t = 0.7h et V = 15 km.h
+-1
+.
+Application numérique : d = 15 km.h
+-1
+× 0.7h = 10.5 km .
+-On la ditance du trajet -collège-maison-aller-retour est :
+d
+1
+= 2 × D = 6km × 2 = 12km .
+Et on la distance d que peut
+parcourir l’élève pendant une seule
+charge de batterie est : d = 10.5km
+alors d < d
+1
+.
+Donc l’élève n'arrive pas à parcourir le trajet -collège-maison-aller-retour avec
+une seule charge de batterie.
+55
+66
+77
+11
+44
+22
+33
+44
+• F est une force : (0.5pt)
+• P est une force : (0.5pt)
+• Les deux forces F et P ont : (1pt)
+de contact
+de contact localise
+deux sens opposes
+de pesanteur
+de contact réparti
+même droite d'action
+à distance
+à distance
+même sens
+DynamiqueStatique
+3.2.a. La nature de la trajectoire du ballon est curviligne .
+3.2.b. La forme de la trajectoire du ballon  apparail-elle : n'est pas semblable
+car la trajectoire change selon le corps du référence (observateurs 1 et 2)
+- Les règles de la sécurité routière que doivent respecter les conducteurs
+de voitures :
+- Respectez les limitations de vitesse et les panneaux de signalisation.
+- Ne pas utiliser un téléphone portable en conduisant.
+W
+J
+Ω
+Résistance électrique
+Puissance électrique
+Énergie électrique
+Correction d'examen régional (Souss - Massa - 2023)
+F
+F
+P
+P
+La masse m
+P = m × g
+Vrai
+Le poids P
+P = m + g
+Faux
+Un dynamomètreUne balance
+X
+X
+X
+X
+X
+X
+X
+X
+X
+Le centre de gravité GLe point de contact ALe point d'action
+La droite verticale qui
+passe par A et G
+La droite verticale qui
+passe par A et G
+La droite d'action
+Du point G vers le basDu point A vers le hautLe sens
+P = 4.5N , Selon l'échelle
+2.25N        1cm ,  Alors
+4.5N         2cm
+F = 4.5N , Selon l'échelle
+2.25N        1cm ,  Alors
+4.5N         2cm
+L'intensité
+F
+P
+P
+2cm
+- Complétons la phrase suivante avec les mots convenables :
+La tension U aux bornes d’un conducteur ohmique est égale au produit de sa
+résistance R par l'intensité I du courant électrique qui le traverse.
+Exercice 2
+6pts
+11
+0.20.4
+0
+10
+20
+U(V)
+I (A)
+35
+- En appliquant les conditions d'équilibre, déterminons les caractéristiques
+de la force F appliquée par le genou sur le ballon :
+33
+- Représentons sur le schéma  les deux forces     et      .
+On a l’échelle : 2N         1cm , alors F = P = 4N          2cm .
+- Faisons le bilan des forces appliquées sur le ballon :
+- Calculons l’intensité de courant électrique I traversant la bouilloire électrique :
+On a  P = U × I  , alors   I = P / U     ,  A.N      I = 2200W / 220V = 10A
+-Calculons la résistance électrique R de cette bouilloire électrique :
+On a      U = R × I  Alors  R = U / I      A.N       R = 220V / 10A = 22Ω
+- a- Calculons la puissance électrique totale Pt consommée par ces appareils :
+On a      Pt = P1 + P2 + P3 ,   A.N : Pt = 2200W + 500W + 1800W = 4500W.
+b- Calculons l’énergie électrique totale Et consommée en Wh :
+On a      Et = Pt × t ,   A.N : Et = 4500W×30min = 4500W×0.5h = 2250Wh.
+c- Calculons le nombre de tours n effectués par le disque du compteur électrique :
+On a      Et = n × C ,   alors n = Et / C .
+Application numérique : n = 2250Wh / (2,5Wh/tr) = 900 tr .
+- Complétons les phrases suivantes par les mots convenables :
+- On dit qu’ un corps est en mouvement lorsqu’ il se déplace et change sa
+position par rapport à un référence .
+- Quand un corps est en équilibre sous l’action de deux forces, alors ces
+forces ont, même droite d’action sens opposés, et même intensité .
+- Une action mécanique de contact peut être : localisée ou répartie.
+- On modélise une action mécanique par une force qu’on note F
+- Relions par une flèche chaque grandeur dans le groupe 1 à son unité
+internationale dans le groupe 2 :
+Exercice 1
+10pts
+Exercice 2
+6pts
+Exercice 3
+4pts
+11
+22
+11
+44
+- Calculons la durée t mise pour parcourir la rue (du premier au dernier
+poteaux) :
+On a V = d / t , alors t = d / V ,
+avec V = 50km/h = (50/3.6) m/s = 13.89 m/s
+Application numerique : t = 280m / (13.89m/s) = 20.16 s.
+- Déterminer en Wh l’énergie totale Et consommée par toutes les lampes
+utilisées dans cette rue pendant la durée t de passage de la voiture :
+a - Calculons (n) le nombre totale des lampes :
+On a la longueur de la rue ,du premier au dernier poteaux, est : d= 280m et
+la distance entre deux poteaux d’éclairage public est 35m.
+Donc n = 280m / 35m = 8.
+b - Calculons (Pt) la puissance totale de toutes les lampes
+On a Pt = 8 × P = 8 × 3000W = 24000W.
+c - Calculons (Et) l'energie totale consommée par toutes les lampes.
+On a Et = Pt × t , avec t = 20.16s = 20.16h / 3600  = 0.0056 h.
+Application numérique : Et = 24000W × 0.0056h =  134.4 Wh .
+11
+22
+11
+22
+33
+- Les caractéristiques du poids P du ballon :
+22
+m.s
+-1
+kg
+N
+N.kg
+-1
+Groupe 2
+L’intensité de la pesanteur
+L’intensité d’une force
+La masse
+Groupe 1
+- Complétons les phrases suivantes par ce qui convient :
+a- L’unité de l’énergie électrique dans le système international des unités est le joule
+de symbole J .
+b- Les appareils de chauffage se caractérisent par la transformation de l’énergie
+électrique en énergie thermique .
+- Choisissons la bonne réponse :
+a- L’expression de la résistance R d’un conducteur ohmique s’écrit :
+b- L’énergie électrique consommée dans une maison se mesure à l’aide d’un :
+22
+33
+R = I / UR = U / IR = U × I
+wattmètrevoltmètrecompteur électrique
+Partie 1
+Partie 2
+Partie 1
+Partie 2
+Correction d'examen régional (Guelmim - Oued Noun - 2023)
+FauxVrai
+- Le mouvement d’un corps est dit uniforme, lorsque sa vitesse
+augmente.
+- Une action mécanique peut modifier la trajectoire du
+mouvement d’un corps.
+La masse d’un corps est une grandeur physique qui dépend du
+lieu.
+On mesure l’intensité du poids d’un corps par la balance.
+44
+- Répondons par vrai ou faux :
+X
+X
+X
+X
+- Cochons la bonne réponse :
+a- La relation entre la vitesse moyenne , la distance et le temps est :
+b- La relation entre le poids et la masse est :
+c- La distance d’arrêt D
+A
+est déterminée par la relation suivante :
+33
+v = d / tv = t / dv = d × t
+D
+A
+= D
+F
++ D
+R
+D
+A
+= D
+F
+- D
+R
+D
+A
+= D
+R
+- D
+F
+P = m / gP = g / mP = m × g
+X
+X
+X
+ClassificationForces appliquées sur le ballon
+force de contact
+force à distance
+: Force appliquée par le genou sur le ballon .
+: Poids du ballon .
+F
+P
+L'intensitéLa directionLe sensLe point d'application
+P = m × g
+P=0.4kg×10N/kg
+P = 4N
+La droite veticale
+qui passe par G
+Du point G
+vers le bas
+Le centre de gravite
+du ballon (G)
+-5.1) La nature du mouvement du Ballon est retarde car les distances
+parcourues par le ballon pendant des intervalles de temps égaux sont de plus
+en plus petites.
+5.2) Calculons la vitesse moyenne entre les positions  M1 et M2 :
+On a V = d / t , avec d = 40cm = 0.4m et t = 0.1s.
+Application numerique : V = 0.4m / 0.1s = 4 m.s
+-1
+.
+55
+F
+P
+P
+2cm
+Le point A de contact entre le
+genou et le ballon
+Le point d'action
+La droite verticale qui passe par
+A et G
+La direction
+Du point A vers le hautLe sens
+F = P = 4NL'intensité
+FauxVrai
+L’indication 6v représente l’intesité nominale
+L’indication 0,6W représente la puissance nominale
+Si cette lampe reçoit une puissance supérieure à 0,6W, donc
+l’éclat de la lampe est normal
+Si cette lampe reçoit une puissance inférieure à 0,6W, donc
+l’éclat de la lampe est faible
+- Répondons par vrai ou faux :
+11
+X
+X
+X
+X
+X
+X
+36
+- Le corps (S) est suspendu au crochet d'un dynamomètre
+et en équilibre.
+On donne : l'intensité de la pesanteur g = 10 N/Kg
+a -  Faisons le bilan des forces exercées sur le corps (S) :
+b - Déterminons les caractéristiques de la force      exercée par
+le dynamomètre :
+Correction d'examen régional (Laâyoune-Sakia El Hamra - 2023)
+- L'état de mouvement ou de repos d'un objet est toujours lié au corps de
+référence. et le mouvement et le repos sont des notions relatives, et si le corps (les
+arbres) change de position par rapport au corps de référence, on dit qu'il est en
+mouvement.
+- Calculons  en km.h
+-1
+la vitesse moyenne de la bicyclette :
+On a  V = d / t avec t = 1min = 60s  et d = 100 × tours avec 1 tour = 2πr
+donc d = 100 × 2πr = 100×2×3.14×0.25m = 157m
+A.N : V = 157m / 60s = 2.617 m.s
+-1
+= 2.617 × 3.6 km.h
+-1
+= 9.42 km.h
+-1
+.
+- Représentons  en choisissant le matériel adéquat le schéma du montage
+électrique pour déterminer la valeur de la puissance nominale de la lampe de la
+bicyclette :
+- a - Déterminons le type du mouvement de cet ascenseur lors de ce
+déplacement:
+Le type du mouvement est une translation rectiligne , car tous segment joignant
+deux points quelconque de cet ascenseur se déplace en conservant la même direc-
+tion.
+b - Complétons ce qui suit :
+• L'ascenseur est en mouvement par rapport à Khalid.
+• L'ascenseur est au repos par rapport à ahmed .
+c - Calculons la distance parcourue par cet ascenseur :
+On a d = v × t . avec  v = 0,5m.s
+-1
+et t = 9.5s.
+A.N :  d =  0,5m.s
+-1
+× 9.5s = 4.75m .
+- Répondons par vrai(V) ou faux(F) .
+- La nature du mouvement d'un ballon du foot lors de sa chute libre est uniforme.
+faux .
+- L'effet d'une action mécanique est toujours dynamique. faux .
+- L'intensité du poids d'un corps et sa masse sont reliées par la relation : P = m × g
+vrai .
+- Un corps soumis à une seule force peut être en équilibre. faux .
+- Complétons par ce qui convient  :
+• La distance du freinage dépend de la vitesse et de l’état du véhicule puis de l'état de
+la route.
+• La force a quatre caractéristiques, parmi eux l'intensité de celle-ci qui se mesure
+avec un dynamomètre.
+• Les deux forces d'équilibre ont même intensité, même droite d'action et sens
+opposés.
+10pts
+Exercice 3
+4pts
+11
+22
+- Cochons la bonne réponse
+33
+44
+11
+22
+a) Le vent exerce sur un cerf-volant une force :
+De contact localiséeDe contact répartieÀ distance
+b) Plus on s'éloigne de la surface de la terre, plus l'intensité du poids :
+AugmenteDiminueNe varie pas
+c) Le temps de la réaction dépend de :
+L'état des rouesL'état de la routeL'état du conducteur
+- a - Le nom de dipôle est un
+conducteur ohmique par ce que sa
+caractéristique est une fonction
+linéaire et le coefficient directeur
+représente la résistance électrique(R)
+b - D’après la loi d'Ohm :
+On a U = R × I. Alors R = U / I
+A.N : R = 9V / 60mA = 9V/0.06A
+= 150 Ω
+-
+a - La signification de chacune de ces
+indications :
+220V : La tension électrique nominale et 2kW : La puissance électrique nominale
+b - Calculons l'intensité nominale du sèche-cheveux :
+On a : P = U × I   , alors I = P / U  , A.N : I = 2kW / 220V = 2000W/220V = 9.09A
+c - Calculons en Wh puis en J, l'énergie consommée par ce sèche-cheveux pendant
+15 minutes de son fonctionnement :
+On a : E = P × t   , avec t = 15min = 1h/4  et P = 2000W .
+A.N: E = 2000W × 1h/4 = 500Wh = 500 × 3600J = 1800000J
+22
+33
+d - En appliquant la loi d'équilibre, les deux forces      et       ont la même intensité.
+donc on a P = T = m × g , alors m = T / g
+A.N :  m = 2N / 10 N.Kg
+-1
+= 0.2 Kg
+c - Représentons la force    sur le schéma M
+On a l’échelle : 1N         1cm , alors T = 2N          2cm .
+55
+T
+T
+TP
+- Répondons par vrai ou faux :
+- L'unité internationale de la puissance électrique est le Joule J. Faux .
+- Pour calculer l'énergie électrique consommée par un appareil électrique, on ap-
+plique la relation: E = P.t  Vrai .
+- L'appareil de chauffage convertit l'énergie électrique en énergie thermique. Vrai .
+- Le compteur électrique est utilisé pour mesurer la résistance électrique. Faux .
+6pts
+11
+X
+X
+X
+: Force appliquée par le dynamomètre  .
+: Poids du corps (S) .
+T
+P
+Le point A de contact entre le le
+crochet et le corps (S).
+Le point d'action
+La droite verticale qui passe
+par A
+La direction
+Du point A vers le hautLe sens
+T = 2N (Voir le dynamomètre)L'intensité
+20406080
+0
+3
+6
+9
+12
+U(V)
+I (mA)
+37
+- Faisons le bilan des forces appliquées sur la cabine :
+- Calculeons l’intensité du poids de la cabine :
+On a  P = m × g  avec  g = 10N.kg
+-1
+et  m = 500kg
+A.N  P = 500kg × 10N.kg
+-1
+= 5000N
+- Déterminons les caractéristiques de la force    exercée par le
+câble sur la cabine
+- Représentons les deux forces    et    exercées sur la cabine :(voir fig1)
+Ona l’échelle : 2500N          1cm , alors F = P = 5000N           2cm .
+- Calculons la masse m.
+On a P
+0
+= m × g
+0
+donc   m = P
+0
+/ g
+0
+.
+A.N  m = 58.8N / (9.8 N/kg) = 6 kg .
+- Trouvons l'intensité de pesanteur g au sommet du montagne Toubkal.
+la masse est une grandeur constante, donc la masse de pomme de terre au sommet
+du montagne Toubkal est m = 6kg.
+Et on a au sommet du montagne Toubkal P = m × g   donc   g = P / m .
+A.N  m = 58.68N / 6kg = 9.78 N.kg
+-1
+.
+- La balance recommandée à l’agricultrice c'est la balance mécanique romaine
+avec des masses marquées, car elle ne contient pas un ressort qui dépend de la
+valeur de l’intensité de pesanteur.
+- Répondons par vrai(V) ou faux(F) :
+-La nature de la trajectoire d'un point mobile dépend du référentiel choisi Vrai
+-L’unité de la vitesse moyenne dans le système international est le km/h Faux .
+-Le sens d’une force est toujours le même sens que le sens du mouvement d’un corps
+Faux.
+-La droite d’action d’une force ne passe pas nécessairement par son point d’action.
+Faux.
+-Le poids d’un objet est une action mécanique à distance Vrai.
+- Remplissons  le tableau suivant qvec les mots convenables :
+GrandeurUnité de mesureInstrument de mesure
+Varie selon le lieu
+(oui/non)
+MasseKilogrammela balancenon
+PoisNewtonLe dynamomètreoui
+10pts
+Exercice 3
+4pts
+11
+22
+- La cabine de l’ascenseur est en mouvement par rapport au sol.
+- Lors de déplacement de la cabine de l’ascenseur.
+La trajectoire et le type du mouvement de la cabine l’ascenseur sont :
+La trajectoire : Rectiligne.
+Type du mouvement : Translation rectiligne .
+- La nature du mouvement de la cabine est uniforme car la vitesse de la cabine est
+constante.
+- Calculons la durée mise par la cabine pour parcourir la distance entre les deux
+étages A et B :
+On a  t = d / V avec  d = 5m et V = 2.5m.s
+-1
+A.N  t = 5m / (2.5m.s
+-1
+) = 2s
+11
+22
+33
+44
+11
+22
+33
+44
+11
+22
+33
+EXERCICE 1
+EXERCICE 2 (3pts)
+EXERCICE 2
+Partie A
+Partie B
+- Entourons la lettre de la proposition juste :
+- La tension aux bornes d’un conducteur ohmique de résistance électrique
+R = 50Ω si elle est traversée par un courant électrique d'intensité I = 190 mA est :
+- 1 joule est égal à :
+- L’unité internationale de la puissance électrique est :
+- La puissance électrique P reçue par un appareil électrique en courant électrique
+continu est donnée par la relation :
+- Écrivons la lettre de la réponse juste :
+L’intensité du courant électrique qui traverse le four électrique est :
+On a : P = U × I  ,  donc  I = P / U , avec U=220V et P = 3,5kW=3500W .
+A.N  I = 3500W / 220V = 15.90A . donc la lettre de la réponse juste est : b .
+- La signification physique des indications :
+220V : Tension électrique .
+5kW :  Puissance électrique nominale .
+- Calculons l’énergie E
+m
+consommée par ce moteur pendant un mois :
+On a : E
+m
+= 30 × E
+j
+avec E
+j
+l’énergie électrique consommée pendant 1 jour.
+avec E
+j
+= P × t  et p = 5kW = 5000W  et t = 3h.
+A.N  E
+m
+= 30 × 5000W × 3h = 450000Wh = 450000×3600J = 1620000000J
+- Calculons le nombre de tours effectué par le compteur :
+On a E
+m
+= n × C   donc   n = E
+m
+/ C .  avec  C = 3Wh.tr
+-1
+.
+A.N  n =  450000Wh / (3Wh.tr
+-1
+) = 150000 tr.
+U = 9.5 kVU = 0.95 VU = 9.5 V
+abc
+3600 Wh3600 Ws1 W.s
+abc
+Le wattLe voltL'ampère
+abc
+P = U × I
+2
+P = U / IP = U × I
+abc
+I = 15,90 mAI = 15,90 AI = 0.0159 A
+abc
+22
+33
+33
+22
+11
+EXERCICE 1
+- Complétons les phrases en utilisant le mot ou l’expression convenables :
+a - La tension U aux bornes d'un conducteur ohmique est égale au produit de sa
+résistance R par l'intensité I du courant électrique qui le traverse.
+b - Les appareils électriques de chauffage transforment l'énergie électrique en  énergie
+thermique
+c - L’énergie électrique consommée dans une installation électrique domestique pen-
+dant une durée donnée est égale à la somme des énergies électriques consommées
+par chaque appareil électrique en fonctionnement.
+d - La puissance électrique consommée par un appareil de chauffage de résistance R
+est P = R × I
+2
+.
+e - Pour mesurer la puissance électrique consommée par un appareil électrique on
+utilise le wattmètre .
+6pts
+11
+Correction d'examen régional (Dakhla - Oued Ed-Dahab - 2023)
+: Force appliquée par le cable sur la cabine .
+: Poids de la cabine .
+F
+P
+F
+FP
+Intensité de la forceLigne d'actionSens d'actionpoint d'application
+F = P = 5000N
+car la cabine est en
+équilibre sous l'action
+de deux forces   et
+La droite
+veticale qui
+passe par A
+Du point A
+vers le haut
+Le point A de
+contact entre le
+cable et la cabine
+F
+P
+A
+G
+Fig 1
+P
+2cm
+3éme Collége A.P.I.C
+38
+Energie électriqueEnergie thermique
+Compteur électrique
+E = P × t
+t = E / P
+P = E / t
+Q = P × t
+t = Q / P
+P = Q / t
+E = n × C
+C = E / n
+n = E / C
+P = U
+2
+/ R
+R = U
+2
+/ P
+U = √P × R
+La puissance électrique
+P : P  ui ssance é le ctriq ueE : E  nergie  é le ctriq ueE : E  nergie  e le ctriq ueQ : E   nergie  t hermiq ue
+R : R   esi stance é le ctriq ue
+t :  D  ur ée d u t emps
+C : C   anstante c ompteur
+t :  D  ur ée d u t emps
+U : T   ensio n é le ctriq ue
+P : P  ui ssance é le ctriq ue
+n : n  ombre de s t our s
+P : P  ui ssance é le ctriq ue
+U = R × I
+R = U / I
+I = U / R
+Loi d'ohm
+U : T   ensio n é le ctriq ue
+R : R   esi stance é le ctriq ue
+I : I  ntensi té d u c our ant
+P = m × g
+g = P / m
+m = P / g
+Le poids et la masse
+P : P  oid s
+g : C  anstante de  g ravité
+m : m
+asse d u c orps
+P = R × I
+2
+R = P / I
+2
+I = √P / R
+La puissance électrique
+P : P  ui ssance é le ctriq ue
+R : R   esi stance é le ctriq ue
+I : I  ntensi té d u c our ant
+d = v × t
+v : V  itesse m oyenne
+d : l  a di  stance
+t : d  ur ée d u p arcour s
+La vitesse moyenne
+FORMULES ET UNITÉS
+j
+Wh
+1Wh = 3600 J
+Wh
+kWh
+1kwh = 1000 Wh
+km/h
+m/s
+On multiplie  p ar 36  00
+On divise p ar 36  00
+On multiplie  p ar 10  00
+On divise p ar 10  00
+On multiplie  p ar 3.6
+On divise p ar 3.6
+SymboleSignification Facteur
+Tتيرا     Tera10
+12
+Gجيكا  Giga10
+9
+MMegaميكا  10
+6
+kكيلو    Kilo10
+3
+hHectoهيكتو  10
+2
+daديكا     Deca10
+dديسي     Deci10
+-1
+cCentiسنتي  10
+-2
+mMilli     ميلي10
+-3
+μميكرو  Micro10
+-6
+nNanoنانو  10
+-9
+pبيكو    Pico10
+-12
+Facteur des unités
+Grandeur physiqueSymUnité
+Sym
+Unité
+distancedMètrem
+masse mkilogrammekg
+Durée du tempstSeconds
+intensité courantIAmpèreA
+Tension électriqueUVoltV
+Intensité de forceFNewtonN
+Résistance électriqueROhmΩ
+Puissance électriquePWattW
+Energie électriqueEJouleJ
+fréquencefHertzHz
+vitessevm/sm/s
+charge électriqueQCoulombC
+Unités universelle
+10
+m
+× 10
+n
+= 10
+m+n
+10
+5
+× 10
+3
+= 10
+8
+10
+m
+÷ 10
+n
+= 10
+m-n
+10
+5
+÷ 10
+3
+= 10
+2
+(10
+m
+)
+n
+= 10
+m×n
+(10
+5
+)
+3
+= 10
+15
+10
+-m
+= 1/10
+m
+10
+-3
+= 1/10
+3
+Puissance de 10
+Règle :
+Exemple :
+Règle :
+Exemple :
+Régle :
+Exemple :
+Règle :
+Exemple :
+39
+Le sujet est constitué de plusieurs questions dont les réponses vont faire
+appel à diverses compétences : le candidat devra être capable d'extraire des
+informations des documents, de les comprendre et de les expliquer au regard
+des connaissances acquises au cours de l'année. Dans certains cas, il sera
+demandé de légender ou de compléter des schémas.
+Il y a un lien logique entre les questions, il est donc préférable de les traiter
+dans l'ordre, sauf indication contraire.
+Un travail au brouillon est recommandé pour certaines questions avant de
+rédiger sur la copie.
+Un travail régulier est le gage d'une bonne réussite. Appliquez-vous dans la
+tenue de votre cahier afin de pouvoir facilement vous relire.
+Une lecture systématique de votre cours chaque semaine vous permettra de
+le mémoriser facilement.
+Il est possible de faire des petites fiches de résumé du cours pour chacun des
+chapitres dans lesquels sont inscrites les notions essentielles.
+Vérifiez votre matériel
+• Crayons à papier, gomme, crayons de couleur, stylo, effaceur ou blanco.
+• La calculatrice, sur laquelle vous mettrez une étiquette à votre nom.
+• Une montre, afin de surveiller l'heure pendant l'épreuve.
+• Carte d'identité et convocation seront demandées.
+Gérez votre stress
+• Inutile, la veille de l'épreuve, de vous lancer dans de grandes révisions. La
+précipitation ne fera que créer du stress. Si vous avez besoin de vous rassurer,
+relisez tranquillement votre cours ou des fiches de révision, mais en toute
+tranquillité.
+• Prévoyez un moment de détente, par exemple une activité sportive qui
+vous permettra de vous détendre.
+1 - Structure de l'épreuve
+2 - Pour réussir l'examen
+3 - La veille de l'épreuve
+4 - Le jour de l'épreuve
+Gérez votre stress
+• Arrivez 30 minutes avant le début de l'épreuve afin de pouvoir vous instal-
+ler tranquillement et compléter les en-têtes des copies.
+• Concentrez-vous sur votre travail, ce qui vous permettra de réduire le
+stress. Les personnes très émotives prendront soin de respirer profondément
+avant l'épreuve pour faciliter la relaxation.
+Organisez-vous
+• Lisez attentivement et posément l'ensemble du sujet afin d'avoir une vue
+d'ensemble du problème étudié. Faites les calculs au brouillon et vérifiez-les
+une ou deux fois.
+• Soignez la présentation de votre copie : écriture suffisamment grande
+et lisible, paragraphes espacés, questions numérotées. Relisez votre copie
+quelques minutes avant la fin de l'épreuve afin de corriger les éventuelles
+fautes d'orthographe.
+• Soyez précis dans vos réponses et utilisez systématiquement les documents
+qui vous sont proposés.
+• Si vos connaissances sur le sujet sont insuffisantes, pas de panique ! Com-
+mentez, décrivez, expliquez les documents proposés. Cela vous permettra,
+pour certaines questions, d'obtenir des points. De nombreux éléments de
+réponse sont dans les documents.
+• Surtout ne vous découragez pas.
+• Surveillez l'heure, puisque vous ne disposez que de 60 minutes pour
+l’épreuve.
+• Utilisez tout le temps disponible et essayez de faire le maximum pendant la
+durée de l'épreuve.
+Comment résoudre un épreuve
+40
+INDEX EXAMENS
+Correction d'examen régional (Tanger - Tétouan - Al Hoceïma - 2023)Page 25................
+Correction d'examen régional (Béni mellal - Khénifra - 2023)Page 29..............................
+Correction d'examen régional (Souss - Massa - 2023)Page 34..............................
+Correction d'examen régional (Fès - Meknès - 2023)Page 27..............................
+Correction d'examen régional (Marrakech - Safi - 2023)Page 31..............................
+Correction d'examen régional (Laâyoune - Sakia El Hamra - 2023)Page 36......................
+Correction d'examen régional (L’Oriental - 2023)Page 26..............................
+Correction d'examen régional (Casablanca - Settat - 2023)Page 30..............................
+Correction d'examen régional (Guelmim - Oued Noun - 2023)Page 35..............................
+Correction d'examen régional (Rabat - Salé - Kénitra - 2023)Page 28..............................
+Correction d'examen régional (Drâa - Tafilalet - 2023)Page 33..............................
+Correction d'examen régional (Dakhla - Oued Ed-Dahab - 2023)Page 37..............................
+Examen régional (Tanger - Tétouan - Al Hoceïma - 2023)Page 12.............................................
+Examen régional (Béni mellal - Khénifra - 2023)Page 16.............................................
+Examen régional (Souss - Massa - 2023)Page 21.............................................
+Examen régional (Fès - Meknès - 2023)Page 14.............................................
+Examen régional (Marrakech - Safi - 2023)Page 18.............................................
+Examen régional (Laâyoune - Sakia El Hamra - 2023)Page 23..............................................
+Examen régional (L’Oriental - 2023)Page 13..............................................
+Examen régional (Casablanca - Settat - 2023)Page 17.............................................
+Examen régional (Guelmim - Oued Noun - 2023)Page 22.............................................
+Examen régional (Rabat - Salé - Kénitra - 2023)Page 15.............................................
+Examen régional (Drâa - Tafilalet - 2023)Page 20.............................................
+Examen régional (Dakhla - Oued Ed-Dahab - 2023)Page 24.............................................
+PHYSIQUE - CHIMIE

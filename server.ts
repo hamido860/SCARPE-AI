@@ -19,6 +19,7 @@ import JSZip from "jszip";
 import { GoogleGenAI } from "@google/genai";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { jsPDF } from "jspdf";
+import { discoverPdfsFromInput } from "./src/utils/pdfDiscovery.js";
 
 // Initialize Supabase Client (if environment variables are present)
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -103,6 +104,9 @@ async function startServer() {
     if (fs.existsSync(reportPath)) {
       try {
         activeData = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+        if (!Array.isArray(activeData)) {
+          activeData = [];
+        }
       } catch (e) {
         activeData = [];
       }
@@ -1486,8 +1490,8 @@ async function startServer() {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
-        timeout: 30000,
-        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        timeout: 60000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
         validateStatus: (status) => status < 500
       });
 
@@ -1709,11 +1713,11 @@ Answer:`;
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.9",
         },
-        timeout: 15000,
+        timeout: 60000,
         maxRedirects: 5,
         responseType: 'arraybuffer',
         validateStatus: (status) => status < 500,
-        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
       });
 
       if (response.status >= 400) {
@@ -2254,6 +2258,8 @@ Snippet from content / text: "${cleanTextStr.substring(0, 1200)}"
 YOUR TASK:
 Classify this document structure strictly using the Provided Reference Classification Dictionary.${topicFilterConstraint}${matchingContextHint}
 
+CRITICAL: When matching the document to subjects or topics, consider conceptual variations, synonyms, and cross-language translations. For example, if the document mentions "mathematics", "calculus", or "function", it should map to the "math" subject and related topics like "functions", even if those exact words are not explicitly detailed in the keywords. Be smart about semantic matching.
+
 You MUST select EXACTLY ONE Grade ID, Subject ID, Topic ID, and Document Type ID only if they exist in the dictionary and correspond to the document context.
 If the document does not match any subject or topic in our reference dictionary, or looks entirely unrelated to secondary school math/physics/svt, set "isMatch" to false.
 
@@ -2522,7 +2528,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
               },
-              timeout: 15000 
+              timeout: 60000 
             });
             pdfBytes = response.data;
           }
@@ -2561,7 +2567,7 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
-        timeout: 15000 
+        timeout: 60000 
       });
       pdfBytes = response.data;
 
@@ -2808,7 +2814,14 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
 
     const cleanBytes = await pdfDoc.save();
     fs.writeFileSync(cleanPath, cleanBytes);
-    return { cleanPath, cleanName };
+
+    const rawName = cleanName.replace(".pdf", "_raw.pdf");
+    const rawPath = path.join(LOCAL_OUTPUT_DIR, "downloads", rawName);
+    if (fs.existsSync(originalPath)) {
+      fs.copyFileSync(originalPath, rawPath);
+    }
+
+    return { cleanPath, cleanName, rawPath, rawName };
   }
 
   function saveDatasetRow(row: any) {
@@ -3017,8 +3030,8 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
     const { title, contentHtml, contentText } = extractHtmlLesson(htmlContent, url);
     const cleanText = cleanHtmlLessonText(contentText);
     
-    // Hash the raw HTML content
-    const hash = crypto.createHash("sha256").update(htmlContent).digest("hex");
+    // Hash the raw HTML content combining with URL to avoid cross-lesson deduplication on generic templates
+    const hash = crypto.createHash("sha256").update(url + "|" + htmlContent).digest("hex");
     
     // Save files locally
     const htmlDir = path.join(LOCAL_OUTPUT_DIR, "html");
@@ -3071,7 +3084,8 @@ Make sure to respond strictly with valid JSON. Do not include any markdown block
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/437.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/437.36"
         },
-        timeout: 25000
+        timeout: 60000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT })
       });
       const htmlContent = Buffer.from(response.data).toString("utf8");
 
@@ -3212,16 +3226,30 @@ Respond strictly in raw JSON without markdown:
 
       let pdfBytes: Buffer;
       let contentType = "";
+      let statusCode = 200;
+      let fetchUrl = url;
+      
+      // Handle Google Drive Links
+      if (fetchUrl.includes("drive.google.com/file/d/")) {
+        const fileIdMatch = fetchUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileIdMatch && fileIdMatch[1]) {
+          fetchUrl = `https://drive.google.com/uc?id=${fileIdMatch[1]}&export=download`;
+        }
+      }
+
       try {
-        const response = await axios.get(url, {
+        const response = await axios.get(fetchUrl, {
           responseType: "arraybuffer",
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
-          timeout: 20000
+          timeout: 60000,
+          httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
+          validateStatus: (status) => status < 500
         });
         pdfBytes = Buffer.from(response.data);
         contentType = (response.headers['content-type'] || '').toLowerCase();
+        statusCode = response.status;
       } catch (dlErr: any) {
         updateReport("rejection-report.json", { url, reason: `Download failed: ${dlErr.message}`, title });
         return res.json({
@@ -3239,7 +3267,54 @@ Respond strictly in raw JSON without markdown:
         });
       }
 
-      const isPdfByUrl = url.toLowerCase().split(/[?#]/)[0].endsWith(".pdf");
+      const isPdfByUrl = url.toLowerCase().split(/[?#]/)[0].endsWith(".pdf") || url.includes("drive.google.com/file/d/");
+      const byteSize = pdfBytes ? pdfBytes.length : 0;
+      const bodyString = pdfBytes ? pdfBytes.toString("utf8") : "";
+
+      // Reject PDF-expected downloads that are actually HTML lessons, startup blocks or other placeholders
+      if (isPdfByUrl) {
+        let isInvalid = false;
+        let rejectReason = "";
+
+        if (contentType.includes("text/html")) {
+          isInvalid = true;
+          rejectReason = "Content-Type is text/html (expected a PDF binary)";
+        } else if (byteSize < 400) {
+          isInvalid = true;
+          rejectReason = `File size is too small (${byteSize} bytes) for a valid PDF document`;
+        } else if (bodyString.includes("Please wait while your application starts")) {
+          isInvalid = true;
+          rejectReason = "Download body contains 'Please wait while your application starts' placeholder message";
+        } else if (bodyString.toLowerCase().includes("<!doctype html>")) {
+          isInvalid = true;
+          rejectReason = "Download body contains HTML doctype symbol instead of PDF binary signature";
+        } else if (bodyString.includes("Starting Server")) {
+          isInvalid = true;
+          rejectReason = "Download body contains 'Starting Server' status message";
+        } else if (statusCode !== 200) {
+          isInvalid = true;
+          rejectReason = `Download response status is ${statusCode} instead of 200`;
+        }
+
+        if (isInvalid) {
+          console.warn(`[Pipeline Parse Validation Error] URL: ${url}, Reason: ${rejectReason}`);
+          updateReport("rejection-report.json", { url, reason: `Rejected PDF: ${rejectReason}`, title });
+          return res.json({
+            success: false,
+            status: "blocked",
+            pipelineStep: "download",
+            blockReason: "invalid_pdf_content",
+            reason: rejectReason,
+            technicalError: `Content Type: ${contentType}, Bytes: ${byteSize}, StatusCode: ${statusCode}`,
+            metadata: combinedMetadataAndIds,
+            cleanTitle: safeTitle,
+            renamePattern: fallbackName,
+            needsReview: true,
+            isMatch: false
+          });
+        }
+      }
+
       const isHtml = contentType.includes("text/html");
 
       if (isHtml && !isPdfByUrl) {
@@ -3315,7 +3390,54 @@ Respond strictly in raw JSON without markdown:
       
       const originalPath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${hash}.original.pdf`);
       let isDuplicate = fs.existsSync(originalPath);
-      if (!isDuplicate) {
+      
+      if (isDuplicate) {
+        // Detailed log audit prior to duplicate skip (as requested)
+        const reportsDir = path.join(LOCAL_OUTPUT_DIR, "reports");
+        let existingPdfUrl = "";
+        let existingDocumentId = "";
+        const extractionReportPath = path.join(reportsDir, "extraction-report.json");
+        if (fs.existsSync(extractionReportPath)) {
+          try {
+            const reportData = JSON.parse(fs.readFileSync(extractionReportPath, "utf8"));
+            const originalDoc = reportData.find((item: any) => item.hash === hash && !item.isDuplicate);
+            if (originalDoc) {
+              existingPdfUrl = originalDoc.url;
+              existingDocumentId = originalDoc.hash.substring(0, 12);
+            }
+          } catch (e) {
+            console.warn("[Duplicate Log] Failed to read extraction-report.json:", e);
+          }
+        }
+
+        let sourcePageUrl = "";
+        const discoveryMappingPath = path.join(reportsDir, "discovery-mapping.json");
+        if (fs.existsSync(discoveryMappingPath)) {
+          try {
+            const mappingData = JSON.parse(fs.readFileSync(discoveryMappingPath, "utf8"));
+            const mappingEntry = mappingData.find((item: any) => item.pdf_url === url);
+            if (mappingEntry) {
+              sourcePageUrl = mappingEntry.source_page_url;
+            }
+          } catch (e) {
+            console.warn("[Duplicate Log] Failed to read discovery-mapping.json:", e);
+          }
+        }
+        if (!sourcePageUrl) {
+          sourcePageUrl = url;
+        }
+
+        console.log(`[Duplicate Pre-skip Audit Log]`);
+        console.log(`- pdf_url: ${url}`);
+        console.log(`- filename: ${title || path.basename(url)}`);
+        console.log(`- content_type: ${contentType}`);
+        console.log(`- status_code: ${statusCode}`);
+        console.log(`- byte_size: ${pdfBytes.length}`);
+        console.log(`- hash: ${hash}`);
+        console.log(`- existing_document_id: ${existingDocumentId || "not_found"}`);
+        console.log(`- existing_pdf_url: ${existingPdfUrl || "not_found"}`);
+        console.log(`- source_page_url: ${sourcePageUrl}`);
+      } else {
         fs.writeFileSync(originalPath, pdfBytes);
       }
 
@@ -4097,7 +4219,7 @@ Respond strictly in raw JSON without markdown:
         return res.status(400).json({ error: "One or more of selected metadata keys are missing from reference" });
       }
 
-      const { cleanPath, cleanName } = await createCleanPdfCopy({
+      const { cleanPath, cleanName, rawName } = await createCleanPdfCopy({
         hash,
         grade_label: grade.nameFr || grade.id,
         grade_slug: grade.suffix || grade.id,
@@ -4271,6 +4393,7 @@ Respond strictly in raw JSON without markdown:
       res.json({
         success: true,
         cleanName,
+        rawName,
         cleanPath,
         datasetId,
         datasetRow
@@ -5015,6 +5138,7 @@ ${lessonsList}
 
 YOUR CORE TASK:
 Identify the precise Grade, Subject, Module, Topic, and Lesson where this document belongs.
+CRITICAL: When matching the document, strongly consider conceptual variations, synonyms, and cross-language translations (e.g., "mathematics/calculus" = math, "الدوال" = functions). Match semantically even if the exact string isn't an alias.
 If the exact lesson is missing or cannot be confidently matched against any lesson from the LESSONS available list, set lessonId to null and describe the issue in the reason.
 
 Provide your output strictly as a JSON object with these fields:
@@ -5352,8 +5476,9 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
 
     if (matchedFile) {
       const fullPath = path.join(cleanPdfsDir, matchedFile);
+      const isInline = req.query.inline === 'true';
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename=${matchedFile}`);
+      res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="${matchedFile}"`);
       return res.send(fs.readFileSync(fullPath));
     } else {
       return res.status(404).send("Clean PDF file copy not generated yet.");
@@ -5699,7 +5824,9 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
   function loadSiteMap(): SiteMapNode[] {
     try {
       if (fs.existsSync(SITEMAP_PATH)) {
-        return JSON.parse(fs.readFileSync(SITEMAP_PATH, "utf8"));
+        const parsed = JSON.parse(fs.readFileSync(SITEMAP_PATH, "utf8"));
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && Array.isArray(parsed.nodes)) return parsed.nodes;
       }
     } catch (e) {
       console.error("Failed to load site map:", e);
@@ -5775,12 +5902,32 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
       domain = new URL(startUrl).hostname;
     } catch {}
 
-    while (queue.length > 0 && pagesProcessed < maxPages) {
+    const SAFE_MAX_PAGES = Math.min(maxPages, 500); // Prevent infinite loops
+    const startTime = Date.now();
+
+    while (queue.length > 0 && pagesProcessed < SAFE_MAX_PAGES) {
+      if (Date.now() - startTime > 120000) {
+        console.log(`[Site Map Scraper] Reached 2-minute time limit. Bailing out.`);
+        break;
+      }
+      
       const current = queue.shift()!;
-      const currentCanonical = canonicalizeUrl(current.url);
+      let currentCanonical = canonicalizeUrl(current.url);
+      
+      // Auto-correct common URL typos (.pd instead of .pdf)
+      if (currentCanonical.endsWith(".pd")) {
+        currentCanonical += "f";
+      }
+
       const currentHash = getCanonicalUrlHash(currentCanonical);
 
       if (visited.has(currentCanonical)) continue;
+      
+      // Skip Cloudflare email protection or other known unhelpful links
+      if (currentCanonical.includes("/cdn-cgi/l/email-protection") || currentCanonical.includes("javascript:")) {
+        continue;
+      }
+
       visited.add(currentCanonical);
 
       try {
@@ -5796,12 +5943,17 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
               },
-              timeout: 8000,
-              validateStatus: (status) => status < 400,
-              httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+              timeout: 60000,
+              validateStatus: (status) => status < 500, // Handle 404 gracefully
+              httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
             });
             responseData = resp.data || "";
             contentType = (resp.headers['content-type'] || '').toLowerCase();
+            
+            if (resp.status === 404) {
+              console.warn(`[Site Map Scraper] 404 Not Found for ${currentCanonical}`);
+              responseData = "";
+            }
           } catch (fetchErr: any) {
             console.warn(`[Site Map Scraper] Failed to fetch HTML for ${currentCanonical}: ${fetchErr.message}`);
             const classification = classifyPageUrlRole(currentCanonical, "", current.linkText, null, null);
@@ -5866,6 +6018,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
         navPath = navPath.replace(/Seed > /g, "").replace(/\.pdf/gi, "");
 
         const discoveredLinks: string[] = [];
+        const newChildren: any[] = [];
         if ($ && (classification.action === "crawl_children" || classification.action === "stage_asset") && current.depth < maxDepth) {
           $('a').each((_, el) => {
             const href = $(el).attr('href');
@@ -5881,8 +6034,8 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
               if (cleanChildHostname === cleanDomain) {
                 if (!childCanonical.match(/\.(jpg|jpeg|png|gif|svg|css|js|zip|rar|tar|7z|mp3|mp4|wav|avi|woff|woff2|ttf|eot)$/i)) {
                   discoveredLinks.push(childCanonical);
-                  if (!visited.has(childCanonical) && !queue.some(q => canonicalizeUrl(q.url) === childCanonical)) {
-                    queue.push({
+                  if (!visited.has(childCanonical) && !queue.some(q => canonicalizeUrl(q.url) === childCanonical) && !newChildren.some(nc => canonicalizeUrl(nc.url) === childCanonical)) {
+                    newChildren.push({
                       url: childCanonical,
                       depth: current.depth + 1,
                       parentUrl: currentCanonical,
@@ -5894,6 +6047,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
               }
             } catch {}
           });
+          queue.unshift(...newChildren);
         }
 
         const node: SiteMapNode = {
@@ -5986,9 +6140,9 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             },
-            timeout: 10000,
+            timeout: 60000,
             validateStatus: (status) => status < 400,
-            httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+            httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
           });
           
           pagesCrawled++;
@@ -6026,6 +6180,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
           
           const $ = load(response.data);
           
+          const newChildrenToVisit: {url: string, depth: number}[] = [];
           $('a').each((_, el) => {
             const href = $(el).attr('href');
             if (!href) return;
@@ -6065,9 +6220,9 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
                 // Skip obvious non-html files
                 if (!cleanUrl.match(/\.(jpg|jpeg|png|gif|svg|css|js|zip|rar|mp4|mp3|wav|avi|doc|docx|xls|xlsx|ppt|pptx)$/i)) {
                    if (isValidUrlSource(cleanUrl).valid) {
-                     // Check if already in toVisit
-                     if (!toVisit.some(v => v.url === cleanUrl)) {
-                       toVisit.push({ url: cleanUrl, depth: depth + 1 });
+                     // Check if already in toVisit or newChildrenToVisit
+                     if (!toVisit.some(v => v.url === cleanUrl) && !newChildrenToVisit.some(v => v.url === cleanUrl)) {
+                       newChildrenToVisit.push({ url: cleanUrl, depth: depth + 1 });
                      }
                    }
                 }
@@ -6076,6 +6231,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
               // Invalid URL, ignore
             }
           });
+          toVisit.unshift(...newChildrenToVisit);
           
           // Also check iframes and embeds for PDFs
           $('iframe, embed, object').each((_, el) => {
@@ -6083,7 +6239,8 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
             if (src) {
               try {
                 const absoluteUrl = new URL(src, currentUrl).href;
-                if (absoluteUrl.toLowerCase().endsWith('.pdf') || absoluteUrl.includes('pdf')) {
+                const lowerAbs = absoluteUrl.toLowerCase();
+                if (lowerAbs.endsWith('.pdf') || lowerAbs.includes('pdf') || lowerAbs.includes('drive.google.com/file/d/')) {
                   if (checkTopicFilter(absoluteUrl)) {
                     foundPdfs.add(absoluteUrl);
                   }
@@ -6125,108 +6282,26 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
   app.post("/api/discover-pdfs", async (req, res) => {
     try {
       const { query, pastedUrls, topicFilter } = req.body;
-      let rawUrls: string[] = [];
-
-      // Helper to split accidental concatenated URLs
-      function splitConcatenatedUrls(inputStr: string): string[] {
-        const results: string[] = [];
-        const regex = /https?:\/\//gi;
-        const matches: number[] = [];
-        let match;
-        while ((match = regex.exec(inputStr)) !== null) {
-          matches.push(match.index);
-        }
-        if (matches.length === 0) {
-          if (inputStr.trim()) results.push(inputStr.trim());
-        } else {
-          for (let i = 0; i < matches.length; i++) {
-            const start = matches[i];
-            const end = i + 1 < matches.length ? matches[i + 1] : inputStr.length;
-            const sliced = inputStr.substring(start, end).trim();
-            if (sliced) results.push(sliced);
-          }
-        }
-        return results;
-      }
-
-      // Helper to extract grade, subject, and track metadata from title or slug
-      function extractMetadataFromContext(urlStr: string, htmlContent: string, pageTitle: string): { grade: string | null; subject: string | null; track: string | null } {
-        let grade: string | null = null;
-        let subject: string | null = null;
-        let track: string | null = null;
-
-        let decodedUrl = urlStr;
-        try {
-          decodedUrl = decodeURIComponent(urlStr);
-        } catch (e) {}
-
-        const combinedText = `${decodedUrl} ${pageTitle} ${htmlContent.substring(0, 5000)}`.toLowerCase();
-
-        // Grade Detection
-        if (combinedText.includes("3ac") || combinedText.includes("3eme") || combinedText.includes("3ème") || combinedText.includes("ثالثة اعدادي") || combinedText.includes("السنة الثالثة اعدادي")) {
-          grade = "3AC";
-        } else if (combinedText.includes("2ac") || combinedText.includes("ثانية اعدادي") || combinedText.includes("السنة الثانية اعدادي")) {
-          grade = "2AC";
-        } else if (combinedText.includes("1ac") || combinedText.includes("اولى اعدادي") || combinedText.includes("السنة الاولى اعدادي")) {
-          grade = "1AC";
-        } else if (combinedText.includes("tronc commun") || combinedText.includes("جذع مشترك")) {
-          grade = "Tronc Commun";
-        } else if (combinedText.includes("2bac") || combinedText.includes("ثانية باك") || combinedText.includes("البكالوريا")) {
-          grade = "2BAC";
-        } else if (combinedText.includes("1bac") || combinedText.includes("اولى باك") || combinedText.includes("الأولى بكالوريا")) {
-          grade = "1BAC";
-        }
-
-        // Subject Detection
-        if (combinedText.includes("math") || combinedText.includes("رياضيات") || combinedText.includes("الرياضيات")) {
-          subject = "Mathématiques";
-        } else if (combinedText.includes("physique") || combinedText.includes("chimie") || combinedText.includes("الفيزياء")) {
-          subject = "Physique-Chimie";
-        } else if (combinedText.includes("svt") || combinedText.includes("sciences de la vie") || combinedText.includes("الارض") || combinedText.includes("الأرض")) {
-          subject = "SVT";
-        } else if (combinedText.includes("francais") || combinedText.includes("français") || combinedText.includes("الفرنسية")) {
-          subject = "Français";
-        } else if (combinedText.includes("arabe") || combinedText.includes("العربية")) {
-          subject = "Arabe";
-        } else if (combinedText.includes("anglais") || combinedText.includes("الانجليزية") || combinedText.includes("الإنجليزية")) {
-          subject = "Anglais";
-        }
-
-        // Track Detection
-        if (combinedText.includes("biof") || combinedText.includes("خيار فرنسي") || combinedText.includes("option francais") || combinedText.includes("option français")) {
-          track = "BIOF (Option Français)";
-        } else if (combinedText.includes("خيار عربي") || combinedText.includes("option arabe")) {
-          track = "Option Arabe";
-        } else if (combinedText.includes("science") || combinedText.includes("علوم") || combinedText.includes("العلوم")) {
-          track = "Sciences";
-        } else if (combinedText.includes("lettres") || combinedText.includes("اداب") || combinedText.includes("الآداب")) {
-          track = "Lettres";
-        }
-
-        return { grade, subject, track };
-      }
+      let urlInput = "";
 
       if (pastedUrls && Array.isArray(pastedUrls)) {
-        for (const u of pastedUrls) {
-          if (typeof u === "string" && u.trim().length > 0) {
-            rawUrls.push(...splitConcatenatedUrls(u));
-          }
-        }
+        urlInput = pastedUrls.join(" ");
       } else if (query && query.trim().length > 0) {
         console.log(`[Discover] Querying search grounding for: ${query}`);
         const response = await callGeminiWithRetry({
           model: "gemini-2.5-flash",
-          contents: `Find educational resources, articles, lessons, exams or direct PDF files related to the search query: "${query}". Specify the full direct URLs from legitimate sources and educational webpages starting with http or https.`,
+          contents: `Find educational resources, lessons, exams or direct PDF files related to the search query: "${query}". Specify the full direct URLs from legitimate sources and educational webpages starting with http or https.`,
           config: {
             tools: [{ googleSearch: {} }],
           },
         });
 
+        const rawUrls: string[] = [];
         const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
         if (chunks && Array.isArray(chunks)) {
           for (const chunk of chunks) {
             if (chunk.web?.uri) {
-              rawUrls.push(...splitConcatenatedUrls(chunk.web.uri));
+              rawUrls.push(chunk.web.uri);
             }
           }
         }
@@ -6235,364 +6310,52 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
         const urlRegex = /(https?:\/\/[^\s$,;?#()\[\]"']+)/g;
         let match;
         while ((match = urlRegex.exec(text)) !== null) {
-          rawUrls.push(...splitConcatenatedUrls(match[1]));
+          rawUrls.push(match[1]);
+        }
+        urlInput = rawUrls.join(" ");
+      }
+
+      console.log(`[Discover PDFs Endpoint] Initiating discovery model for text: "${urlInput}"`);
+      const results = await discoverPdfsFromInput(urlInput, topicFilter);
+
+      // Now map results into a format containing our special fields and update record index
+      for (const item of results) {
+        if (item.accepted && item.isDirectPdf) {
+          const mappingEntry = {
+            raw_url: item.raw_url,
+            normalized_url: item.normalized_url,
+            source_page_url: item.source_page_url,
+            pdf_url: item.pdf_url,
+            url_type: item.url_type,
+            pdf_count: item.pdf_count,
+            metadata: item.metadata
+          };
+          updateReport("discovery-mapping.json", mappingEntry);
         }
       }
 
-      // De-duplicate initial set of URLs to process
-      rawUrls = Array.from(new Set(rawUrls.map(u => u.trim())));
-
-      // Resolve topic filter against dictionary
-      const activeDict = normalizeDictionary(await getActiveDictionary());
-      let resolvedTopicFilters = null;
-      let topicFilterMatched = false;
-      let expandedFilterTerms: string[] = [];
-
-      if (topicFilter && topicFilter.trim().length > 0) {
-        resolvedTopicFilters = resolveTopicFiltersAgainstDictionary(topicFilter, activeDict);
-        if (resolvedTopicFilters.matchedTopics.length > 0) {
-          topicFilterMatched = true;
-          expandedFilterTerms = resolvedTopicFilters.expandedKeywords.map(normalizeMatchText);
-        }
-      }
-
-      const results: any[] = [];
-      const discoveredPdfSet = new Set<string>();
-      let anyPdfsFoundOnAtLeastOnePage = false;
-
-      for (const rawUrl of rawUrls) {
-        // Step 3: Normalize - trim, remove hash, keep query params
-        const trimmed = rawUrl.trim();
-        if (!trimmed) continue;
-
-        let cleanUrl = trimmed;
-        if (cleanUrl.includes("#")) {
-          cleanUrl = cleanUrl.split("#")[0];
-        }
-
-        // Decode safely only for display inside logging
-        let normalizedDisplayUrl = cleanUrl;
-        try {
-          normalizedDisplayUrl = decodeURIComponent(cleanUrl);
-        } catch (e) {}
-
-        // Resolve redirects
-        const resolvedCleanUrl = resolveUrl(cleanUrl);
-
-        try {
-          const validationInfo = isValidUrlSource(resolvedCleanUrl);
-          if (!validationInfo.valid) {
-            results.push({
-              url: resolvedCleanUrl,
-              isDirectPdf: false,
-              accepted: false,
-              reason: `Rejected: ${validationInfo.reason || "Malformed or unsupported source URL"}`
-            });
-            continue;
-          }
-
-          const parsed = new URL(resolvedCleanUrl);
-          const pathname = parsed.pathname.toLowerCase();
-          const hostname = parsed.hostname.toLowerCase();
-
-          // Step 4: Detect if the cleaned URL is a direct PDF
-          const isDirectPdf = pathname.endsWith(".pdf");
-
-          const isNoisy = hostname.includes("facebook.com") || 
-                          hostname.includes("twitter.com") || 
-                          hostname.includes("instagram.com") || 
-                          hostname.includes("youtube.com") || 
-                          hostname.includes("linkedin.com") || 
-                          hostname.includes("github.com") || 
-                          hostname.includes("stackoverflow.com") || 
-                          hostname.includes("npm") || 
-                          hostname.includes("localhost") ||
-                          hostname === "google.com" ||
-                          hostname === "www.google.com";
-
-          const isEduPage = hostname.includes("talamidi") || 
-                            hostname.includes("moutamadris") || 
-                            hostname.includes("alloschool") || 
-                            pathname.includes("math") || 
-                            pathname.includes("physique") || 
-                            pathname.includes("cours") || 
-                            pathname.includes("exerc") || 
-                            pathname.includes("exam") || 
-                            pathname.includes("pdf") ||
-                            pathname.includes("download") ||
-                            pathname.includes("drive.google.com");
-
-          if (isDirectPdf) {
-            anyPdfsFoundOnAtLeastOnePage = true;
-            const pdfUrlNormalized = resolvedCleanUrl;
-
-            if (!discoveredPdfSet.has(pdfUrlNormalized)) {
-              discoveredPdfSet.add(pdfUrlNormalized);
-
-              // 10. Add clear logging
-              console.log(`[Discover] Direct PDF Target Logged:`, {
-                raw_url: trimmed,
-                normalized_url: normalizedDisplayUrl,
-                url_type: "direct_pdf",
-                pdf_count: 1,
-                discovered_pdf_urls: [pdfUrlNormalized]
-              });
-
-              const meta = extractMetadataFromContext(resolvedCleanUrl, "", parsed.pathname);
-              const mappingEntry = {
-                source_page_url: resolvedCleanUrl,
-                pdf_url: pdfUrlNormalized,
-                metadata: meta,
-                url_type: "direct_pdf"
-              };
-              updateReport("discovery-mapping.json", mappingEntry);
-
-              // Apply topic filter
-              let accepted = true;
-              let reason = "Direct PDF document link detected";
-
-              if (topicFilter && topicFilter.trim().length > 0) {
-                if (!topicFilterMatched) {
-                  accepted = false;
-                  reason = "Rejected: topic filters do not match Supabase dictionary";
-                } else {
-                  const normUrl = normalizeMatchText(pdfUrlNormalized);
-                  let matchedTerm = false;
-                  for (const term of expandedFilterTerms) {
-                    if (normUrl.includes(term)) {
-                      matchedTerm = true;
-                      break;
-                    }
-                  }
-                  if (!matchedTerm) {
-                    accepted = false;
-                    reason = "Rejected: URL does not match any of the resolved topic keywords";
-                  }
-                }
-              }
-
-              results.push({
-                url: pdfUrlNormalized,
-                isDirectPdf: true,
-                accepted,
-                reason,
-                source_page_url: resolvedCleanUrl,
-                pdf_url: pdfUrlNormalized,
-                metadata: meta
-              });
-            }
-          } else {
-            // Step 5: Treat it as an HTML source page. Fetch and parse.
-            let pageHtml = "";
-            let pageTitle = "";
-            try {
-              console.log(`[Discover] Fetching educational page HTML for extraction limit check: ${resolvedCleanUrl}`);
-              const htmlRes = await axios.get(resolvedCleanUrl, {
-                headers: {
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                  "Accept-Language": "fr,en-US;q=0.7,en;q=0.3"
-                },
-                timeout: 15000
-              });
-              pageHtml = typeof htmlRes.data === "string" ? htmlRes.data : "";
-              if (pageHtml) {
-                const $ = load(pageHtml);
-                pageTitle = $("title").text().trim();
-              }
-            } catch (fetchErr: any) {
-              console.error(`[Discover] Failed to read HTML source page: ${resolvedCleanUrl}, error: ${fetchErr.message}`);
-            }
-
-            const pagePdfLinks: string[] = [];
-            const pageSubHtmlLinks: string[] = [];
-            if (pageHtml) {
-              const $ = load(pageHtml);
-              $("a").each((_, el) => {
-                const href = $(el).attr("href");
-                if (!href) return;
-                try {
-                  const absoluteObj = new URL(href, resolvedCleanUrl);
-                  const absoluteStr = absoluteObj.href.split("#")[0]; // Normalise - remove hash fragments
-
-                  const isDocAsset = [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls"].some(ext => absoluteObj.pathname.toLowerCase().endsWith(ext));
-                  if (isDocAsset) {
-                    pagePdfLinks.push(absoluteStr);
-                  } else {
-                    // Collect potential sub-pages on the same hostname to dig into
-                    if (absoluteObj.hostname === parsed.hostname && absoluteStr !== resolvedCleanUrl) {
-                      const pathLower = absoluteObj.pathname.toLowerCase();
-                      const nonHtmlExtensions = [".png", ".jpg", ".jpeg", ".gif", ".css", ".js", ".zip", ".rar", ".mp3", ".mp4"];
-                      const isAsset = nonHtmlExtensions.some(suffix => pathLower.endsWith(suffix));
-                      if (!isAsset) {
-                        pageSubHtmlLinks.push(absoluteStr);
-                      }
-                    }
-                  }
-                } catch {
-                  // Skip invalid href targets
-                }
-              });
-            }
-
-            const uniquePagePdfLinks = Array.from(new Set(pagePdfLinks));
-            const uniqueSubHtmlLinks = Array.from(new Set(pageSubHtmlLinks)).slice(0, 8); // Dig to up to 8 sub-URLs
-
-            console.log(`[Discover] HTML Page Content Base Analysis:`, {
-              url: resolvedCleanUrl,
-              direct_pdfs_found: uniquePagePdfLinks.length,
-              candidate_sub_urls_found: uniqueSubHtmlLinks.length,
-              dig_targets: uniqueSubHtmlLinks
-            });
-
-            // Perform parallel deep dig into up to 8 sub-URLs to discover more PDFs!
-            const extraPdfLinksFromSubPages: string[] = [];
-            if (uniqueSubHtmlLinks.length > 0) {
-              console.log(`[Discover] Initiating "deep dig" into ${uniqueSubHtmlLinks.length} sub-URLs for page: ${resolvedCleanUrl}`);
-              const subPagePromises = uniqueSubHtmlLinks.map(async (subUrl) => {
-                try {
-                  const subHtmlRes = await axios.get(subUrl, {
-                    headers: {
-                      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                      "Accept-Language": "fr,en-US;q=0.7,en;q=0.3"
-                    },
-                    timeout: 10000 // Snell speed timeout limit per sub-page
-                  });
-                  const subHtml = typeof subHtmlRes.data === "string" ? subHtmlRes.data : "";
-                  if (subHtml) {
-                    const $sub = load(subHtml);
-                    const subPdfLinks: string[] = [];
-                    $sub("a").each((_, el) => {
-                      const href = $sub(el).attr("href");
-                      if (!href) return;
-                      try {
-                        const absoluteObj = new URL(href, subUrl);
-                        const absoluteStr = absoluteObj.href.split("#")[0];
-                        const isSubDocAsset = [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls"].some(ext => absoluteObj.pathname.toLowerCase().endsWith(ext));
-                        if (isSubDocAsset) {
-                          subPdfLinks.push(absoluteStr);
-                        }
-                      } catch {}
-                    });
-                    return subPdfLinks;
-                  }
-                } catch (subErr: any) {
-                  console.warn(`[Discover] Deep dig warning: failed to fetch sub-URL: ${subUrl}, error: ${subErr.message}`);
-                }
-                return [];
-              });
-
-              const resolvedSubPdfsArrays = await Promise.all(subPagePromises);
-              for (const arr of resolvedSubPdfsArrays) {
-                if (arr) {
-                  extraPdfLinksFromSubPages.push(...arr);
-                }
-              }
-            }
-
-            const allDiscoveredPdfs = Array.from(new Set([...uniquePagePdfLinks, ...extraPdfLinksFromSubPages]));
-
-            // Step 10: Clear console logging
-            console.log(`[Discover] HTML Page Content Logged:`, {
-              raw_url: trimmed,
-              normalized_url: normalizedDisplayUrl,
-              url_type: "source_page",
-              pdf_count: allDiscoveredPdfs.length,
-              discovered_pdf_urls: allDiscoveredPdfs
-            });
-
-            if (allDiscoveredPdfs.length > 0) {
-              anyPdfsFoundOnAtLeastOnePage = true;
-
-              for (const pdfLink of allDiscoveredPdfs) {
-                if (!discoveredPdfSet.has(pdfLink)) {
-                  discoveredPdfSet.add(pdfLink);
-
-                  const meta = extractMetadataFromContext(pdfLink, pageHtml, pageTitle || parsed.pathname);
-                  const mappingEntry = {
-                    source_page_url: resolvedCleanUrl,
-                    pdf_url: pdfLink,
-                    metadata: meta,
-                    url_type: "source_page"
-                  };
-                  updateReport("discovery-mapping.json", mappingEntry);
-
-                  // Apply topic filter if present
-                  let accepted = true;
-                  let reason = `Extracted from educational index/sub-page: ${resolvedCleanUrl}`;
-
-                  if (topicFilter && topicFilter.trim().length > 0) {
-                    if (!topicFilterMatched) {
-                      accepted = false;
-                      reason = "Rejected: topic filters do not match Supabase dictionary";
-                    } else {
-                      const normUrl = normalizeMatchText(pdfLink);
-                      let matchedTerm = false;
-                      for (const term of expandedFilterTerms) {
-                        if (normUrl.includes(term)) {
-                          matchedTerm = true;
-                          break;
-                        }
-                      }
-                      if (!matchedTerm) {
-                        accepted = false;
-                        reason = "Rejected: Extracted link does not match any of the resolved topic keywords";
-                      }
-                    }
-                  }
-
-                  results.push({
-                    url: pdfLink,
-                    isDirectPdf: true,
-                    accepted,
-                    reason,
-                    source_page_url: resolvedCleanUrl,
-                    pdf_url: pdfLink,
-                    metadata: meta
-                  });
-                }
-              }
-            } else {
-              // Step 9: No PDFs found on this page or its sub-URLs
-              const meta = extractMetadataFromContext(resolvedCleanUrl, pageHtml, pageTitle || parsed.pathname);
-              results.push({
-                url: resolvedCleanUrl,
-                isDirectPdf: false,
-                accepted: true, // Keep the source page for manual review
-                reason: "No educational PDFs found on page or its first 8 sub-pages. Staged for manual review.",
-                source_page_url: resolvedCleanUrl,
-                pdf_url: resolvedCleanUrl,
-                metadata: meta,
-                url_type: "source_page_no_pdfs"
-              });
-            }
-          }
-        } catch (err: any) {
-          results.push({
-            url: resolvedCleanUrl,
-            isDirectPdf: false,
-            accepted: false,
-            reason: `Error during processing: ${err.message}`
-          });
-        }
-      }
-
-      let topicFilterReport = null;
-      if (topicFilter && topicFilter.trim().length > 0 && resolvedTopicFilters) {
-        topicFilterReport = {
-          rawFilters: resolvedTopicFilters.rawFilters,
-          matchedTopics: resolvedTopicFilters.matchedTopics,
-          unmatchedFilters: resolvedTopicFilters.unmatchedFilters,
-          expandedKeywords: resolvedTopicFilters.expandedKeywords
-        };
-      }
-
+      // Check if any direct PDFs were discovered
+      const anyPdfsFoundOnAtLeastOnePage = results.some(r => r.isDirectPdf);
       const responseStatus = anyPdfsFoundOnAtLeastOnePage ? "success" : "no_pdf_found";
+
+      // Re-resolve active topic filter dictionary for topic filter reporting
+      let topicFilterReport = null;
+      if (topicFilter && topicFilter.trim().length > 0) {
+        const activeDict = normalizeDictionary(await getActiveDictionary());
+        const resolvedTopicFilters = resolveTopicFiltersAgainstDictionary(topicFilter, activeDict);
+        if (resolvedTopicFilters) {
+          topicFilterReport = {
+            rawFilters: resolvedTopicFilters.rawFilters,
+            matchedTopics: resolvedTopicFilters.matchedTopics,
+            unmatchedFilters: resolvedTopicFilters.unmatchedFilters,
+            expandedKeywords: resolvedTopicFilters.expandedKeywords
+          };
+        }
+      }
+
       res.json({ results, topicFilterReport, status: responseStatus });
     } catch (err: any) {
       console.error("[Discover Error]", err);
-      // Fallback rate limiting handler
       const errMsg = err.message || "";
       const isRateLimit = errMsg.includes("429") || 
                          errMsg.toLowerCase().includes("quota exceeded") || 
@@ -6603,7 +6366,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
 
       if (isRateLimit) {
         return res.status(429).json({
-          error: "Gemini API Quota/Rate Limit Exceeded. You have exceeded your current API quota limit for 'gemini-2.5-flash'. Please check your current API rate limits or billing plan at https://ai.google.dev/gemini-api/docs/rate-limits, or try again later."
+          error: "Gemini API Quota/Rate Limit Exceeded. You have exceeded your current API quota limit."
         });
       }
       res.status(500).json({ error: err.message || "Failed during PDF discovery" });
@@ -6670,8 +6433,8 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.5",
         },
-        timeout: 15000,
-        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        timeout: 60000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
         validateStatus: (status) => status < 500
       });
 
@@ -6733,8 +6496,8 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
-        timeout: 30000,
-        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        timeout: 60000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
         validateStatus: (status) => status < 500 // Don't throw for 404
       });
 
@@ -6849,6 +6612,34 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     }
   }
 
+  function recordDriveSync(filename: string, fileId: string, folder: string) {
+    try {
+      const gdriveSyncsDir = path.join(LOCAL_OUTPUT_DIR, "dataset");
+      if (!fs.existsSync(gdriveSyncsDir)) fs.mkdirSync(gdriveSyncsDir, { recursive: true });
+      const dbPath = path.join(gdriveSyncsDir, "gdrive_syncs.json");
+      let syncs: any = {};
+      if (fs.existsSync(dbPath)) {
+        syncs = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+      }
+      syncs[filename] = { fileId, folder, timestamp: new Date().toISOString() };
+      fs.writeFileSync(dbPath, JSON.stringify(syncs, null, 2));
+    } catch (e) {
+      console.error("Failed to record drive sync:", e);
+    }
+  }
+
+  app.get("/api/gdrive/sync-status", (req, res) => {
+    try {
+      const dbPath = path.join(LOCAL_OUTPUT_DIR, "dataset", "gdrive_syncs.json");
+      if (fs.existsSync(dbPath)) {
+        return res.json(JSON.parse(fs.readFileSync(dbPath, "utf8")));
+      }
+      return res.json({});
+    } catch (e) {
+      return res.json({});
+    }
+  });
+
   app.post("/api/gdrive/sync", async (req, res) => {
     try {
       const { accessToken, category, filepath, filename, fileBufferBase64, mimeType } = req.body;
@@ -6889,6 +6680,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
 
       console.log(`[Google Drive Sync] Syncing ${destFilename} (${categoryFolderName}) to Drive...`);
       const result = await uploadToDriveServer(accessToken, destFilename, targetMimeType, buffer, targetFolderId);
+      recordDriveSync(destFilename, result.id, categoryFolderName);
       
       res.json({
         success: true,
@@ -6899,7 +6691,13 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
       });
     } catch (err: any) {
       console.error("[Google Drive Sync Error]", err.response?.data || err.message);
-      res.status(500).json({ error: err.response?.data?.error?.message || err.message });
+      let errMsg = err.message;
+      if (err.response?.status === 401) {
+        errMsg = "Google Drive session has expired or is invalid. Please disconnect and reconnect your Google Drive in the app.";
+      } else if (err.response?.data?.error?.message) {
+        errMsg = err.response.data.error.message;
+      }
+      res.status(err.response?.status || 500).json({ error: errMsg });
     }
   });
 
@@ -6996,6 +6794,7 @@ Do not include any markdown format blocks or conversational text, specify valid 
 
       const finalName = suggestedFilename || destFilename;
       const result = await uploadToDriveServer(accessToken, finalName, targetMimeType, buffer, currentParentId);
+      recordDriveSync(finalName, result.id, `Gemini Automated Curriculums / ${parentFolder || ""} / ${childFolder || ""} / ${grandchildFolder || ""}`);
 
       res.json({
         success: true,
@@ -7006,7 +6805,13 @@ Do not include any markdown format blocks or conversational text, specify valid 
       });
     } catch (err: any) {
       console.error("[Gemini Drive Sync Error]", err.response?.data || err.message);
-      res.status(500).json({ error: err.response?.data?.error?.message || err.message });
+      let errMsg = err.message;
+      if (err.response?.status === 401) {
+        errMsg = "Google Drive session has expired or is invalid. Please disconnect and reconnect your Google Drive in the app.";
+      } else if (err.response?.data?.error?.message) {
+        errMsg = err.response.data.error.message;
+      }
+      res.status(err.response?.status || 500).json({ error: errMsg });
     }
   });
 
@@ -7052,6 +6857,7 @@ Do not include any markdown format blocks or conversational text, specify valid 
 
           console.log(`[GDrive Sync-All] Syncing ${file}...`);
           const uploadRes = await uploadToDriveServer(accessToken, file, mime, buffer, folderId);
+          recordDriveSync(file, uploadRes.id, `AI Studio Curriculum Pipeline Workspace / ${cat.label}`);
           syncedFiles.push({
             filename: file,
             folderName: cat.label,
@@ -7068,7 +6874,13 @@ Do not include any markdown format blocks or conversational text, specify valid 
       });
     } catch (err: any) {
       console.error("[Google Drive Sync-All Error]", err.response?.data || err.message);
-      res.status(500).json({ error: err.response?.data?.error?.message || err.message });
+      let errMsg = err.message;
+      if (err.response?.status === 401) {
+        errMsg = "Google Drive session has expired or is invalid. Please disconnect and reconnect your Google Drive in the app.";
+      } else if (err.response?.data?.error?.message) {
+        errMsg = err.response.data.error.message;
+      }
+      res.status(err.response?.status || 500).json({ error: errMsg });
     }
   });
 
@@ -7101,14 +6913,21 @@ Do not include any markdown format blocks or conversational text, specify valid 
     function isAllowedMoutamadris(url: string): { allowed: boolean; reason: string } {
       try {
         const parsed = new URL(url);
-        if (!parsed.hostname.includes("moutamadris.ma")) return { allowed: false, reason: "external-domain" };
+        const host = parsed.hostname;
+        if (!host.includes("moutamadris.ma") && !host.includes("drive.google.com")) {
+          return { allowed: false, reason: "external-domain" };
+        }
         
         const path = parsed.pathname.toLowerCase();
         if (BLOCKED_EXTENSIONS.test(path)) return { allowed: false, reason: "static-file" };
 
-        if (url.toLowerCase().endsWith(".pdf")) {
+        if (url.toLowerCase().endsWith(".pdf") || host.includes("drive.google.com")) {
           if (BLOCKED_PDF_SOURCES.test(url)) return { allowed: false, reason: "blocked-pdf-source" };
-          if (!CONTENT_PATTERNS.test(path)) return { allowed: false, reason: "pdf-no-content-path" };
+          // Drive links might not match content patterns, that's fine
+          if (!host.includes("drive.google.com") && !CONTENT_PATTERNS.test(path)) {
+            return { allowed: false, reason: "pdf-no-content-path" };
+          }
+          return { allowed: true, reason: "ok" };
         }
 
         if (BLOCKED_PATH_PATTERNS.test(path + "/")) return { allowed: false, reason: "blocked-path" };
@@ -7149,9 +6968,9 @@ Do not include any markdown format blocks or conversational text, specify valid 
               "User-Agent": "Mozilla/5.0 (compatible; LevelSpace-Bot/1.0; +https://levelespace.com/bot)",
               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             },
-            timeout: 10000,
+            timeout: 60000,
             validateStatus: (status) => status < 400,
-            httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+            httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
           });
           
           pagesCrawled++;
@@ -7197,6 +7016,7 @@ Do not include any markdown format blocks or conversational text, specify valid 
             isPdf: false
           });
 
+          const newChildrenToVisit: {url: string, depth: number}[] = [];
           $('a').each((_, el) => {
             const href = $(el).attr('href');
             if (!href) return;
@@ -7215,12 +7035,13 @@ Do not include any markdown format blocks or conversational text, specify valid 
                   foundPdfs.add(cleanUrl);
                 }
               } else if (linkAllowed && !visited.has(cleanUrl) && depth < maxDepth) {
-                if (!toVisit.some(v => v.url === cleanUrl)) {
-                  toVisit.push({ url: cleanUrl, depth: depth + 1 });
+                if (!toVisit.some(v => v.url === cleanUrl) && !newChildrenToVisit.some(v => v.url === cleanUrl)) {
+                  newChildrenToVisit.push({ url: cleanUrl, depth: depth + 1 });
                 }
               }
             } catch (e) {}
           });
+          toVisit.unshift(...newChildrenToVisit);
           
           // Also check iframes/embeds
           $('iframe, embed, object').each((_, el) => {
@@ -7228,7 +7049,8 @@ Do not include any markdown format blocks or conversational text, specify valid 
             if (src) {
               try {
                 const absoluteUrl = new URL(src, currentUrl).href;
-                if (absoluteUrl.toLowerCase().endsWith('.pdf') || absoluteUrl.includes('pdf')) {
+                const lowerAbs = absoluteUrl.toLowerCase();
+                if (lowerAbs.endsWith('.pdf') || lowerAbs.includes('pdf') || lowerAbs.includes('drive.google.com/file/d/')) {
                   const { allowed: linkAllowed } = isAllowedMoutamadris(absoluteUrl);
                   if (linkAllowed && checkTopicFilter(absoluteUrl)) foundPdfs.add(absoluteUrl);
                 }

@@ -90,7 +90,12 @@
       "keywords": [
         "math",
         "maths",
+        "mathematics",
         "mathématiques",
+        "mathematique",
+        "algebre",
+        "algèbre",
+        "calculus",
         "الرياضيات",
         "رياضيات",
         "mathematiques"
@@ -192,7 +197,10 @@
       "keywords": [
         "fonction",
         "fonctions",
+        "function",
+        "functions",
         "الدوال",
+        "دالة",
         "دوال linéaires",
         "خطية",
         "تألفية"
@@ -300,6 +308,8 @@
       "nameFr": "Série d'Exercices",
       "suffix": "EX",
       "keywords": [
+        "cahier",
+        "cahier-exercices",
         "exercice",
         "exercise",
         "exercices",
@@ -336,6 +346,7 @@
       "keywords": [
         "exam",
         "examen",
+        "examens",
         "devoir",
         "test",
         "فروض",
@@ -343,7 +354,13 @@
         "امتحان",
         "الامتحان",
         "contrôle",
-        "controle"
+        "controle",
+        "regional",
+        "regionaux",
+        "local",
+        "locaux",
+        "جهوي",
+        "محلي"
       ]
     },
     {

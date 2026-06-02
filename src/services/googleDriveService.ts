@@ -18,7 +18,7 @@ const provider = new GoogleAuthProvider();
 provider.addScope("https://www.googleapis.com/auth/drive");
 
 let isSigningIn = false;
-let cachedAccessToken: string | null = null;
+let cachedAccessToken: string | null = typeof window !== "undefined" ? localStorage.getItem("scarpe_gdrive_access_token") : null;
 
 // Initialize Auth listener
 export const initAuth = (
@@ -27,6 +27,9 @@ export const initAuth = (
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
+      if (!cachedAccessToken && typeof window !== "undefined") {
+        cachedAccessToken = localStorage.getItem("scarpe_gdrive_access_token");
+      }
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else {
@@ -35,6 +38,9 @@ export const initAuth = (
       }
     } else {
       cachedAccessToken = null;
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("scarpe_gdrive_access_token");
+      }
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -50,6 +56,9 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       throw new Error("Failed to retrieve access token from Google sign-in.");
     }
     cachedAccessToken = credential.accessToken;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("scarpe_gdrive_access_token", cachedAccessToken);
+    }
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (err: any) {
     console.error("[Google Auth Error]", err);
@@ -64,6 +73,9 @@ export const googleSignOut = async (): Promise<void> => {
   try {
     await signOut(auth);
     cachedAccessToken = null;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("scarpe_gdrive_access_token");
+    }
   } catch (err) {
     console.error("[Google Sign Out Error]", err);
     throw err;
