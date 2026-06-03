@@ -2,6 +2,7 @@ import https from 'https';
 import crypto from 'crypto';
 import axios from "axios";
 import { load } from "cheerio";
+import { formatLevelspaceReviewTitle, formatLevelspaceSafeFilename } from "./filenameGenerator";
 
 export interface DiscoveredItem {
   url: string;               // direct pdf link (resolved) - maps to item.url in frontend
@@ -15,17 +16,17 @@ export interface DiscoveredItem {
   accepted: boolean;         // default acceptance state
   reason: string;            // status explanation
   title?: string;            // page/doc title
+  cleanTitle?: string;
   metadata?: {
     grade: string | null;
     subject: string | null;
     track: string | null;
+    documentType: string | null;
+    schoolYear: string | null;
+    source: string | null;
   };
 }
 
-/**
- * Splits concatenated URLs that might have been pasted together without separation
- * e.g., "https://site1.comhttps://site2.com/doc.pdf" -> ["https://site1.com", "https://site2.com/doc.pdf"]
- */
 export function splitConcatenatedUrls(input: string): string[] {
   if (!input) return [];
   const parts = input.split(/\s+/).filter(Boolean);
@@ -51,17 +52,24 @@ export function splitConcatenatedUrls(input: string): string[] {
   return results;
 }
 
-/**
- * Removes hash fragments and returns a clean URL
- */
 export function removeHashFragment(urlStr: string): string {
   if (!urlStr) return "";
   return urlStr.split("#")[0];
 }
 
-/**
- * Validates with pathname suffix check weather a URL represents a direct PDF
- */
+export function normalizeUrlSafe(urlStr: string): string {
+  const noHash = removeHashFragment(urlStr);
+  try {
+    const parsed = new URL(noHash);
+    if (parsed.pathname.length > 1 && parsed.pathname.endsWith("/")) {
+      parsed.pathname = parsed.pathname.slice(0, -1);
+    }
+    return parsed.toString();
+  } catch {
+    return noHash.replace(/\/$/, "");
+  }
+}
+
 export function isDirectPdfUrl(urlStr: string): boolean {
   try {
     const cleanUrl = urlStr.split(/[?#]/)[0];
@@ -72,9 +80,6 @@ export function isDirectPdfUrl(urlStr: string): boolean {
   }
 }
 
-/**
- * Resolves a redirect or relative URL cleanly
- */
 export function resolveRelativeUrl(href: string, baseUrl: string): string {
   try {
     const resolved = new URL(href, baseUrl);
@@ -84,13 +89,44 @@ export function resolveRelativeUrl(href: string, baseUrl: string): string {
   }
 }
 
-/**
- * Helper to extract grade, subject and track from url/metadata context (Task 7)
- */
-export function extractClassifyingMetadata(urlStr: string, textContext: string = ""): { grade: string | null; subject: string | null; track: string | null } {
+export function isAssetUrl(urlStr: string): boolean {
+  try {
+    const cleanUrl = urlStr.split(/[?#]/)[0].toLowerCase();
+    return [".jpg", ".png", ".webp", ".gif", ".css", ".js", ".zip", ".rar"].some(ext => cleanUrl.endsWith(ext));
+  } catch {
+    return false;
+  }
+}
+
+export function isPaginationLink($el: any, href: string): boolean {
+  if ($el.attr("rel") === "next") return true;
+  
+  const text = $el.text().toLowerCase().trim();
+  const paginationTexts = ["next", "suivant", "suivante", "page suivante", "التالي", "الصفحة التالية", "older posts"];
+  if (paginationTexts.some(t => text.includes(t))) return true;
+
+  const className = ($el.attr("class") || "").toLowerCase();
+  const paginationClasses = ["next", "pagination-next", "nav-next", "page-numbers"];
+  if (paginationClasses.some(c => className.includes(c))) return true;
+
+  if (href.match(/[?&](page|paged|p)=\d+/i)) return true;
+  if (href.match(/\/page\/\d+\/?/i)) return true;
+
+  if (/^\d+$/.test(text) && (className.includes("page") || $el.parents('.pagination, .nav-links').length > 0)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function extractClassifyingMetadata(urlStr: string, textContext: string = "") {
   let grade: string | null = null;
   let subject: string | null = null;
   let track: string | null = null;
+  let documentType: string | null = null;
+  let schoolYear: string | null = null;
+  let region: string | null = null;
+  let source: string | null = null;
 
   let decodedUrl = urlStr;
   try {
@@ -99,14 +135,13 @@ export function extractClassifyingMetadata(urlStr: string, textContext: string =
 
   const combinedText = `${decodedUrl} ${textContext}`.toLowerCase();
 
-  // Grade Detection
-  if (combinedText.includes("3ac") || combinedText.includes("3eme") || combinedText.includes("3ème") || combinedText.includes("ثالثة اعدادي") || combinedText.includes("السنة الثالثة اعدادي")) {
+  if (combinedText.includes("3apic") || combinedText.includes("3ac") || combinedText.includes("3eme") || combinedText.includes("3ème") || combinedText.includes("ثالثة اعدادي") || combinedText.includes("السنة الثالثة اعدادي")) {
     grade = "3AC";
   } else if (combinedText.includes("2ac") || combinedText.includes("ثانية اعدادي") || combinedText.includes("السنة الثانية اعدادي")) {
     grade = "2AC";
   } else if (combinedText.includes("1ac") || combinedText.includes("اولى اعدادي") || combinedText.includes("السنة الاولى اعدادي")) {
     grade = "1AC";
-  } else if (combinedText.includes("tronc commun") || combinedText.includes("جذع مشترك")) {
+  } else if (combinedText.includes("tronc commun") || combinedText.includes("جذع مشترك") || combinedText.includes("tc") || combinedText.includes("tcs")) {
     grade = "Tronc Commun";
   } else if (combinedText.includes("2bac") || combinedText.includes("ثانية باك") || combinedText.includes("البكالوريا")) {
     grade = "2BAC";
@@ -114,10 +149,9 @@ export function extractClassifyingMetadata(urlStr: string, textContext: string =
     grade = "1BAC";
   }
 
-  // Subject Detection
   if (combinedText.includes("math") || combinedText.includes("رياضيات") || combinedText.includes("الرياضيات")) {
     subject = "Mathématiques";
-  } else if (combinedText.includes("physique") || combinedText.includes("chimie") || combinedText.includes("الفيزياء")) {
+  } else if (combinedText.includes("physique") || combinedText.includes("chimie") || combinedText.includes("pc") || combinedText.includes("الفيزياء")) {
     subject = "Physique-Chimie";
   } else if (combinedText.includes("svt") || combinedText.includes("sciences de la vie") || combinedText.includes("الارض") || combinedText.includes("الأرض")) {
     subject = "SVT";
@@ -129,284 +163,364 @@ export function extractClassifyingMetadata(urlStr: string, textContext: string =
     subject = "Anglais";
   }
 
-  // Track Detection
   if (combinedText.includes("biof") || combinedText.includes("خيار فرنسي") || combinedText.includes("option francais") || combinedText.includes("option français")) {
-    track = "BIOF (Option Français)";
+    track = "Sciences Expérimentales BIOF";
   } else if (combinedText.includes("خيار عربي") || combinedText.includes("option arabe")) {
     track = "Option Arabe";
-  } else if (combinedText.includes("science") || combinedText.includes("علوم") || combinedText.includes("العلوم")) {
+  } else if (!combinedText.includes("sciences de la vie") && !combinedText.includes("علوم الحياة") && (combinedText.includes("science ") || combinedText.includes("sciences ") || combinedText.includes("علوم") || combinedText.includes("العلوم"))) {
     track = "Sciences";
   } else if (combinedText.includes("lettres") || combinedText.includes("اداب") || combinedText.includes("الآداب")) {
     track = "Lettres";
   }
 
-  return { grade, subject, track };
+  if (combinedText.includes("examen régional") || combinedText.includes("examen regional") || combinedText.includes("régional") || combinedText.includes("regional") || combinedText.includes("جهوي")) {
+    documentType = "Examen régional";
+  } else if (combinedText.includes("cours") || combinedText.includes("lesson") || combinedText.includes("درس")) {
+    documentType = "Cours";
+  } else if (combinedText.includes("exercice") || combinedText.includes("serie") || combinedText.includes("تمارين")) {
+    documentType = "Exercices";
+  } else if (combinedText.includes("corrige") || combinedText.includes("correction") || combinedText.includes("تصحيح")) {
+    documentType = "Devoir corrigé";
+  } else if (combinedText.includes("devoir") || combinedText.includes("controle") || combinedText.includes("فرض")) {
+    documentType = "Devoir";
+  } else if (combinedText.includes("resume") || combinedText.includes("ملخص")) {
+    documentType = "Résumé";
+  }
+
+  // Common Moroccan regions
+  const regions = [
+    "Casablanca-Settat", "Rabat-Salé-Kénitra", "Fès-Meknès", "Marrakech-Safi", 
+    "Tanger-Tétouan-Al Hoceïma", "Souss-Massa", "Béni Mellal-Khénifra", 
+    "Drâa-Tafilalet", "Oriental", "Guelmim-Oued Noun", "Laâyoune-Sakia El Hamra", 
+    "Dakhla-Oued Ed-Dahab"
+  ];
+  
+  for (const r of regions) {
+    if (combinedText.replace(/-/g, " ").includes(r.toLowerCase().replace(/-/g, " "))) {
+      region = r;
+      break;
+    }
+  }
+
+  const yearMatch = combinedText.match(/20\d{2}(-20\d{2})?/);
+  if (yearMatch) {
+    schoolYear = yearMatch[0];
+  }
+
+  try {
+    if (urlStr.startsWith("http")) {
+      const hostname = new URL(urlStr).hostname;
+      const parts = hostname.replace("www.", "").split(".");
+      source = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+      source = source.charAt(0).toUpperCase() + source.slice(1);
+    }
+  } catch {}
+
+  // Google Drive override
+  if (urlStr.includes("drive.google.com")) {
+    source = "Google Drive";
+  }
+
+  return { grade, subject, track, documentType, schoolYear, region, source };
 }
 
-/**
- * Main PDF Discovery entry point
- */
+export interface CrawlerOptions {
+  maxPages: number;
+  maxDepth: number;
+  batchSize: number;
+  timeLimitMs: number;
+}
+
+interface QueuedUrl {
+  url: string;
+  depth: number;
+}
+
 export async function discoverPdfsFromInput(
   pastedText: string,
-  topicFilter?: string
+  topicFilter?: string,
+  options: Partial<CrawlerOptions> = {}
 ): Promise<DiscoveredItem[]> {
+  const opts = {
+    maxPages: 50,
+    maxDepth: 3,
+    batchSize: 5,
+    timeLimitMs: 90000,
+    ...options
+  };
+
   const rawUrls = splitConcatenatedUrls(pastedText);
   const results: DiscoveredItem[] = [];
 
   for (const rawUrl of rawUrls) {
-    const normalizedUrl = removeHashFragment(rawUrl);
-    
-    if (isDirectPdfUrl(normalizedUrl)) {
-      // 1. Direct PDF asset case
-      const meta = extractClassifyingMetadata(normalizedUrl);
+    const rootNormalized = normalizeUrlSafe(rawUrl);
+
+    if (isDirectPdfUrl(rootNormalized)) {
+      const meta = extractClassifyingMetadata(rootNormalized);
+      const cleanTitle = formatLevelspaceReviewTitle(meta);
+      
       results.push({
-        url: normalizedUrl,
+        url: rootNormalized,
         raw_url: rawUrl,
-        normalized_url: normalizedUrl,
-        source_page_url: normalizedUrl,
-        pdf_url: normalizedUrl,
+        normalized_url: rootNormalized,
+        source_page_url: rootNormalized,
+        pdf_url: rootNormalized,
         url_type: "direct_pdf",
         pdf_count: 1,
         isDirectPdf: true,
         accepted: true,
         reason: "Direct PDF document link detected",
-        title: normalizedUrl.split("/").pop() || "Direct PDF",
+        title: cleanTitle || rootNormalized.split("/").pop() || "Direct PDF",
+        cleanTitle: cleanTitle,
         metadata: meta
       });
-    } else {
-      // 2. HTML source page case
-      try {
-        console.log(`[Discover Service] Fetching source HTML page: ${normalizedUrl}`);
-        const htmlRes = await axios.get(normalizedUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "fr,en-US;q=0.7,en;q=0.3"
-          },
-          httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
-          timeout: 60000,
-          validateStatus: () => true
-        });
+      continue;
+    }
 
-        if (htmlRes.status >= 400 && htmlRes.status !== 404) {
-          throw new Error(`Request failed with status code ${htmlRes.status}`);
-        }
+    console.log(`[Discover Service] Starting crawl for root HTML page: ${rootNormalized}`);
+    
+    const queue: QueuedUrl[] = [{ url: rootNormalized, depth: 0 }];
+    const visited = new Set<string>();
+    const pagePdfLinks = new Set<string>();
+    let pagesCrawled = 0;
+    const startTime = Date.now();
+    
+    let rootPageTitle = "";
+    let rootPageHtml = "";
 
-        const pageHtml = typeof htmlRes.data === "string" ? htmlRes.data : "";
-        const $ = load(pageHtml);
-        const pageTitle = $("title").text().trim();
-        
-        const pagePdfLinks: string[] = [];
+    while (queue.length > 0) {
+      if (pagesCrawled >= opts.maxPages) {
+        console.log(`[Discover Service] Stop reason: maxPages (${opts.maxPages}) reached`);
+        break;
+      }
+      if (Date.now() - startTime > opts.timeLimitMs) {
+        console.log(`[Discover Service] Stop reason: timeLimitMs (${opts.timeLimitMs}) reached`);
+        break;
+      }
+      
+      const batch = queue.splice(0, opts.batchSize);
+      const validBatch = batch.filter(q => !visited.has(q.url));
+      
+      if (validBatch.length === 0) continue;
 
-        // 1. First try to find PDFs exclusively within primary content areas 
-        // to avoid grabbing social links or standard sidebar navigation PDFs.
-        const mainContentSelectors = [
-          ".entry-content",
-          ".post-content",
-          "article",
-          "main",
-          "#content", 
-          ".content-area"
-        ];
+      validBatch.forEach(q => visited.add(q.url));
+      pagesCrawled += validBatch.length;
+
+      const mainContentSelectors = [
+        ".entry-content", ".post-content", "article", "main", "#content", ".content-area"
+      ];
+
+      await Promise.all(validBatch.map(async ({ url: currentUrl, depth }) => {
+        console.log(`[Discover Service] Crawl page ${pagesCrawled} depth ${depth}: ${currentUrl}`);
         
-        let foundInMain = false;
-        
-        for (const selector of mainContentSelectors) {
-          const $main = $(selector);
-          if ($main.length > 0) {
-            $main.find("a").each((_, el) => {
-              const href = $(el).attr("href");
-              if (!href) return;
-              try {
-                const absoluteStr = resolveRelativeUrl(href, normalizedUrl);
-                const cleanAbsoluteStr = removeHashFragment(absoluteStr);
-                if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                  pagePdfLinks.push(cleanAbsoluteStr);
-                  foundInMain = true;
-                }
-              } catch {}
-            });
+        try {
+          const htmlRes = await axios.get(currentUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+              "Accept-Language": "fr,en-US;q=0.7,en;q=0.3"
+            },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
+            timeout: currentUrl === rootNormalized ? 60000 : 12000,
+            validateStatus: () => true
+          });
+
+          if (htmlRes.status >= 400 && htmlRes.status !== 404) {
+            console.log(`[Discover Service] Request failed for ${currentUrl} with status ${htmlRes.status}`);
+            return;
           }
-        }
-        
-        // 2. If nothing is found in typical main containers, fallback to whole page scan 
-        // BUT explicitly avoid common negative (red) areas: sidebar, widgets, etc.
-        if (!foundInMain && pagePdfLinks.length === 0) {
-          $("a").each((_, el) => {
-            // Check if element is inside an excluded area
-            const isExcluded = $(el).parents("#sidebar, .sidebar, .widget, .social-share, footer, header, #secondary").length > 0;
-            if (isExcluded) return;
-            
-            const href = $(el).attr("href");
-            if (!href) return;
-            try {
-              const absoluteStr = resolveRelativeUrl(href, normalizedUrl);
-              const cleanAbsoluteStr = removeHashFragment(absoluteStr);
-              if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                pagePdfLinks.push(cleanAbsoluteStr);
-              }
-            } catch {}
-          });
-        }
-        
-        // 3. Absolute Fallback: if STILL nothing, just grab any a tag (sometimes the DOM is non-semantic)
-        if (pagePdfLinks.length === 0) {
-          $("a").each((_, el) => {
-            const href = $(el).attr("href");
-            if (!href) return;
-            try {
-              const absoluteStr = resolveRelativeUrl(href, normalizedUrl);
-              const cleanAbsoluteStr = removeHashFragment(absoluteStr);
-              if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                pagePdfLinks.push(cleanAbsoluteStr);
-              }
-            } catch {}
-          });
-        }
 
-        // 3.5 Check iframes and embeds (Moutamadris often uses drive iframes to show PDFs)
-        if (pagePdfLinks.length === 0) {
-          $("iframe, embed, object").each((_, el) => {
-            const src = $(el).attr("src") || $(el).attr("data") || $(el).attr("href");
-            if (!src) return;
-            try {
-              const absoluteStr = resolveRelativeUrl(src, normalizedUrl);
-              const cleanAbsoluteStr = removeHashFragment(absoluteStr);
-              if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                pagePdfLinks.push(cleanAbsoluteStr);
-              }
-            } catch {}
-          });
-        }
+          const pageHtml = typeof htmlRes.data === "string" ? htmlRes.data : "";
+          const $ = load(pageHtml);
+          const pageTitle = $("title").text().trim();
+          
+          if (currentUrl === rootNormalized) {
+             rootPageTitle = pageTitle;
+             rootPageHtml = pageHtml;
+          }
 
-        // 4. One-Level Deep Crawl Strategy for Category Pages (e.g. Moutamadris.ma)
-        // If the URL is a category page that points to lessons (which in turn contain PDFs),
-        // we'll fetch the lesson links to discover actual PDFs.
-        if (pagePdfLinks.length === 0) {
-          let candidateDeepLinks: string[] = [];
+          let foundPdfsOnPage = 0;
+          let foundInMain = false;
           
           for (const selector of mainContentSelectors) {
              const $main = $(selector);
              if ($main.length > 0) {
                $main.find("a").each((_, el) => {
-                  const href = $(el).attr("href");
-                  if (!href) return;
-                  try {
-                    const absoluteStr = resolveRelativeUrl(href, normalizedUrl);
-                    const cleanAbsoluteStr = removeHashFragment(absoluteStr);
-                    // Only crawl links on the same origin that don't look like utility pages
-                    if (cleanAbsoluteStr.startsWith(new URL(normalizedUrl).origin) && !cleanAbsoluteStr.endsWith(".jpg") && !cleanAbsoluteStr.endsWith(".png")) {
-                       candidateDeepLinks.push(cleanAbsoluteStr);
-                    }
-                  } catch {}
-               });
-               if (candidateDeepLinks.length > 0) break; // found links in the primary content area
-             }
-          }
-
-          candidateDeepLinks = Array.from(new Set(candidateDeepLinks)).filter(u => u !== normalizedUrl).slice(0, 15);
-          
-          if (candidateDeepLinks.length > 0) {
-             console.log(`[Discover Service] Deep crawling ${candidateDeepLinks.length} sub-pages for PDFs...`);
-             const BATCH_SIZE = 5;
-             const startTime = Date.now();
-             for (let i = 0; i < candidateDeepLinks.length; i += BATCH_SIZE) {
-                if (Date.now() - startTime > 30000) {
-                  console.log(`[Discover Service] Deep crawl time limit of 30s elapsed. Halting deeper scan.`);
-                  break;
-                }
-               const batchUrls = candidateDeepLinks.slice(i, i + BATCH_SIZE);
-               await Promise.all(batchUrls.map(async (deepUrl) => {
+                 const href = $(el).attr("href");
+                 if (!href) return;
                  try {
-                    const deepRes = await axios.get(deepUrl, {
-                      headers: { 
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-                      },
-                      httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
-                      timeout: 12000,
-                      validateStatus: () => true
-                    });
-                    
-                    if (deepRes.status === 200 && typeof deepRes.data === "string") {
-                       const $d = load(deepRes.data);
-                       $d("a").each((_, el) => {
-                          const href = $d(el).attr("href");
-                          if (!href) return;
-                          try {
-                            const absoluteStr = resolveRelativeUrl(href, deepUrl);
-                            const cleanAbsoluteStr = removeHashFragment(absoluteStr);
-                            if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                               pagePdfLinks.push(cleanAbsoluteStr);
-                            }
-                          } catch {}
-                       });
-                    }
-                 } catch (e: any) { 
-                    console.log(`[Discover Service] Deep crawl failed for ${deepUrl}: ${e.message}`);
-                 }
-               }));
-               // slight delay between batches to avoid 429
-               await new Promise(r => setTimeout(r, 600));
+                   const absoluteStr = resolveRelativeUrl(href, currentUrl);
+                   const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
+                   if (isDirectPdfUrl(cleanAbsoluteStr)) {
+                     pagePdfLinks.add(cleanAbsoluteStr);
+                     foundInMain = true;
+                     foundPdfsOnPage++;
+                   }
+                 } catch {}
+               });
              }
           }
-        }
 
-        const uniquePdfLinks = Array.from(new Set(pagePdfLinks));
-        
-        // If we found PDFs either directly or via deep crawl
-        if (uniquePdfLinks.length > 0) {
-          // Found direct PDFs on this page
-          for (const pdfLink of uniquePdfLinks) {
-            const meta = extractClassifyingMetadata(pdfLink, pageTitle + " " + pageHtml.substring(0, 5000));
-            results.push({
-              url: pdfLink,
-              raw_url: rawUrl,
-              normalized_url: normalizedUrl,
-              source_page_url: normalizedUrl,
-              pdf_url: pdfLink,
-              url_type: "source_page",
-              pdf_count: uniquePdfLinks.length,
-              isDirectPdf: true,
-              accepted: true,
-              reason: `Extracted from educational source page: ${normalizedUrl}`,
-              title: pdfLink.split("/").pop() || pageTitle,
-              metadata: meta
+          if (!foundInMain && foundPdfsOnPage === 0) {
+            $("a").each((_, el) => {
+               const isExcluded = $(el).parents("#sidebar, .sidebar, .widget, .social-share, footer, header, #secondary").length > 0;
+               if (isExcluded) return;
+               const href = $(el).attr("href");
+               if (!href) return;
+               try {
+                 const absoluteStr = resolveRelativeUrl(href, currentUrl);
+                 const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
+                 if (isDirectPdfUrl(cleanAbsoluteStr)) {
+                   pagePdfLinks.add(cleanAbsoluteStr);
+                   foundPdfsOnPage++;
+                 }
+               } catch {}
             });
           }
-        } else {
-          // No PDFs found at all
-          const meta = extractClassifyingMetadata(normalizedUrl, pageTitle + " " + pageHtml.substring(0, 5000));
-          results.push({
-            url: normalizedUrl,
-            raw_url: rawUrl,
-            normalized_url: normalizedUrl,
-            source_page_url: normalizedUrl,
-            pdf_url: normalizedUrl,
-            url_type: "source_page_no_pdfs",
-            pdf_count: 0,
-            isDirectPdf: false,
-            accepted: true,
-            reason: "No educational PDFs discovered on page. Staged for manual review.",
-            title: pageTitle || normalizedUrl,
-            metadata: meta
-          });
+
+          if (foundPdfsOnPage === 0) {
+            $("a").each((_, el) => {
+               const href = $(el).attr("href");
+               if (!href) return;
+               try {
+                 const absoluteStr = resolveRelativeUrl(href, currentUrl);
+                 const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
+                 if (isDirectPdfUrl(cleanAbsoluteStr)) {
+                   pagePdfLinks.add(cleanAbsoluteStr);
+                   foundPdfsOnPage++;
+                 }
+               } catch {}
+            });
+            
+            $("iframe, embed, object").each((_, el) => {
+               const src = $(el).attr("src") || $(el).attr("data") || $(el).attr("href");
+               if (!src) return;
+               try {
+                 const absoluteStr = resolveRelativeUrl(src, currentUrl);
+                 const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
+                 if (isDirectPdfUrl(cleanAbsoluteStr)) {
+                   pagePdfLinks.add(cleanAbsoluteStr);
+                   foundPdfsOnPage++;
+                 }
+               } catch {}
+            });
+          }
+
+          console.log(`[Discover Service] Found ${foundPdfsOnPage} PDFs on URL: ${currentUrl}`);
+
+          if (depth < opts.maxDepth) {
+            const paginationCandidates = new Set<string>();
+            const deepCandidateLinks = new Set<string>();
+            const origin = new URL(currentUrl).origin;
+            
+            $("a").each((_, el) => {
+               const href = $(el).attr("href");
+               if (!href) return;
+               
+               let absoluteStr = "";
+               try {
+                 absoluteStr = resolveRelativeUrl(href, currentUrl);
+               } catch { return; }
+               
+               const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
+               
+               if (
+                 cleanAbsoluteStr.startsWith(origin) && 
+                 !isAssetUrl(cleanAbsoluteStr) && 
+                 !isDirectPdfUrl(cleanAbsoluteStr) &&
+                 !visited.has(cleanAbsoluteStr)
+               ) {
+                  const isPagination = isPaginationLink($(el), href);
+                  
+                  if (isPagination) {
+                    paginationCandidates.add(cleanAbsoluteStr);
+                  } else {
+                    if (foundPdfsOnPage === 0) {
+                      const inMain = $(el).parents(mainContentSelectors.join(", ")).length > 0;
+                      if (inMain) {
+                        deepCandidateLinks.add(cleanAbsoluteStr);
+                      }
+                    }
+                  }
+               }
+            });
+
+            for (const link of paginationCandidates) {
+              if (!queue.find(q => q.url === link)) {
+                queue.unshift({ url: link, depth: depth });
+                console.log(`[Discover Service] Enqueued next page (pagination): ${link}`);
+              }
+            }
+            
+            const candidateArray = Array.from(deepCandidateLinks).slice(0, 50);
+            for (const link of candidateArray) {
+              if (!queue.find(q => q.url === link)) {
+                queue.push({ url: link, depth: depth + 1 });
+              }
+            }
+          }
+        } catch (err: any) {
+           console.log(`[Discover Service] Crawl failed for ${currentUrl}: ${err.message}`);
         }
-      } catch (err: any) {
-        console.error(`[Discover Service] Failed to crawl URL: ${normalizedUrl}`, err.message);
+      }));
+      
+      if (queue.length === 0) {
+        console.log(`[Discover Service] Stop reason: noMoreUrls`);
+      } else {
+        await new Promise(r => setTimeout(r, 600));
+      }
+    }
+
+    const uniquePdfLinks = Array.from(pagePdfLinks);
+    
+    if (uniquePdfLinks.length > 0) {
+      for (const pdfLink of uniquePdfLinks) {
+        let meta: Record<string, any> = { grade: null, subject: null, track: null, documentType: null, schoolYear: null, source: null };
+        try {
+          meta = extractClassifyingMetadata(pdfLink, rootPageTitle + " " + rootPageHtml.substring(0, 5000));
+        } catch {}
+        
+        const cleanTitle = formatLevelspaceReviewTitle(meta as any);
+
         results.push({
-          url: normalizedUrl,
+          url: pdfLink,
           raw_url: rawUrl,
-          normalized_url: normalizedUrl,
-          source_page_url: normalizedUrl,
-          pdf_url: normalizedUrl,
-          url_type: "source_page_no_pdfs",
-          pdf_count: 0,
-          isDirectPdf: false,
-          accepted: false,
-          reason: `Error during discovery: ${err.message}`
+          normalized_url: rootNormalized,
+          source_page_url: rootNormalized,
+          pdf_url: pdfLink,
+          url_type: "source_page",
+          pdf_count: uniquePdfLinks.length,
+          isDirectPdf: true,
+          accepted: true,
+          reason: `Extracted from educational source page: ${rootNormalized}`,
+          title: cleanTitle || pdfLink.split("/").pop() || rootPageTitle,
+          cleanTitle: cleanTitle,
+          metadata: meta as any
         });
       }
+    } else {
+      let meta: Record<string, any> = { grade: null, subject: null, track: null, documentType: null, schoolYear: null, source: null };
+      try {
+        meta = extractClassifyingMetadata(rootNormalized, rootPageTitle + " " + rootPageHtml.substring(0, 5000));
+      } catch {}
+      
+      const cleanTitle = formatLevelspaceReviewTitle(meta as any);
+
+      results.push({
+        url: rootNormalized,
+        raw_url: rawUrl,
+        normalized_url: rootNormalized,
+        source_page_url: rootNormalized,
+        pdf_url: rootNormalized,
+        url_type: "source_page_no_pdfs",
+        pdf_count: 0,
+        isDirectPdf: false,
+        accepted: true,
+        reason: "No educational PDFs discovered on page. Staged for manual review.",
+        title: cleanTitle || rootPageTitle || rootNormalized,
+        cleanTitle: cleanTitle,
+        metadata: meta as any
+      });
     }
   }
 

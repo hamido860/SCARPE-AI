@@ -1,6 +1,6 @@
 import React from "react";
 import { 
-  Search, Globe, ChevronRight, Loader2, ExternalLink, Sparkles
+  Search, Globe, ChevronRight, Loader2, ExternalLink, Sparkles, Wand2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { JobWorkspaceLayout } from "../../layout/JobWorkspaceLayout";
 import { StagedPdf } from "../../../types/pdf";
 import { generateCurriculumFilename } from "../../../utils/filenameGenerator";
+import { ScrapedDataExporter } from "./ScrapedDataExporter";
 
 interface IntakeJobViewProps {
   stagedPdfs: StagedPdf[];
@@ -51,7 +52,10 @@ interface IntakeJobViewProps {
   siteMapNodes?: any[];
   onUpdateSiteMapNode?: (id: string, updates: any) => void;
   onClearSiteMap?: () => void;
+  onAiClean?: () => void;
+  isAiCleaning?: boolean;
   onStageUrlsWithMetadata?: (assets: Array<{ url: string; grade: string; subject: string; topic: string; docType: string }>) => void;
+  hasDriveConnected?: boolean;
 }
 
 export function IntakeJobView({
@@ -90,11 +94,29 @@ export function IntakeJobView({
   siteMapNodes = [],
   onUpdateSiteMapNode,
   onClearSiteMap,
-  onStageUrlsWithMetadata
+  onAiClean,
+  isAiCleaning,
+  onStageUrlsWithMetadata,
+  hasDriveConnected
 }: IntakeJobViewProps) {
 
-  const [siteMapSubTab, setSiteMapSubTab] = React.useState<"website_map" | "final_assets">("website_map");
+  const [siteMapSubTab, setSiteMapSubTab] = React.useState<"website_map" | "final_assets" | "staged_assets">("website_map");
   const [selectedSiteMapUrls, setSelectedSiteMapUrls] = React.useState<string[]>([]);
+  const [selectedStagedUrls, setSelectedStagedUrls] = React.useState<string[]>([]);
+
+  const stagedPdfAssets = siteMapNodes.filter((n: any) => 
+    n.page_role === "pdf_asset" && 
+    n.action === "stage_asset" && 
+    n.status === "completed" && 
+    !n.rejection_reason
+  ).map((n: any) => ({
+    ...n,
+    drive_status: n.drive_status || "not_uploaded",
+    download_status: n.download_status || "not_downloaded",
+    verification_status: n.verification_status || "unverified",
+    selected: false,
+    validation_errors: n.validation_errors || []
+  }));
 
   const getAssetTypeFromUrl = (url: string, isDirectPdf?: boolean): string => {
     const lowered = url.toLowerCase();
@@ -205,6 +227,29 @@ export function IntakeJobView({
   const [fileExtensionFilter, setFileExtensionFilter] = React.useState<string>("all");
   const [customExtension, setCustomExtension] = React.useState<string>("");
 
+  const [roleFilter, setRoleFilter] = React.useState<string>("all");
+  const [actionFilter, setActionFilter] = React.useState<string>("all");
+  const [statusFilter, setStatusFilter] = React.useState<string>("all");
+  const [navigationPathFilter, setNavigationPathFilter] = React.useState<string>("");
+  
+  type SortField = 'canonical_url' | 'navigation_path' | 'page_role' | 'action' | 'links' | 'metadata' | 'confidence' | 'status' | 'none';
+  const [sortField, setSortField] = React.useState<SortField>('none');
+  const [sortAsc, setSortAsc] = React.useState<boolean>(true);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortAsc) {
+        setSortAsc(false);
+      } else {
+        setSortField('none');
+        setSortAsc(true);
+      }
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+  };
+
   const tableItems = activeTab === "crawl" 
     ? crawledPdfs.map(url => ({
         url,
@@ -259,6 +304,11 @@ export function IntakeJobView({
   });
 
   const filteredSiteMapNodes = siteMapNodes.filter(node => {
+    if (roleFilter !== "all" && node.page_role !== roleFilter) return false;
+    if (actionFilter !== "all" && node.action !== actionFilter) return false;
+    if (statusFilter !== "all" && node.status !== statusFilter) return false;
+    if (navigationPathFilter && !node.navigation_path?.toLowerCase().includes(navigationPathFilter.toLowerCase())) return false;
+
     if (fileExtensionFilter === "all") return true;
     const cleanUrl = node.canonical_url.toLowerCase().split(/[?#]/)[0];
     
@@ -284,6 +334,51 @@ export function IntakeJobView({
     }
     return true;
   });
+
+  const sortedAndFilteredSiteMapNodes = [...filteredSiteMapNodes].sort((a, b) => {
+    if (sortField === 'none') return 0;
+    let aVal: any = '';
+    let bVal: any = '';
+    
+    switch (sortField) {
+      case 'canonical_url':
+        aVal = a.canonical_url || '';
+        bVal = b.canonical_url || '';
+        break;
+      case 'navigation_path':
+        aVal = (a.navigation_path || '').replace(/ > /g, '');
+        bVal = (b.navigation_path || '').replace(/ > /g, '');
+        break;
+      case 'page_role':
+        aVal = a.page_role || '';
+        bVal = b.page_role || '';
+        break;
+      case 'action':
+        aVal = a.action || '';
+        bVal = b.action || '';
+        break;
+      case 'links':
+        aVal = a.discovered_links_count || 0;
+        bVal = b.discovered_links_count || 0;
+        break;
+      case 'metadata':
+        aVal = `${a.extracted_grade || ''} ${a.extracted_subject || ''} ${a.extracted_document_type || ''} ${a.extracted_topic || ''}`.trim();
+        bVal = `${b.extracted_grade || ''} ${b.extracted_subject || ''} ${b.extracted_document_type || ''} ${b.extracted_topic || ''}`.trim();
+        break;
+      case 'confidence':
+        aVal = a.confidence || 0;
+        bVal = b.confidence || 0;
+        break;
+      case 'status':
+        aVal = a.status || '';
+        bVal = b.status || '';
+        break;
+    }
+    if (aVal < bVal) return sortAsc ? -1 : 1;
+    if (aVal > bVal) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
 
   const pdfCount = tableItems.filter(item => item.accepted && item.assetType === "PDF").length;
   const htmlCount = tableItems.filter(item => item.accepted && item.assetType === "HTML Lesson").length;
@@ -593,19 +688,46 @@ export function IntakeJobView({
                     : "text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50"
                 }`}
               >
-                Final Assets ({filteredSiteMapNodes.length === siteMapNodes.length ? `${siteMapNodes.filter(n => n.is_final_asset).length} ready` : `${filteredSiteMapNodes.filter(n => n.is_final_asset).length}/${siteMapNodes.filter(n => n.is_final_asset).length} filtered`})
+                Final Assets ({filteredSiteMapNodes.length === siteMapNodes.length ? `${siteMapNodes.filter((n: any) => n.is_final_asset).length} ready` : `${filteredSiteMapNodes.filter((n: any) => n.is_final_asset).length}/${siteMapNodes.filter((n: any) => n.is_final_asset).length} filtered`})
+              </button>
+              <button
+                id="sitemapping-tab-staged"
+                type="button"
+                onClick={() => setSiteMapSubTab("staged_assets")}
+                className={`px-4 py-2 text-xs font-mono uppercase font-bold transition-all flex items-center gap-1.5 ${
+                  siteMapSubTab === "staged_assets"
+                    ? "bg-neutral-900 text-white rounded-none"
+                    : "text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50"
+                }`}
+              >
+                Staged PDF Assets ({stagedPdfAssets.length})
               </button>
               
+              {siteMapNodes.length > 0 && onAiClean && (
+                <button
+                  type="button"
+                  onClick={onAiClean}
+                  disabled={isAiCleaning}
+                  className="ml-auto px-3 py-1.5 text-[9px] font-mono uppercase bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-none border border-indigo-200 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Wand2 className="w-3 h-3" />
+                  {isAiCleaning ? "Cleaning..." : "AI Clean Search Results"}
+                </button>
+              )}
               {siteMapNodes.length > 0 && onClearSiteMap && (
                 <button
                   type="button"
                   onClick={onClearSiteMap}
-                  className="ml-auto px-3 py-1.5 text-[9px] font-mono uppercase text-red-600 hover:bg-red-50 rounded-none border border-red-200 transition-colors"
+                  className="ml-2 px-3 py-1.5 text-[9px] font-mono uppercase text-red-600 hover:bg-red-50 rounded-none border border-red-200 transition-colors"
                 >
                   Clear Results
                 </button>
               )}
             </div>
+
+            {siteMapNodes.length > 0 && (
+              <ScrapedDataExporter data={siteMapNodes} />
+            )}
 
             {siteMapNodes.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center text-neutral-400 border border-dashed border-neutral-200 bg-white shadow-xs">
@@ -615,22 +737,61 @@ export function IntakeJobView({
               </div>
             ) : siteMapSubTab === "website_map" ? (
               <div className="border border-neutral-200 bg-white overflow-x-auto shadow-sm">
+                <div className="flex gap-2 p-2 bg-neutral-50 border-b border-neutral-200">
+                  <input 
+                    type="text"
+                    placeholder="Filter by Navigation Path..."
+                    value={navigationPathFilter}
+                    onChange={e => setNavigationPathFilter(e.target.value)}
+                    className="border border-neutral-300 text-[10px] font-mono px-2 py-1 bg-white min-w-[200px]"
+                  />
+                  <select 
+                    value={roleFilter} 
+                    onChange={e => setRoleFilter(e.target.value)} 
+                    className="border border-neutral-300 text-[10px] font-mono px-2 py-1 bg-white"
+                  >
+                    <option value="all">ALL ROLES</option>
+                    {Array.from(new Set(siteMapNodes.map(n => n.page_role).filter(Boolean))).map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                  <select 
+                    value={actionFilter} 
+                    onChange={e => setActionFilter(e.target.value)} 
+                    className="border border-neutral-300 text-[10px] font-mono px-2 py-1 bg-white"
+                  >
+                    <option value="all">ALL ACTIONS</option>
+                    {Array.from(new Set(siteMapNodes.map(n => n.action).filter(Boolean))).map(action => (
+                      <option key={action} value={action}>{action}</option>
+                    ))}
+                  </select>
+                  <select 
+                    value={statusFilter} 
+                    onChange={e => setStatusFilter(e.target.value)} 
+                    className="border border-neutral-300 text-[10px] font-mono px-2 py-1 bg-white"
+                  >
+                    <option value="all">ALL STATUSES</option>
+                    {Array.from(new Set(siteMapNodes.map(n => n.status).filter(Boolean))).map(status => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </div>
                 <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
                     <tr className="bg-neutral-50 border-b border-neutral-200 text-[9px] font-mono uppercase text-neutral-500">
-                      <th className="p-3 font-bold">Source ID & Canonical URL</th>
-                      <th className="p-3 font-bold">Navigation Path / Breadcrumb</th>
-                      <th className="p-3 font-bold">Role</th>
-                      <th className="p-3 font-bold">Action</th>
-                      <th className="p-3 font-bold text-center">Links</th>
-                      <th className="p-3 font-bold">Deducted Metadata</th>
-                      <th className="p-3 font-bold text-center">Confidence</th>
-                      <th className="p-3 font-bold">Crawl Status</th>
+                      <th className="p-3 font-bold cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('canonical_url')}>Source ID & Canonical URL {sortField === 'canonical_url' && (sortAsc ? '↑' : '↓')}</th>
+                      <th className="p-3 font-bold cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('navigation_path')}>Navigation Path / Breadcrumb {sortField === 'navigation_path' && (sortAsc ? '↑' : '↓')}</th>
+                      <th className="p-3 font-bold cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('page_role')}>Role {sortField === 'page_role' && (sortAsc ? '↑' : '↓')}</th>
+                      <th className="p-3 font-bold cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('action')}>Action {sortField === 'action' && (sortAsc ? '↑' : '↓')}</th>
+                      <th className="p-3 font-bold text-center cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('links')}>Links {sortField === 'links' && (sortAsc ? '↑' : '↓')}</th>
+                      <th className="p-3 font-bold cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('metadata')}>Deducted Metadata {sortField === 'metadata' && (sortAsc ? '↑' : '↓')}</th>
+                      <th className="p-3 font-bold text-center cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('confidence')}>Confidence {sortField === 'confidence' && (sortAsc ? '↑' : '↓')}</th>
+                      <th className="p-3 font-bold cursor-pointer hover:bg-neutral-100" onClick={() => handleSort('status')}>Crawl Status {sortField === 'status' && (sortAsc ? '↑' : '↓')}</th>
                       <th className="p-3 font-bold w-12 text-center">Open</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100 text-[11px]">
-                    {filteredSiteMapNodes.map((node, idx) => {
+                    {sortedAndFilteredSiteMapNodes.map((node, idx) => {
                       const isHub = node.page_role === "hub_page";
                       return (
                         <tr key={node.id || idx} className="hover:bg-neutral-50/50 transition-colors">
@@ -709,7 +870,7 @@ export function IntakeJobView({
                   </tbody>
                 </table>
               </div>
-            ) : (
+            ) : siteMapSubTab === "final_assets" ? (
               <div className="space-y-4">
                 {/* Advanced site mapping controller */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white border border-neutral-200 p-4 shadow-xs gap-3">
@@ -888,7 +1049,189 @@ export function IntakeJobView({
                   </table>
                 </div>
               </div>
-            )}
+            ) : siteMapSubTab === "staged_assets" ? (
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <div className="border border-neutral-300 bg-white p-3 shadow-xs">
+                    <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">Total Staged</div>
+                    <div className="text-sm font-black font-mono text-blue-700 mt-1">{stagedPdfAssets.length}</div>
+                  </div>
+                  <div className="border border-neutral-300 bg-white p-3 shadow-xs">
+                    <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">By Grade</div>
+                    <div className="text-[9px] font-mono text-neutral-700 mt-1 max-h-24 overflow-y-auto">
+                      {Object.entries(stagedPdfAssets.reduce((acc: any, curr: any) => { acc[curr.extracted_grade || 'Unknown'] = (acc[curr.extracted_grade || 'Unknown'] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([k,v]) => <div key={k}>{k}: {v as number}</div>)}
+                    </div>
+                  </div>
+                  <div className="border border-neutral-300 bg-white p-3 shadow-xs">
+                    <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">By Subject</div>
+                    <div className="text-[9px] font-mono text-neutral-700 mt-1 max-h-24 overflow-y-auto">
+                      {Object.entries(stagedPdfAssets.reduce((acc: any, curr: any) => { acc[curr.extracted_subject || 'Unknown'] = (acc[curr.extracted_subject || 'Unknown'] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([k,v]) => <div key={k}>{k}: {v as number}</div>)}
+                    </div>
+                  </div>
+                  <div className="border border-neutral-300 bg-white p-3 shadow-xs flex-1">
+                    <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">By Type</div>
+                    <div className="text-[9px] font-mono text-neutral-700 mt-1 max-h-24 overflow-y-auto w-full">
+                      {Object.entries(stagedPdfAssets.reduce((acc: any, curr: any) => { acc[curr.extracted_document_type || 'Unknown'] = (acc[curr.extracted_document_type || 'Unknown'] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([k,v]) => <div key={k}>{k}: {v as number}</div>)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 p-2 bg-neutral-50 border border-neutral-200">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="text-[10px] uppercase font-mono bg-white"
+                    onClick={() => setSelectedStagedUrls(stagedPdfAssets.map((n: any) => n.canonical_url))}
+                  >
+                    Select All ({stagedPdfAssets.length})
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="text-[10px] uppercase font-mono bg-white text-red-600"
+                    onClick={() => setSelectedStagedUrls([])}
+                  >
+                    Clear Selection
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="text-[10px] uppercase font-mono bg-indigo-50 border-indigo-200 text-indigo-700"
+                    onClick={() => {
+                       if (onUpdateSiteMapNode) {
+                          selectedStagedUrls.forEach(url => {
+                             const node = siteMapNodes.find((n: any) => n.canonical_url === url);
+                             if (node) {
+                                onUpdateSiteMapNode(node.id, { drive_status: "uploaded" });
+                             }
+                          });
+                       }
+                    }}
+                    disabled={selectedStagedUrls.length === 0 || !hasDriveConnected}
+                  >
+                    {hasDriveConnected ? "Add to Drive" : "Drive Not Configured"}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="text-[10px] uppercase font-mono bg-emerald-50 border-emerald-200 text-emerald-700"
+                    onClick={() => {
+                       const data = stagedPdfAssets.filter((a: any) => selectedStagedUrls.includes(a.canonical_url));
+                       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                       const urlObj = URL.createObjectURL(blob);
+                       const a = document.createElement("a");
+                       a.href = urlObj;
+                       a.download = "staged_assets.json";
+                       a.click();
+                    }}
+                    disabled={selectedStagedUrls.length === 0}
+                  >
+                    Export Selected
+                  </Button>
+                </div>
+
+                {stagedPdfAssets.length === 0 ? (
+                  <div className="p-8 text-center text-neutral-500 font-mono text-[10px] uppercase border border-dashed border-neutral-300">
+                    No staged PDFs found.
+                  </div>
+                ) : (
+                  <div className="border border-neutral-200 bg-white overflow-x-auto shadow-sm">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="bg-neutral-50 border-b border-neutral-200 text-[9px] font-mono uppercase text-neutral-500">
+                          <th className="p-3 w-10 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={stagedPdfAssets.length > 0 && selectedStagedUrls.length === stagedPdfAssets.length} 
+                              onChange={() => {
+                                if (selectedStagedUrls.length === stagedPdfAssets.length) {
+                                  setSelectedStagedUrls([]);
+                                } else {
+                                  setSelectedStagedUrls(stagedPdfAssets.map((n: any) => n.canonical_url));
+                                }
+                              }} 
+                              className="rounded-none border-neutral-300 w-3.5 h-3.5 cursor-pointer" 
+                            />
+                          </th>
+                          <th className="p-3 font-bold w-16">Grade</th>
+                          <th className="p-3 font-bold w-16">Subject</th>
+                          <th className="p-3 font-bold w-20">Doc type</th>
+                          <th className="p-3 font-bold">Topic</th>
+                          <th className="p-3 font-bold text-center w-20">Confidence</th>
+                          <th className="p-3 font-bold text-center">Source</th>
+                          <th className="p-3 font-bold w-24">Drive Status</th>
+                          <th className="p-3 font-bold w-12 text-center">Open</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100 text-[11px]">
+                        {stagedPdfAssets.map((node: any, idx: number) => {
+                          const isChecked = selectedStagedUrls.includes(node.canonical_url);
+                          return (
+                            <tr key={node.id || idx} className={`hover:bg-neutral-50/50 transition-colors ${isChecked ? "bg-emerald-50/30" : ""}`}>
+                              <td className="p-3 text-center">
+                                <input 
+                                  type="checkbox" 
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setSelectedStagedUrls(prev => 
+                                      prev.includes(node.canonical_url)
+                                        ? prev.filter(u => u !== node.canonical_url)
+                                        : [...prev, node.canonical_url]
+                                    );
+                                  }}
+                                  className="rounded-none border-neutral-300 w-3.5 h-3.5 cursor-pointer" 
+                                />
+                              </td>
+                              <td className="p-3 text-neutral-700">
+                                 <Badge className="bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200 rounded-none text-[8px] font-mono shadow-none uppercase">
+                                    {node.extracted_grade || "—"}
+                                 </Badge>
+                              </td>
+                              <td className="p-3 text-neutral-700">
+                                 <Badge className="bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200 rounded-none text-[8px] font-mono shadow-none uppercase">
+                                    {node.extracted_subject || "—"}
+                                 </Badge>
+                              </td>
+                              <td className="p-3 text-neutral-700">
+                                 <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border border-blue-200 rounded-none text-[8px] font-mono shadow-none uppercase">
+                                    {node.extracted_document_type || "—"}
+                                 </Badge>
+                              </td>
+                              <td className="p-3 font-mono text-[10px] text-neutral-600 truncate max-w-[200px]" title={node.extracted_topic || ""}>
+                                 {node.extracted_topic || "—"}
+                              </td>
+                              <td className="p-1 font-mono text-center">
+                                <span className={`font-bold text-[10px] ${
+                                  node.confidence >= 0.9 ? "text-emerald-700" :
+                                  node.confidence >= 0.75 ? "text-blue-700" : "text-amber-700"
+                                }`}>
+                                  {Math.round((node.confidence || 0) * 100)}%
+                                </span>
+                              </td>
+                              <td className="p-3 text-center font-mono text-[10px]">
+                                <a href={node.source_url || node.canonical_url} target="_blank" rel="noreferrer" className="text-neutral-500 hover:underline">
+                                  {new URL(node.source_url || node.canonical_url || "http://unknown").hostname.replace("www.", "")}
+                                </a>
+                              </td>
+                              <td className="p-3">
+                                <Badge className={`rounded-none text-[8px] font-mono py-0 px-1 shadow-none uppercase ${node.drive_status === "uploaded" ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-neutral-100 text-neutral-600 border-neutral-250 hover:bg-neutral-50"}`}>
+                                   {node.drive_status}
+                                </Badge>
+                              </td>
+                              <td className="p-3 text-center">
+                                <a href={node.source_url || node.canonical_url} target="_blank" rel="noreferrer" className="text-neutral-400 hover:text-neutral-900 inline-block align-middle">
+                                  <ExternalLink className="w-3.5 h-3.5"/>
+                                </a>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="border border-neutral-200 bg-white overflow-x-auto shadow-sm">

@@ -1,5 +1,58 @@
 import { StagedPdf } from "../types/pdf";
 
+export interface LevelspaceNamingMetadata {
+  grade?: string | null;
+  subject?: string | null;
+  track?: string | null;
+  documentType?: string | null;
+  schoolYear?: string | null;
+  region?: string | null;
+  source?: string | null;
+}
+
+export function formatLevelspaceReviewTitle(metadata: LevelspaceNamingMetadata): string {
+  const parts = [
+    metadata.grade,
+    metadata.subject,
+    metadata.track,
+    metadata.documentType,
+    metadata.schoolYear,
+    metadata.region,
+    metadata.source
+  ].filter(Boolean).map(p => p?.trim()).filter(Boolean);
+
+  if (parts.length === 0) return "Levelspace · Unnamed Document";
+  return `Levelspace · ${parts.join(" · ")}`;
+}
+
+export function formatLevelspaceSafeFilename(metadata: LevelspaceNamingMetadata): string {
+  const parts = [
+    metadata.grade,
+    metadata.subject,
+    metadata.track,
+    metadata.documentType,
+    metadata.schoolYear,
+    metadata.region,
+    metadata.source
+  ].filter(Boolean).map(p => p?.trim()).filter(Boolean);
+
+  if (parts.length === 0) return "Levelspace_Unnamed_Document.pdf";
+
+  
+  const removeAccents = (str: string) => {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  const formattedParts = parts.map(p => {
+    return removeAccents(p!)
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/[\s_]+/g, "-")
+      .replace(/-+/g, "-");
+  });
+
+  return `Levelspace_${formattedParts.join("_")}.pdf`;
+}
+
 /**
  * Clean a string by removing common generic Moroccan school terms and punctuation,
  * returning a hyphenated topic slug. Supports Arabic and French.

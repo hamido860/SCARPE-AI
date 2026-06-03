@@ -62,4 +62,10 @@ export interface StagedPdf {
   datasetRowStatus?: "pending" | "saving" | "success" | "failed";
   cleanFilename?: string;
   datasetId?: string;
+
+  driveUploadStatus?: "pending" | "uploading" | "uploaded" | "failed";
+  driveFileId?: string;
+  driveFolderPath?: string;
+  driveUploadedAt?: string;
+  driveError?: string;
 }

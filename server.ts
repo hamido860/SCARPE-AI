@@ -20,6 +20,7 @@ import { GoogleGenAI } from "@google/genai";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { jsPDF } from "jspdf";
 import { discoverPdfsFromInput } from "./src/utils/pdfDiscovery.js";
+import { formatLevelspaceReviewTitle, formatLevelspaceSafeFilename } from "./src/utils/filenameGenerator.js";
 
 // Initialize Supabase Client (if environment variables are present)
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -67,6 +68,7 @@ async function callGeminiWithRetry(params: any, options = { maxRetries: 5, initi
 }
 
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
+import { runMoutamadrisCrawl } from "./src/utils/moutamadrisCrawler.js";
 const pdf = (pdfParse as any).default || pdfParse;
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -1248,6 +1250,63 @@ async function startServer() {
     }
     return chunks;
   }
+
+  app.post("/api/pipeline/ai-rename-pdfs", async (req, res) => {
+    try {
+      const { pdfs } = req.body;
+      if (!pdfs || !Array.isArray(pdfs) || pdfs.length === 0) {
+        return res.json([]);
+      }
+
+      const prompt = `You are an educational asset evaluator. I will give you a JSON array of PDF metadata, filenames, and URL patterns.
+Your job is to automatically extract and normalize the grade, subject, document type, and topic for standardized renaming.
+If an item is completely non-educational, garbled, or completely unrelated, set isValid to false.
+Otherwise, normalize the data (e.g. "3eme", "3apic" -> "3AC") and keep the topic/lesson clean and precise.
+
+Input JSON:
+${JSON.stringify(pdfs)}
+
+Return a JSON array of ALL input items with their original 'id', setting 'isValid' to true or false.
+For each valid item, return EXACTLY this structure:
+[
+  {
+    "id": "the-original-id",
+    "isValid": true,
+    "grade": "extracted grade (e.g., 3AC, TCS, 1BAC, 2BAC...)",
+    "subject": "extracted subject (e.g., SVT, PC, Math, Arabic...)",
+    "docType": "extracted document type (e.g., Cours, Exercices, Examen...)",
+    "topic": "the specific lesson or exam name (keep it clean and precise)"
+  },
+  {
+    "id": "another-original-id",
+    "isValid": false
+  }
+]
+`;
+
+      const response = await callGeminiWithRetry({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      let aiResults = [];
+      try {
+        if (response && response.text) {
+          aiResults = JSON.parse(response.text.trim());
+        }
+      } catch (err) {
+        console.error("Gemini failed to return valid JSON array", err);
+      }
+
+      res.json(Array.isArray(aiResults) ? aiResults : []);
+    } catch (error: any) {
+      console.error("AI rename error:", error);
+      res.status(500).json({ error: "Failed to perform AI rename" });
+    }
+  });
 
   app.post("/api/pipeline/reset-workspace", async (req, res) => {
     try {
@@ -3176,8 +3235,6 @@ Respond strictly in raw JSON without markdown:
 
   app.post("/api/pipeline/parse", async (req, res) => {
     const { url, title, topicFilter } = req.body;
-    const safeTitle = getSafeTitleFromFilename(title || url || "unnamed");
-    const fallbackName = `needs-review__${safeTitle}.pdf`;
 
     let activeDict: any = { grades: [], subjects: [], topics: [], allowedDocumentTypes: [] };
     try {
@@ -3192,6 +3249,38 @@ Respond strictly in raw JSON without markdown:
       ...deterministicMetadata,
       ...mappedIds
     };
+
+    let trackHint = null;
+    let schoolYearHint = null;
+    const allTextToSearch = ((url || "") + " " + (title || "")).toLowerCase();
+    
+    if (allTextToSearch.includes("biof") || allTextToSearch.includes("خيار فرنسي") || allTextToSearch.includes("option francais")) {
+      trackHint = "Sciences Expérimentales BIOF";
+    } else if (allTextToSearch.includes("خيار عربي") || allTextToSearch.includes("option arabe")) {
+      trackHint = "Option Arabe";
+    }
+
+    const yearMatch = allTextToSearch.match(/20\d{2}-20\d{2}/);
+    if (yearMatch) {
+      schoolYearHint = yearMatch[0];
+    }
+    
+    let formattedSource = combinedMetadataAndIds.sourceSite || null;
+    if (formattedSource) {
+      formattedSource = formattedSource.charAt(0).toUpperCase() + formattedSource.slice(1);
+    }
+
+    const levelspaceMeta = {
+      grade: combinedMetadataAndIds.sourceGradeRaw || combinedMetadataAndIds.gradeHint || null,
+      subject: combinedMetadataAndIds.sourceSubjectRaw || combinedMetadataAndIds.subjectHint || null,
+      track: trackHint,
+      documentType: combinedMetadataAndIds.sourceDocumentTypeRaw || combinedMetadataAndIds.documentTypeHint || null,
+      schoolYear: schoolYearHint,
+      source: formattedSource
+    };
+
+    const safeTitle = formatLevelspaceReviewTitle(levelspaceMeta);
+    const fallbackName = formatLevelspaceSafeFilename(levelspaceMeta);
 
     try {
       if (!url) {
@@ -3375,6 +3464,8 @@ Respond strictly in raw JSON without markdown:
           pipelineStep: "extract",
           blockReason: "",
           technicalError: "",
+          cleanTitle: safeTitle,
+          renamePattern: fallbackName,
           metadata: {
             ...combinedMetadataAndIdsForHtml,
             rawTextLength: textLen,
@@ -3389,7 +3480,14 @@ Respond strictly in raw JSON without markdown:
       const hash = crypto.createHash("sha256").update(pdfBytes).digest("hex");
       
       const originalPath = path.join(LOCAL_OUTPUT_DIR, "downloads", `${hash}.original.pdf`);
+      const { force_reprocess, repair_metadata } = req.body;
       let isDuplicate = fs.existsSync(originalPath);
+      let duplicateOverridden = false;
+      let finalDuplicateDecision = "skipped";
+      let existingProcessingStatus = "unknown";
+      let existingReviewStatus = "unknown";
+      let existingChunksCount = 0;
+      let existingBlockReason = "";
       
       if (isDuplicate) {
         // Detailed log audit prior to duplicate skip (as requested)
@@ -3426,6 +3524,59 @@ Respond strictly in raw JSON without markdown:
         if (!sourcePageUrl) {
           sourcePageUrl = url;
         }
+        
+        // 1. Gather SiteMapNode status
+        const siteMapNodes = loadSiteMap();
+        const existingNode = siteMapNodes.find(n => n.hash === hash || n.raw_file_hash === hash);
+        if (existingNode) {
+          existingProcessingStatus = existingNode.processing_status || "unknown";
+          existingReviewStatus = existingNode.review_status || existingNode.status || "unknown";
+          existingBlockReason = existingNode.block_reason || existingNode.rejection_reason || existingNode.blockReason || "";
+          existingDocumentId = existingNode.id || existingDocumentId;
+        }
+
+        // 2. Count existing chunks
+        const chunkPath = path.join(LOCAL_OUTPUT_DIR, "dataset", `${hash}_chunks.json`);
+        if (fs.existsSync(chunkPath)) {
+          try {
+             const chunkData = JSON.parse(fs.readFileSync(chunkPath, 'utf8'));
+             existingChunksCount = Array.isArray(chunkData.chunks) ? chunkData.chunks.length : 0;
+          } catch(e) {}
+        }
+        
+        // 3. Skip only if
+        let shouldSkip = false;
+        if (
+          existingProcessingStatus === "completed" && 
+          existingChunksCount > 0 &&
+          (existingReviewStatus === "auto_approved" || existingReviewStatus === "needs_metadata_review" || existingReviewStatus === "needs_review") &&
+          existingReviewStatus !== "rejected"
+        ) {
+          shouldSkip = true;
+        }
+
+        // 4. Force Reprocess if previously failed/blocked/no chunks
+        if (
+          existingProcessingStatus === "failed" ||
+          existingProcessingStatus === "blocked" ||
+          existingChunksCount === 0 ||
+          existingBlockReason === "low_confidence_classification" ||
+          existingProcessingStatus === "unknown" ||
+          existingProcessingStatus === "pending" ||
+          existingReviewStatus === "rejected"
+        ) {
+          shouldSkip = false;
+        }
+        
+        if (repair_metadata) {
+          shouldSkip = false;
+          finalDuplicateDecision = "metadata_repair";
+        } else if (force_reprocess) {
+          shouldSkip = false;
+          finalDuplicateDecision = "reprocessed (force)";
+        } else {
+          finalDuplicateDecision = shouldSkip ? "skipped" : "reprocessed";
+        }
 
         console.log(`[Duplicate Pre-skip Audit Log]`);
         console.log(`- pdf_url: ${url}`);
@@ -3434,10 +3585,24 @@ Respond strictly in raw JSON without markdown:
         console.log(`- status_code: ${statusCode}`);
         console.log(`- byte_size: ${pdfBytes.length}`);
         console.log(`- hash: ${hash}`);
-        console.log(`- existing_document_id: ${existingDocumentId || "not_found"}`);
         console.log(`- existing_pdf_url: ${existingPdfUrl || "not_found"}`);
         console.log(`- source_page_url: ${sourcePageUrl}`);
-      } else {
+        
+        console.log(`[Duplicate Resolution Log]`);
+        console.log(`- duplicate hash found: ${hash}`);
+        console.log(`- existing document id: ${existingDocumentId || "not_found"}`);
+        console.log(`- existing processing_status: ${existingProcessingStatus}`);
+        console.log(`- existing review_status: ${existingReviewStatus}`);
+        console.log(`- existing chunks_count: ${existingChunksCount}`);
+        console.log(`- final duplicate decision: ${finalDuplicateDecision}`);
+        
+        if (!shouldSkip) {
+          isDuplicate = false;
+          duplicateOverridden = true;
+        }
+      } 
+      
+      if (!isDuplicate || duplicateOverridden) {
         fs.writeFileSync(originalPath, pdfBytes);
       }
 
@@ -3515,6 +3680,8 @@ Respond strictly in raw JSON without markdown:
         pipelineStep: "extract",
         blockReason: needsOcr ? "ocr_needed" : "",
         technicalError: errorOccurred ? errorMsg : "",
+        cleanTitle: safeTitle,
+        renamePattern: fallbackName,
         metadata: {
           ...combinedMetadataAndIds,
           rawTextLength: textLen,
@@ -4192,6 +4359,38 @@ Respond strictly in raw JSON without markdown:
     res.json({ success: true, config: ocrConfig });
   });
 
+  app.post("/api/pipeline/chunk", async (req, res) => {
+    try {
+      const { hash, url, title, text } = req.body;
+      if (!hash || !text) return res.status(400).json({ error: "Hash and Text required" });
+
+      const chunks = chunkText(text);
+      if (chunks.length > 0) {
+        const datasetDir = path.join(LOCAL_OUTPUT_DIR, "dataset");
+        if (!fs.existsSync(datasetDir)) fs.mkdirSync(datasetDir, { recursive: true });
+
+        // Save generic chunks just for persistence before classification
+        fs.writeFileSync(path.join(datasetDir, `${hash}_chunks.json`), JSON.stringify({
+          hash,
+          url,
+          title,
+          chunks,
+          chunking_status: "rag_ready"
+        }, null, 2));
+
+        // Update site map to reflect chunking status
+        updateReport("dataset-report.json", {
+          hash,
+          chunking_status: "rag_ready"
+        });
+      }
+
+      res.json({ success: true, count: chunks.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/pipeline/clean-copy", async (req, res) => {
     const {
       hash,
@@ -4210,14 +4409,10 @@ Respond strictly in raw JSON without markdown:
 
     try {
       const activeDict = normalizeDictionary(await getActiveDictionary());
-      const grade = activeDict.grades.find((g: any) => g.id === gradeId);
-      const subject = activeDict.subjects.find((s: any) => s.id === subjectId);
-      const topic = activeDict.topics.find((t: any) => t.id === topicId);
-      const docType = activeDict.allowedDocumentTypes.find((d: any) => d.id === documentTypeId);
-
-      if (!grade || !subject || !topic || !docType) {
-        return res.status(400).json({ error: "One or more of selected metadata keys are missing from reference" });
-      }
+      const grade = activeDict.grades.find((g: any) => g.id === gradeId) || { id: gradeId || "unknown", nameFr: "Unknown Grade", suffix: "unk_grade" };
+      const subject = activeDict.subjects.find((s: any) => s.id === subjectId) || { id: subjectId || "unknown", nameFr: "Unknown Subject", suffix: "unk_subject" };
+      const topic = activeDict.topics.find((t: any) => t.id === topicId) || { id: topicId || "unknown", nameFr: "Unknown Topic", suffix: "unk_topic" };
+      const docType = activeDict.allowedDocumentTypes.find((d: any) => d.id === documentTypeId) || { id: documentTypeId || "unknown", nameFr: "Unknown Document Type", suffix: "unk_doctype" };
 
       const { cleanPath, cleanName, rawName } = await createCleanPdfCopy({
         hash,
@@ -4311,13 +4506,13 @@ Respond strictly in raw JSON without markdown:
         
         "levelspace_grade_id": ls.grade_id || gradeId,
         "levelspace_subject_id": ls.subject_id || subjectId,
-        "levelspace_module_id": ls.module_id || "nombres_et_calcul",
+        "levelspace_module_id": ls.module_id || "unknown",
         "levelspace_topic_id": ls.topic_id || topicId,
         "levelspace_lesson_id": ls.lesson_id || null,
         
         "levelspace_grade_name": ls.grade_name || grade.nameFr,
         "levelspace_subject_name": ls.subject_name || subject.nameFr,
-        "levelspace_module_name": ls.module_name || "Nombres et calcul",
+        "levelspace_module_name": ls.module_name || "unknown",
         "levelspace_topic_name": ls.topic_name || topic.nameFr,
         "levelspace_lesson_title": ls.lesson_title || null,
         
@@ -4332,7 +4527,7 @@ Respond strictly in raw JSON without markdown:
         "needs_ocr": false,
         
         "raw_text_path": `/workspace/downloads/${hash}.original.pdf`,
-        "clean_text_path": `/workspace/text/${hash}.clean.txt`,
+        "clean_text_path": `/workspace/ocr/${hash}.ocr.txt`,
         "clean_pdf_path": `/workspace/clean-pdfs/${cleanName}`,
         
         "curriculum_path": ls.curriculum_path || `${grade.id} / ${subject.id} / ${topic.id}`,
@@ -4343,8 +4538,6 @@ Respond strictly in raw JSON without markdown:
         "teacher_visible": ls.teacher_visible ?? true,
         "admin_visible": ls.admin_visible ?? true,
         "ai_visible": ls.ai_visible ?? true,
-        "ai_knowledge": ls.ai_knowledge ?? false,
-        "knowledge_role": ls.knowledge_role || null,
         
         "use_for_lesson_generation": ls.document_role === "student_lesson_source" || ls.document_role === "pedagogical_planning_source",
         "use_for_quiz_generation": ls.document_role === "practice_source",
@@ -5496,6 +5689,29 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     }
   });
 
+  app.get("/api/pipeline/dataset-rows", (req, res) => {
+    const datasetDir = path.join(LOCAL_OUTPUT_DIR, "dataset");
+    if (!fs.existsSync(datasetDir)) {
+      return res.json([]);
+    }
+    try {
+      const files = fs.readdirSync(datasetDir);
+      const rows = files
+        .filter(f => f.endsWith(".json") && f !== "gdrive_syncs.json" && f !== "gdrive_migration.json")
+        .map(f => {
+          try {
+            return JSON.parse(fs.readFileSync(path.join(datasetDir, f), "utf-8"));
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      return res.json(rows);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Failed to load database rows schema" });
+    }
+  });
+
   app.get("/api/pipeline/export-zip", async (req, res) => {
     try {
       const zip = new JSZip();
@@ -5589,11 +5805,135 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     extracted_document_type: string;
     extracted_topic: string;
     action: "crawl_children" | "stage_asset" | "reexamine" | "ignore" | string;
-    status: "unvisited" | "crawling" | "completed" | "failed" | "ignored" | string;
+    status: "unvisited" | "crawling" | "completed" | "failed" | "ignored" | "rejected" | "needs_review" | string;
     discovered_links_count: number;
     confidence: number;
     rejection_reason: string;
     is_final_asset: boolean;
+    validation_errors?: string[];
+    target_grade_id?: string;
+    target_subject_id?: string;
+    target_module_id?: string | null;
+    target_lesson_id?: string | null;
+    verification_status?: string;
+  }
+
+  function classifyDocumentTypeWithPriority(urlStr: string, textContext: string = ""): string {
+    const combined = `${urlStr || ""} ${textContext || ""}`.toLowerCase();
+    
+    if (combined.includes("non-corrige") || combined.includes("non-corriges") || combined.includes("non-corrigé") || combined.includes("غير مصحح")) {
+      return "Exercices";
+    }
+    if (combined.includes("corrige") || combined.includes("correction") || combined.includes("تصحيح") || combined.includes("corriges") || combined.includes("corrig") || combined.includes("حلول")) {
+      return "Correction";
+    }
+    if (combined.includes("devoir") || combined.includes("controle") || combined.includes("فرض") || combined.includes("contrôle")) {
+      return "Devoir";
+    }
+    if (combined.includes("resume") || combined.includes("carte-mentale") || combined.includes("ملخص")) {
+      return "Resume";
+    }
+    if (combined.includes("exercices") || combined.includes("serie") || combined.includes("activites") || combined.includes("تمارين") || combined.includes("سلسلة") || combined.includes("serie")) {
+      return "Exercices";
+    }
+    if (combined.includes("cours") || combined.includes("lesson") || combined.includes("lecon") || combined.includes("درس")) {
+      return "Course";
+    }
+    return "Course"; // Fallback
+  }
+
+  function checkNavigationPathConflict(navigationPath: string, grade: string, subject: string): { conflicted: boolean; errors: string[] } {
+    const errors: string[] = [];
+    if (!navigationPath) return { conflicted: false, errors };
+
+    const navLower = navigationPath.toLowerCase();
+
+    // Islamic vs Math/PC/SVT/French subject conflict
+    const isIslamicNav = navLower.includes("islam") || navLower.includes("إسلام") || navLower.includes("اسلام");
+    if (isIslamicNav) {
+      const subLower = (subject || "").toLowerCase();
+      if (subLower === "math" || subLower === "pc" || subLower === "svt" || subLower === "french" || subLower === "physique" || subLower === "chimie") {
+        errors.push("navigation_subject_conflict");
+      }
+    }
+
+    // General subject mismatch
+    if (navLower.includes("رياضيات") || navLower.includes("math")) {
+      const subLower = (subject || "").toLowerCase();
+      if (subLower && subLower !== "math" && subLower !== "mathematics" && subLower !== "pc" && subLower !== "physique") {
+        errors.push("navigation_subject_conflict");
+      }
+    }
+    if (navLower.includes("فيزياء") || navLower.includes("physique") || navLower.includes(" pc ")) {
+      const subLower = (subject || "").toLowerCase();
+      if (subLower && subLower !== "pc" && subLower !== "physique" && subLower !== "math") {
+        errors.push("navigation_subject_conflict");
+      }
+    }
+    if (navLower.includes("علوم الحياة") || navLower.includes("svt")) {
+      const subLower = (subject || "").toLowerCase();
+      if (subLower && subLower !== "svt") {
+        errors.push("navigation_subject_conflict");
+      }
+    }
+
+    // Grade mismatch
+    if (navLower.includes("3ac") || navLower.includes("ثالثة اعدادي") || navLower.includes("3eme") || navLower.includes("3ème")) {
+      if (grade && grade !== "3AC" && grade !== "3eme_annee_college") {
+        errors.push("navigation_grade_conflict");
+      }
+    }
+    if (navLower.includes("2ac") || navLower.includes("ثانية اعدادي") || navLower.includes("2eme") || navLower.includes("2ème")) {
+      if (grade && grade !== "2AC" && grade !== "2eme_annee_college") {
+        errors.push("navigation_grade_conflict");
+      }
+    }
+    if (navLower.includes("1ac") || navLower.includes("اولى اعدادي") || navLower.includes("1eme") || navLower.includes("1ème")) {
+      if (grade && grade !== "1AC" && grade !== "1ere_annee_college") {
+        errors.push("navigation_grade_conflict");
+      }
+    }
+
+    return {
+      conflicted: errors.length > 0,
+      errors
+    };
+  }
+
+  function mapExtractedGradeToId(grade: string, activeDict: any): string | null {
+    if (!grade || grade === "-") return null;
+    const match = activeDict.grades?.find((g: any) => 
+      g.id === grade || g.suffix === grade || g.nameFr === grade || g.nameAr === grade
+    );
+    return match ? match.id : null;
+  }
+
+  function mapExtractedSubjectToId(subject: string, activeDict: any): string | null {
+    if (!subject || subject === "-") return null;
+    const match = activeDict.subjects?.find((s: any) => 
+      s.id === subject || s.suffix === subject || s.nameFr === subject || s.nameAr === subject
+    );
+    return match ? match.id : null;
+  }
+
+  function mapExtractedTopicToId(topic: string, activeDict: any): string | null {
+    if (!topic || topic === "-" || topic === "General-Topic") return null;
+    const match = activeDict.topics?.find((t: any) => 
+      t.id === topic || t.suffix === topic || t.nameFr === topic || t.nameAr === topic || (t.keywords && t.keywords.some((kw: string) => kw.toLowerCase() === topic.toLowerCase()))
+    );
+    return match ? match.id : null;
+  }
+
+  function populatePdfAssetTargetFields(node: SiteMapNode, activeDict: any) {
+    if (node.page_role === "pdf_asset" || node.is_final_asset) {
+      node.target_grade_id = mapExtractedGradeToId(node.extracted_grade, activeDict) || undefined;
+      node.target_subject_id = mapExtractedSubjectToId(node.extracted_subject, activeDict) || undefined;
+      node.target_module_id = null;
+      node.target_lesson_id = mapExtractedTopicToId(node.extracted_topic, activeDict) || null;
+      node.source_url = node.source_url || node.canonical_url;
+      node.canonical_url = node.canonical_url;
+      node.verification_status = node.verification_status || "pending";
+    }
   }
 
   function canonicalizeUrl(urlStr: string): string {
@@ -5694,17 +6034,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     }
 
     // 3. Document Type mapping
-    if (urlLower.includes("corrig") || urlLower.includes("correction") || urlLower.includes("تصحيح") || urlLower.includes("حلول") || urlLower.includes("حل-التمارين") || linkText.includes("تصحيح") || linkText.includes("حل") || htmlContent.includes("تصحيح") || htmlContent.includes("تصحيح الفروض")) {
-      docType = "Correction";
-    } else if (urlLower.includes("exercice") || urlLower.includes("serie") || urlLower.includes("تمارين") || urlLower.includes("سلسلة") || linkText.includes("تمارين") || linkText.includes("سلسلة") || htmlContent.includes("تمارين")) {
-      docType = "Exercices";
-    } else if (urlLower.includes("resume") || urlLower.includes("résumé") || urlLower.includes("ملخص") || linkText.includes("ملخص") || htmlContent.includes("ملخص")) {
-      docType = "Resume";
-    } else if (urlLower.includes("devoir") || urlLower.includes("فرض") || urlLower.includes("الفروض") || linkText.includes("فرض") || htmlContent.includes("فرض")) {
-      docType = "Devoir";
-    } else if (urlLower.includes("controle") || urlLower.includes("contrôle") || urlLower.includes("examen") || urlLower.includes("امتحان") || linkText.includes("امتحان") || linkText.includes("الامتحانات")) {
-      docType = "Controle";
-    }
+    docType = classifyDocumentTypeWithPriority(urlLower, `${linkText} ${htmlContent}`);
 
     // 4. News / Administrative Announcements Filter (Task 8)
     const isNewsAnnouncements = urlLower.includes("دخول-مدرسي") || urlLower.includes("نتائج") || urlLower.includes("تسجيل") || urlLower.includes("منحة") || urlLower.includes("توجيه") || urlLower.includes("مباراة") ||
@@ -5728,7 +6058,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
       action = "stage_asset";
       isFinal = true;
       confidence = 0.95;
-    } else if (urlLower === "https://moutamadris.ma/cours/" || urlLower === "https://moutamadris.ma/cours" || urlLower === "https://moutamadris.ma/" || urlLower === "https://moutamadris.ma" || urlLower === "https://talamidi.com/" || urlLower === "https://talamidi.com") {
+    } else if (urlLower === "https://moutamadris.ma/cours/" || urlLower === "https://moutamadris.ma/cours" || urlLower === "https://talamidi.com/" || urlLower === "https://talamidi.com") {
       role = "hub_page";
       action = "crawl_children";
       confidence = 1.0;
@@ -5778,7 +6108,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
       confidence = 0.4;
     }
 
-    const isHomepage = urlLower === "https://moutamadris.ma/" || urlLower === "https://moutamadris.ma" || urlLower === "https://talamidi.com/" || urlLower === "https://talamidi.com";
+    const isHomepage = urlLower === "https://talamidi.com/" || urlLower === "https://talamidi.com";
     const isCoursIndex = urlLower.endsWith("/cours/") || urlLower.endsWith("/cours") || urlLower.endsWith("/examens/") || urlLower.endsWith("/examens");
     
     if (isHomepage || isCoursIndex) {
@@ -5849,6 +6179,104 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     res.json(loadSiteMap());
   });
 
+  app.post("/api/site-map/ai-clean", async (req, res) => {
+    try {
+      const siteMap = loadSiteMap();
+      if (!siteMap || siteMap.length === 0) {
+        return res.json([]);
+      }
+
+      const itemsToAssess = siteMap.map(n => ({
+        id: n.id,
+        url: n.canonical_url,
+        path: n.navigation_path,
+        role: n.page_role
+      }));
+
+      const prompt = `You are an educational asset evaluator. I will give you a JSON array of URLs discovered during a web crawl.
+Your job is to clean, sort, and classify these URLs.
+Reject non-educational URLs (privacy, about us, ads, generic pages, unwanted links).
+Keep ONLY valuable educational assets (especially PDFs, exams, lessons, exercises).
+For the URLs you keep, extract the grade, subject, document type, and topic (lesson).
+
+Input JSON:
+${JSON.stringify(itemsToAssess)}
+
+Return a JSON array of ALWAYS ONLY the ACCEPTED items. Do not include rejected items in your output.
+For each accepted item, return exactly this structure:
+[
+  {
+    "id": "the-original-id",
+    "grade": "extracted grade (e.g., 3AC, TCS, 1BAC, 2BAC...)",
+    "subject": "extracted subject (e.g., SVT, PC, Math, Arabic...)",
+    "docType": "extracted document type (e.g., Cours, Exercices, Examen...)",
+    "topic": "the specific lesson or exam name",
+    "isFinalAsset": true
+  }
+]
+`;
+
+      const response = await callGeminiWithRetry({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      let aiResults = [];
+      try {
+        if (response && response.text) {
+          aiResults = JSON.parse(response.text.trim());
+        }
+      } catch (err) {
+        console.error("Gemini failed to return valid JSON array", err);
+      }
+
+      if (!Array.isArray(aiResults)) {
+         aiResults = [];
+      }
+
+      const acceptedMap = new Map();
+      for (const item of aiResults) {
+        if (item.id) {
+          acceptedMap.set(item.id, item);
+        }
+      }
+
+      const updatedSiteMap = siteMap.map(node => {
+        if (acceptedMap.has(node.id)) {
+          const aiData = acceptedMap.get(node.id);
+          return {
+            ...node,
+            extracted_grade: aiData.grade || node.extracted_grade,
+            extracted_subject: aiData.subject || node.extracted_subject,
+            extracted_document_type: aiData.docType || node.extracted_document_type,
+            extracted_topic: aiData.topic || node.extracted_topic,
+            action: "stage_asset",
+            is_final_asset: true,
+            status: "completed",
+            rejection_reason: ""
+          };
+        } else {
+          return {
+            ...node,
+            action: "ignore",
+            is_final_asset: false,
+            status: "ignored",
+            rejection_reason: "Rejected by AI Cleanup"
+          };
+        }
+      });
+
+      saveSiteMap(updatedSiteMap);
+      res.json(updatedSiteMap);
+    } catch (error: any) {
+      console.error("AI clean error:", error);
+      res.status(500).json({ error: "Failed to perform AI cleanup" });
+    }
+  });
+
   app.post("/api/site-map/clear", (req, res) => {
     saveSiteMap([]);
     res.json({ success: true, message: "Site map cleared." });
@@ -5874,13 +6302,24 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
   });
 
   app.post("/api/site-map/crawl", async (req, res) => {
-    const { url, maxPages = 30, maxDepth = 4, topicFilter, fresh = true } = req.body;
+    const { url, maxPages = 30, maxDepth = 3, topicFilter, fresh = true } = req.body;
     if (!url) {
       return res.status(400).json({ error: "Start URL is required" });
     }
 
     const startUrl = canonicalizeUrl(url);
     console.log(`[Site Map Crawl] Initiating crawl from: ${startUrl}, maxPages: ${maxPages}, maxDepth: ${maxDepth}`);
+
+    let activeDict: any = { grades: [], subjects: [], topics: [], allowedDocumentTypes: [] };
+    try {
+      activeDict = normalizeDictionary(await getActiveDictionary());
+    } catch (dictErr) {
+      console.warn("[Site Map Crawl] Failed to load active dictionary:", dictErr);
+    }
+
+    const startClassification = classifyPageUrlRole(startUrl, "", "Seed", null, null);
+    const targetGrade = startClassification.grade;
+    const targetSubject = startClassification.subject;
 
     let siteMap = fresh ? [] : loadSiteMap();
     const mapByHash = new Map<string, SiteMapNode>(siteMap.map(n => [n.canonical_url_hash, n]));
@@ -5902,12 +6341,12 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
       domain = new URL(startUrl).hostname;
     } catch {}
 
-    const SAFE_MAX_PAGES = Math.min(maxPages, 500); // Prevent infinite loops
+    const SAFE_MAX_PAGES = Math.min(maxPages, 1000); // Prevent infinite loops
     const startTime = Date.now();
 
     while (queue.length > 0 && pagesProcessed < SAFE_MAX_PAGES) {
-      if (Date.now() - startTime > 120000) {
-        console.log(`[Site Map Scraper] Reached 2-minute time limit. Bailing out.`);
+      if (Date.now() - startTime > 300000) {
+        console.log(`[Site Map Scraper] Reached 5-minute time limit. Bailing out.`);
         break;
       }
       
@@ -5924,11 +6363,46 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
       if (visited.has(currentCanonical)) continue;
       
       // Skip Cloudflare email protection or other known unhelpful links
-      if (currentCanonical.includes("/cdn-cgi/l/email-protection") || currentCanonical.includes("javascript:")) {
+      const ignorePatterns = [
+        "/cdn-cgi/l/email-protection", "javascript:", 
+        "whatsapp.com", "facebook.com", "telegram.me", "t.me", "twitter.com", "x.com", 
+        "youtube.com", "play.google.com", "wa.me"
+      ];
+      if (ignorePatterns.some(p => currentCanonical.includes(p))) {
         continue;
       }
 
       visited.add(currentCanonical);
+
+      // Rule 4: Hard reject or needs_review when depth > 5
+      if (current.depth > 5) {
+        const classification = classifyPageUrlRole(currentCanonical, "", current.linkText, null, null);
+        const node: SiteMapNode = {
+          id: "node_" + crypto.randomBytes(4).toString("hex"),
+          source_domain: domain,
+          source_url: current.url,
+          canonical_url: currentCanonical,
+          canonical_url_hash: currentHash,
+          parent_url: current.parentUrl,
+          depth: current.depth,
+          page_role: classification.role,
+          navigation_path: current.navPath,
+          extracted_grade: classification.grade || "-",
+          extracted_subject: classification.subject || "-",
+          extracted_document_type: classification.docType,
+          extracted_topic: classification.topic || "Depth-Exceeded",
+          action: "ignore",
+          status: "needs_review",
+          discovered_links_count: 0,
+          confidence: 0.1,
+          rejection_reason: "Crawl depth exceeded maximum limit (> 5)",
+          is_final_asset: classification.isFinal,
+          validation_errors: ["crawl_depth_exceeded"]
+        };
+        populatePdfAssetTargetFields(node, activeDict);
+        mapByHash.set(currentHash, node);
+        continue;
+      }
 
       try {
         console.log(`[Site Map Scraper] Fetching: ${currentCanonical} (Depth: ${current.depth})`);
@@ -5978,8 +6452,10 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
               discovered_links_count: 0,
               confidence: 0.1,
               rejection_reason: `Fetch failed: ${fetchErr.message}`,
-              is_final_asset: false
+              is_final_asset: false,
+              validation_errors: ["missing_grade", "missing_subject"]
             };
+            populatePdfAssetTargetFields(node, activeDict);
             mapByHash.set(currentHash, node);
             continue;
           }
@@ -6008,8 +6484,22 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
         let displayTitle = current.linkText || htmlTitle || currentCanonical.split("/").filter(Boolean).pop() || "Page";
         if (displayTitle.length > 35) displayTitle = displayTitle.slice(0, 32) + "...";
         
+        // Rule 6: Never inherit navigation_path across cross-grade or cross-subject jumps
+        let nodeGrade = classification.grade || parentNode?.extracted_grade || "-";
+        let nodeSubject = classification.subject || parentNode?.extracted_subject || "-";
+
+        let inheritNav = true;
+        if (parentNode) {
+          const pGrade = parentNode.extracted_grade || "-";
+          const pSubject = parentNode.extracted_subject || "-";
+          if ((nodeGrade !== "-" && pGrade !== "-" && nodeGrade !== pGrade) || 
+              (nodeSubject !== "-" && pSubject !== "-" && nodeSubject !== pSubject)) {
+            inheritNav = false;
+          }
+        }
+
         let navPath = displayTitle;
-        if (current.depth > 0) {
+        if (current.depth > 0 && inheritNav) {
           navPath = `${current.navPath} > ${displayTitle}`;
         } else {
           navPath = displayTitle;
@@ -6017,9 +6507,73 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
 
         navPath = navPath.replace(/Seed > /g, "").replace(/\.pdf/gi, "");
 
+        // Rule 7 & 11: Navigation conflicts and validation tracking
+        const valErrors: string[] = [];
+        const conflictCheck = checkNavigationPathConflict(navPath, nodeGrade, nodeSubject);
+        let nodeStatus = "completed";
+
+        if (conflictCheck.conflicted) {
+          navPath = displayTitle; // Reset navigation context
+          valErrors.push(...conflictCheck.errors);
+          nodeStatus = "needs_review";
+        }
+
+        // Rule 8: Do not stage homepage/hub/index pages
+        const pathname = new URL(currentCanonical).pathname;
+        const isHomeOrHub = pathname === "/" || pathname === "/cours/" || pathname === "/cours" || classification.role === "hub_page";
+        
+        let action = classification.action;
+        if (isHomeOrHub && action === "stage_asset") {
+          action = "crawl_children";
+        }
+
+        // Rule 9: Do not stage nodes with extracted_grade "-" and extracted_subject "-"
+        if (nodeGrade === "-" && nodeSubject === "-" && action === "stage_asset") {
+          action = "ignore";
+        }
+
+        // Fill validation errors for missing grade/subject
+        if (!nodeGrade || nodeGrade === "-") {
+          valErrors.push("missing_grade");
+        }
+        if (!nodeSubject || nodeSubject === "-") {
+          valErrors.push("missing_subject");
+        }
+
+        // Rule 10: Do not mark status completed when rejection_reason is non-empty
+        const rejectionReasonOutput = classification.rejectionReason || "";
+        if (rejectionReasonOutput && nodeStatus === "completed") {
+          nodeStatus = "needs_review"; // or "rejected"
+        }
+
+        const node: SiteMapNode = {
+          id: mapByHash.get(currentHash)?.id || "node_" + crypto.randomBytes(4).toString("hex"),
+          source_domain: domain,
+          source_url: current.url,
+          canonical_url: currentCanonical,
+          canonical_url_hash: currentHash,
+          parent_url: current.parentUrl,
+          depth: current.depth,
+          page_role: classification.role,
+          navigation_path: navPath,
+          extracted_grade: nodeGrade,
+          extracted_subject: nodeSubject,
+          extracted_document_type: classification.docType,
+          extracted_topic: classification.topic || "Sequence-01",
+          action: action,
+          status: nodeStatus,
+          discovered_links_count: 0,
+          confidence: classification.confidence,
+          rejection_reason: rejectionReasonOutput,
+          is_final_asset: classification.isFinal,
+          validation_errors: valErrors
+        };
+
+        populatePdfAssetTargetFields(node, activeDict);
+
         const discoveredLinks: string[] = [];
         const newChildren: any[] = [];
-        if ($ && (classification.action === "crawl_children" || classification.action === "stage_asset") && current.depth < maxDepth) {
+        if ($ && (action === "crawl_children" || action === "stage_asset") && current.depth < maxDepth && current.depth <= 5) {
           $('a').each((_, el) => {
             const href = $(el).attr('href');
             if (!href) return;
@@ -6032,6 +6586,21 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
               const cleanChildHostname = childObj.hostname.replace(/^www\./, "");
               
               if (cleanChildHostname === cleanDomain) {
+                // Check child classification
+                const childClassification = classifyPageUrlRole(childCanonical, "", $(el).text().trim() || "Link", classification.role, {
+                  grade: nodeGrade,
+                  subject: nodeSubject,
+                  docType: classification.docType
+                });
+
+                // Rule 5: Stop following links when grade or subject changes away from target
+                if (targetGrade && childClassification.grade && childClassification.grade !== targetGrade) {
+                  return;
+                }
+                if (targetSubject && childClassification.subject && childClassification.subject !== targetSubject) {
+                  return;
+                }
+
                 if (!childCanonical.match(/\.(jpg|jpeg|png|gif|svg|css|js|zip|rar|tar|7z|mp3|mp4|wav|avi|woff|woff2|ttf|eot)$/i)) {
                   discoveredLinks.push(childCanonical);
                   if (!visited.has(childCanonical) && !queue.some(q => canonicalizeUrl(q.url) === childCanonical) && !newChildren.some(nc => canonicalizeUrl(nc.url) === childCanonical)) {
@@ -6050,28 +6619,7 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
           queue.unshift(...newChildren);
         }
 
-        const node: SiteMapNode = {
-          id: mapByHash.get(currentHash)?.id || "node_" + crypto.randomBytes(4).toString("hex"),
-          source_domain: domain,
-          source_url: current.url,
-          canonical_url: currentCanonical,
-          canonical_url_hash: currentHash,
-          parent_url: current.parentUrl,
-          depth: current.depth,
-          page_role: classification.role,
-          navigation_path: navPath,
-          extracted_grade: classification.grade || parentNode?.extracted_grade || "-",
-          extracted_subject: classification.subject || parentNode?.extracted_subject || "-",
-          extracted_document_type: classification.docType,
-          extracted_topic: classification.topic || "Sequence-01",
-          action: classification.action,
-          status: "completed",
-          discovered_links_count: discoveredLinks.length,
-          confidence: classification.confidence,
-          rejection_reason: classification.rejectionReason || "",
-          is_final_asset: classification.isFinal
-        };
-
+        node.discovered_links_count = discoveredLinks.length;
         mapByHash.set(currentHash, node);
       } catch (err: any) {
         console.error(`[Site Map Scraper] Serious error during processing of ${currentCanonical}:`, err);
@@ -6817,19 +7365,23 @@ Do not include any markdown format blocks or conversational text, specify valid 
 
   app.post("/api/gdrive/sync-all", async (req, res) => {
     try {
-      const { accessToken } = req.body;
+      const { accessToken, categoryFilter } = req.body;
       if (!accessToken) {
         return res.status(400).json({ error: "Access token is required" });
       }
 
       const rootFolderId = await getOrCreateDriveFolderServer(accessToken, "AI Studio Curriculum Pipeline Workspace");
 
-      const categories = [
+      let categories = [
         { dir: "downloads", label: "Original-PDFs", mime: "application/pdf", suffix: "original.pdf" },
         { dir: "clean-pdfs", label: "Clean-PDFs", mime: "application/pdf", suffix: null },
         { dir: "dataset", label: "Datasets", mime: "application/json", suffix: null },
         { dir: "reports", label: "Reports", mime: "application/json", suffix: null }
       ];
+
+      if (categoryFilter) {
+         categories = categories.filter(c => c.dir === categoryFilter);
+      }
 
       const syncedFiles: Array<{ filename: string, folderName: string, updated: boolean, id: string }> = [];
 
@@ -6896,6 +7448,22 @@ Do not include any markdown format blocks or conversational text, specify valid 
     app.use(express.static(distPath));
   }
 
+  app.post("/api/crawl-moutamadris-advanced", async (req, res) => {
+    try {
+      const outputJson = path.join(process.cwd(), "moutamadris_assets.json");
+      const outputCsv = path.join(process.cwd(), "moutamadris_assets.csv");
+      
+      // Kick off asynchronously since this is a deep crawl
+      runMoutamadrisCrawl(outputJson, outputCsv).catch(err => {
+        console.error("Advanced crawl failed:", err);
+      });
+      
+      res.json({ message: "Advanced crawl started in the background. Check moutamadris_assets json and csv locally." });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Specialized Moutamadris Scraper Endpoint
   app.post("/api/crawl-moutamadris", async (req, res) => {
     const { maxPages = 100, maxDepth = 3, topicFilter } = req.body;
@@ -6923,15 +7491,10 @@ Do not include any markdown format blocks or conversational text, specify valid 
 
         if (url.toLowerCase().endsWith(".pdf") || host.includes("drive.google.com")) {
           if (BLOCKED_PDF_SOURCES.test(url)) return { allowed: false, reason: "blocked-pdf-source" };
-          // Drive links might not match content patterns, that's fine
-          if (!host.includes("drive.google.com") && !CONTENT_PATTERNS.test(path)) {
-            return { allowed: false, reason: "pdf-no-content-path" };
-          }
           return { allowed: true, reason: "ok" };
         }
 
         if (BLOCKED_PATH_PATTERNS.test(path + "/")) return { allowed: false, reason: "blocked-path" };
-        if (!CONTENT_PATTERNS.test(path + "/")) return { allowed: false, reason: "no-content-pattern" };
 
         return { allowed: true, reason: "ok" };
       } catch (e) {

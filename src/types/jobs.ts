@@ -30,8 +30,10 @@ export interface BatchJobItem {
   hash?: string;
   filename: string;
   originalName?: string;
-  status: "queued" | "running" | "classified" | "clean_copy_done" | "blocked" | "failed" | "skipped" | "completed";
-  currentStep: "download" | "extract" | "ocr" | "classify" | "clean_copy" | "dataset" | "done" | string;
+  status: "queued" | "running" | "classified" | "clean_copy_done" | "blocked" | "failed" | "skipped" | "completed" | "needs_review";
+  processing_status?: "pending" | "extracting" | "ocr_needed" | "cleaning" | "chunking" | "completed" | "failed" | "blocked";
+  review_status?: "auto_approved" | "needs_metadata_review" | "needs_text_review" | "rejected" | "pending";
+  currentStep: "download" | "extract" | "ocr" | "cleaning" | "chunking" | "classify" | "clean_copy" | "done" | string;
   blockReason?: string | null;
   blockedReason?: string | null;
   confidenceScore?: number;

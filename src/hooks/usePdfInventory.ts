@@ -19,6 +19,7 @@ export interface PdfInventoryState {
 type PdfInventoryAction =
   | { type: "ADD_FOUND_URLS"; urls: string[] }
   | { type: "STAGE_URLS"; urls: string[]; autoSelect?: boolean }
+  | { type: "STAGE_ITEMS"; items: Array<{ url: string; sourceTitle?: string; sourceName?: string; sourceType?: string }>; autoSelect?: boolean }
   | { type: "UPDATE_PDF"; url: string; updates: Partial<StagedPdf> }
   | { type: "UPDATE_MANY_PDFS"; updates: { url: string; updates: Partial<StagedPdf> }[] }
   | { type: "SELECT_URLS"; urls: string[] | ((prev: string[]) => string[]) }
@@ -57,6 +58,20 @@ function pdfInventoryReducer(state: PdfInventoryState, action: PdfInventoryActio
       let updatedSelected = state.selectedPdfUrls;
       if (action.autoSelect) {
         updatedSelected = Array.from(new Set([...state.selectedPdfUrls, ...action.urls]));
+      }
+      return {
+        ...state,
+        stagedPdfs: updatedStaged,
+        selectedPdfUrls: updatedSelected,
+      };
+    }
+    case "STAGE_ITEMS": {
+      const newItemsFilter = action.items.filter(item => !state.stagedPdfs.some(p => p.url === item.url));
+      const newStagedItems = newItemsFilter.map(createStagedPdfFromUrl);
+      const updatedStaged = [...state.stagedPdfs, ...newStagedItems];
+      let updatedSelected = state.selectedPdfUrls;
+      if (action.autoSelect) {
+        updatedSelected = Array.from(new Set([...state.selectedPdfUrls, ...action.items.map(i => i.url)]));
       }
       return {
         ...state,
@@ -178,6 +193,10 @@ export function usePdfInventory() {
     dispatch({ type: "STAGE_URLS", urls, autoSelect });
   }, []);
 
+  const stageItems = useCallback((items: Array<{ url: string; sourceTitle?: string; sourceName?: string; sourceType?: string }>, autoSelect?: boolean) => {
+    dispatch({ type: "STAGE_ITEMS", items, autoSelect });
+  }, []);
+
   const updatePdf = useCallback((url: string, updates: Partial<StagedPdf>) => {
     dispatch({ type: "UPDATE_PDF", url, updates });
   }, []);
@@ -227,6 +246,7 @@ export function usePdfInventory() {
     activeJobId: state.activeJobId,
     addFoundUrls,
     stageUrls,
+    stageItems,
     updatePdf,
     updateManyPdfs,
     selectUrls,

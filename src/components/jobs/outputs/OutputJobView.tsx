@@ -11,13 +11,18 @@ import {
   RefreshCw,
   Key,
   LogOut,
+  Wand2,
+  CloudSnow,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StagedPdf } from "../../../types/pdf";
 import { JobWorkspaceLayout } from "../../layout/JobWorkspaceLayout";
+import { CustomExportModal } from "./CustomExportModal";
 import { User } from "firebase/auth";
 import axios from "axios";
+import { toast } from "sonner";
 
 interface OutputJobViewProps {
   selectedPdfUrls: string[];
@@ -56,6 +61,7 @@ interface OutputJobViewProps {
     filename: string,
     filepath: string,
   ) => Promise<any>;
+  updateManyPdfs: (updates: {url: string; updates: Partial<StagedPdf>}[]) => void;
 }
 
 export function OutputJobView({
@@ -82,13 +88,153 @@ export function OutputJobView({
   isSyncingSingle,
   handleSyncSingleToDrive,
   handleGeminiSyncToDrive,
+  updateManyPdfs,
 }: OutputJobViewProps) {
   const [syncStatus, setSyncStatus] = useState<
     Record<string, "idle" | "syncing" | "success" | "error">
   >({});
+  const [syncDetails, setSyncDetails] = useState<
+    Record<string, { fileId?: string; folder?: string }>
+  >({});
   const [geminiSyncStatus, setGeminiSyncStatus] = useState<
     Record<string, "idle" | "syncing" | "success" | "error">
   >({});
+  
+  const [selectedForDrive, setSelectedForDrive] = useState<Set<string>>(new Set());
+  const [isAiRenaming, setIsAiRenaming] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const handleAiRenameDriveReady = async () => {
+    // If user selected specific PDFs, only process those. Otherwise, process all ready PDFs.
+    const pdfsToProcess = selectedForDrive.size > 0 
+      ? readyPdfs.filter(p => selectedForDrive.has(p.hash || ""))
+      : readyPdfs;
+
+    if (pdfsToProcess.length === 0) return;
+
+    setIsAiRenaming(true);
+    const toastId = toast.loading("AI is renaming and validating PDFs...");
+    try {
+      const payload = pdfsToProcess.map(p => ({
+        id: p.url, // URL as unique ID for API
+        url: p.url,
+        originalName: p.originalName,
+        currentGrade: p.gradeId,
+        currentSubject: p.subjectId,
+        currentTopic: p.topicId,
+        currentDocType: p.documentTypeId,
+        source: new URL(p.url).hostname
+      }));
+
+      const res = await axios.post("/api/pipeline/ai-rename-pdfs", { pdfs: payload });
+      if (res.data && Array.isArray(res.data)) {
+        let validCount = 0;
+        let rejectedCount = 0;
+        const updates = res.data.map((result: any) => {
+          if (!result.isValid) {
+            rejectedCount++;
+            return {
+              url: result.id,
+              updates: { status: "failed" as const, notes: "Validation failed by AI Rename" }
+            };
+          }
+          
+          validCount++;
+          let cleanTitle = `${result.grade || "Unknown"} > ${result.subject || "Unknown"} > ${result.docType || "PDF"} > ${result.topic || "Document"}`;
+          let renamePattern = `${result.grade || "Unknown"}_${result.subject || "Unknown"}_${result.docType || "PDF"}_${result.topic || "Document"}.pdf`.replace(/[^a-zA-Z0-9_\-.]/g, "_");
+
+          return {
+            url: result.id,
+            updates: {
+              gradeId: result.grade || "Unknown",
+              subjectId: result.subject || "Unknown",
+              topicId: result.topic || "Document",
+              documentTypeId: result.docType || "PDF",
+              cleanTitle,
+              renamePattern
+            }
+          };
+        });
+
+        updateManyPdfs(updates);
+        toast.success(`AI Rename complete: ${validCount} renamed, ${rejectedCount} rejected.`, { id: toastId });
+      }
+    } catch (err: any) {
+      console.error("Failed to AI rename PDFs", err);
+      toast.error("Failed to run AI rename.", { id: toastId });
+    } finally {
+      setIsAiRenaming(false);
+    }
+  };
+
+  const handleToggleDriveSelect = (hash: string) => {
+    const newSet = new Set(selectedForDrive);
+    if (newSet.has(hash)) {
+      newSet.delete(hash);
+    } else {
+      newSet.add(hash);
+    }
+    setSelectedForDrive(newSet);
+  };
+
+  const handleSelectAllReady = () => {
+    if (selectedForDrive.size === readyPdfs.length && readyPdfs.length > 0) {
+      setSelectedForDrive(new Set());
+    } else {
+      setSelectedForDrive(new Set(readyPdfs.map(p => p.hash || "")));
+    }
+  };
+
+  const handleUploadSelected = async () => {
+    const pdfsToUpload = readyPdfs.filter(p => selectedForDrive.has(p.hash || "") && !syncStatus[`pdf-${p.hash}`]);
+    for (const pdf of pdfsToUpload) {
+      const shortHash = pdf.hash?.substring(0, 8) || "nohash";
+      const cleanFilename = pdf.renamePattern || `${pdf.gradeId || "unknown"}__${pdf.subjectId || "unknown"}__${pdf.topicId || "unknown"}__${shortHash}.pdf`;
+      const localPath = `clean-pdfs/${cleanFilename}`;
+      const idOfItem = `pdf-${pdf.hash}`;
+      await triggerSingleSync(idOfItem, "clean-pdfs", cleanFilename, localPath);
+    }
+  };
+
+  const handleUploadAllReady = async () => {
+    const pdfsToUpload = readyPdfs.filter(p => syncStatus[`pdf-${p.hash}`] !== "success" && p.driveUploadStatus !== "uploaded");
+    for (const pdf of pdfsToUpload) {
+      const shortHash = pdf.hash?.substring(0, 8) || "nohash";
+      const cleanFilename = pdf.renamePattern || `${pdf.gradeId || "unknown"}__${pdf.subjectId || "unknown"}__${pdf.topicId || "unknown"}__${shortHash}.pdf`;
+      const localPath = `clean-pdfs/${cleanFilename}`;
+      const idOfItem = `pdf-${pdf.hash}`;
+      await triggerSingleSync(idOfItem, "clean-pdfs", cleanFilename, localPath);
+    }
+  };
+
+  const handleRetryFailed = async () => {
+    const pdfsToUpload = failedUploads;
+    for (const pdf of pdfsToUpload) {
+      const shortHash = pdf.hash?.substring(0, 8) || "nohash";
+      const cleanFilename = pdf.renamePattern || `${pdf.gradeId || "unknown"}__${pdf.subjectId || "unknown"}__${pdf.topicId || "unknown"}__${shortHash}.pdf`;
+      const localPath = `clean-pdfs/${cleanFilename}`;
+      const idOfItem = `pdf-${pdf.hash}`;
+      await triggerSingleSync(idOfItem, "clean-pdfs", cleanFilename, localPath);
+    }
+  };
+
+  const readyPdfs = stagedPdfs.filter(
+    (p) =>
+      ["classified", "approved", "complete"].includes(p.status) &&
+      p.status !== "failed"
+  );
+  
+  const needsReviewPdfs = stagedPdfs.filter(
+    (p) => ["needs_review", "pending", "pending_staged", "classifying", "staged"].includes(p.status)
+  );
+  
+  const uploadedPdfs = stagedPdfs.filter(
+    (p) => p.driveUploadStatus === "uploaded" || syncStatus[`pdf-${p.hash}`] === "success" || geminiSyncStatus[`pdf-${p.hash}`] === "success"
+  );
+  
+  const failedUploads = stagedPdfs.filter(
+    (p) => p.driveUploadStatus === "failed" || syncStatus[`pdf-${p.hash}`] === "error" || geminiSyncStatus[`pdf-${p.hash}`] === "error"
+  );
 
   useEffect(() => {
     const fetchSyncStatus = async () => {
@@ -97,6 +243,8 @@ export function OutputJobView({
         if (res.data && Object.keys(res.data).length > 0) {
           const loadedStatus: Record<string, "success"> = {};
           const loadedGeminiStatus: Record<string, "success"> = {};
+          const loadedDetails: Record<string, { fileId?: string; folder?: string }> = {};
+          
           Object.keys(res.data).forEach(filename => {
             // we assume filename maps back to id properly for generic things
             // for pdfs it could be tricky to reverse map, but let's try
@@ -109,7 +257,7 @@ export function OutputJobView({
           Object.entries(res.data).forEach(([filename, val]: [string, any]) => {
             const isGemini = val.folder && val.folder.includes("Gemini Automated Curriculums");
             stagedPdfs.forEach(pdf => {
-              const shortHash = pdf.hash.substring(0, 8);
+              const shortHash = pdf.hash?.substring(0, 8) || "nohash";
               const cleanFilename = pdf.renamePattern || `${pdf.gradeId || "unknown"}__${pdf.subjectId || "unknown"}__${pdf.topicId || "unknown"}__${shortHash}.pdf`;
               if (cleanFilename === filename) {
                 if (isGemini) {
@@ -117,12 +265,14 @@ export function OutputJobView({
                 } else {
                   loadedStatus[`pdf-${pdf.hash}`] = "success";
                 }
+                loadedDetails[`pdf-${pdf.hash}`] = { fileId: val.fileId, folder: val.folder };
               }
             });
           });
           
           setSyncStatus(prev => ({...prev, ...loadedStatus}));
           setGeminiSyncStatus(prev => ({...prev, ...loadedGeminiStatus}));
+          setSyncDetails(prev => ({...prev, ...loadedDetails}));
         }
       } catch (err) {
         console.warn("Failed to load drive sync status", err);
@@ -143,6 +293,16 @@ export function OutputJobView({
       setSyncStatus((prev) => ({ ...prev, [idOfItem]: "syncing" }));
       await handleSyncSingleToDrive(category, filename, filepath);
       setSyncStatus((prev) => ({ ...prev, [idOfItem]: "success" }));
+      
+      try {
+        const res = await axios.get("/api/gdrive/sync-status");
+        if (res.data) {
+           const val = res.data[filename];
+           if (val) {
+             setSyncDetails(prev => ({...prev, [idOfItem]: { fileId: val.fileId, folder: val.folder }}));
+           }
+        }
+      } catch (err) {}
     } catch (err) {
       console.error(err);
       setSyncStatus((prev) => ({ ...prev, [idOfItem]: "error" }));
@@ -187,8 +347,7 @@ export function OutputJobView({
         {!gdriveUser ? (
           <div className="space-y-2">
             <p className="text-[9px] text-neutral-500 font-sans leading-relaxed">
-              Connect to Google Drive to automatically persist or manually
-              backup pipeline outputs and downloaded files.
+              Connect Google Drive to save reviewed Levelspace PDFs.
             </p>
             <Button
               id="gdrive-sign-in-btn"
@@ -262,9 +421,13 @@ export function OutputJobView({
                 className="w-3.5 h-3.5 rounded-none border-neutral-300 text-neutral-900 focus:ring-0"
               />
               <span className="uppercase text-neutral-700 font-bold">
-                Auto-Sync Pipeline
+                Auto-upload after approval
               </span>
             </label>
+
+            <p className="text-[9.5px] text-neutral-500 font-sans leading-relaxed pt-2">
+              Only reviewed PDFs marked Ready for Drive will be uploaded. You are about to upload {readyPdfs.length - uploadedPdfs.length} reviewed PDFs to Google Drive.
+            </p>
 
             <div className="space-y-2 pt-2 border-t border-neutral-200">
               <Button
@@ -276,10 +439,10 @@ export function OutputJobView({
                 {isSyncingAll ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Syncing ALL Asset folders...</span>
+                    <span>Uploading to Drive...</span>
                   </>
                 ) : (
-                  <span>Force Workspace Backup</span>
+                  <span>Upload reviewed PDFs to Drive</span>
                 )}
               </Button>
 
@@ -352,14 +515,24 @@ export function OutputJobView({
           </Button>
         </div>
 
-        <Button
-          id="outputs-export-jsonl"
-          variant="outline"
-          onClick={handleExportDatasetJsonl}
-          className="w-full rounded-none border-neutral-900 text-neutral-800 hover:bg-neutral-50 text-[10px] font-mono uppercase h-9"
-        >
-          <FileJson className="w-3.5 h-3.5 mr-1.5" /> Export Dataset (JSONL)
-        </Button>
+        <div className="space-y-1.5 pt-1">
+          <Button
+            id="outputs-export-jsonl"
+            variant="outline"
+            onClick={handleExportDatasetJsonl}
+            className="w-full rounded-none border-neutral-900 text-neutral-800 hover:bg-neutral-50 text-[10px] font-mono h-8 uppercase flex items-center justify-center"
+          >
+            <FileJson className="w-3.5 h-3.5 mr-1.5 text-neutral-600" /> Standard JSONL Export
+          </Button>
+          
+          <Button
+            id="outputs-custom-export-btn"
+            onClick={() => setIsExportModalOpen(true)}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-none border-2 border-neutral-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] text-[10px] h-9 font-mono font-black uppercase flex items-center justify-center gap-1.5 transition-all active:translate-x-0.5 active:translate-y-0.5"
+          >
+            <Settings2 className="w-3.5 h-3.5 text-white animate-pulse" /> Custom Schema Export...
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -387,36 +560,30 @@ export function OutputJobView({
       </div>
 
       {/* Stats Grid */}
-      <div className="p-6 grid grid-cols-3 gap-4">
-        <div className="border border-neutral-300 bg-white p-4 flex flex-col justify-between shadow-xs">
-          <div className="text-[9px] uppercase font-mono font-bold text-neutral-500">
-            Processed Ready PDFs
-          </div>
-          <div
-            id="outputs-stat-classified"
-            className="text-xl font-black font-mono text-emerald-700 mt-2"
-          >
-            {stagedPdfs.filter((p) => p.status === "classified").length}
-          </div>
+      <div className="p-6 grid grid-cols-3 md:grid-cols-6 gap-3">
+        <div className="border border-neutral-300 bg-white p-3 flex flex-col justify-between shadow-xs">
+          <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">Found PDFs</div>
+          <div className="text-sm font-black font-mono text-neutral-700 mt-1">{pipelineStats?.originalDownloads || 0}</div>
         </div>
-        <div className="border border-neutral-300 bg-white p-4 flex flex-col justify-between shadow-xs">
-          <div className="text-[9px] uppercase font-mono font-bold text-neutral-500">
-            Clean Cached Copies
-          </div>
-          <div
-            id="outputs-stat-copies"
-            className="text-xl font-black font-mono text-blue-700 mt-2"
-          >
-            {pipelineStats?.cleanCopies || 0}
-          </div>
+        <div className="border border-neutral-300 bg-white p-3 flex flex-col justify-between shadow-xs">
+          <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">Staged PDFs</div>
+          <div className="text-sm font-black font-mono text-blue-700 mt-1">{stagedPdfs.length}</div>
         </div>
-        <div className="border border-neutral-300 bg-white p-4 flex flex-col justify-between shadow-xs">
-          <div className="text-[9px] uppercase font-mono font-bold text-neutral-500">
-            Google Drive Linked
-          </div>
-          <div className="text-xl font-black font-mono mt-2 flex items-center gap-1 text-amber-700">
-            {gdriveUser ? "ACTIVE" : "OFFLINE"}
-          </div>
+        <div className="border border-neutral-300 bg-white p-3 flex flex-col justify-between shadow-xs">
+          <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">Needs Review</div>
+          <div className="text-sm font-black font-mono text-amber-600 mt-1">{needsReviewPdfs.length}</div>
+        </div>
+        <div className="border border-neutral-300 bg-white p-3 flex flex-col justify-between shadow-xs border-l-2 border-l-emerald-500">
+          <div className="text-[8px] uppercase font-mono font-bold text-emerald-600">Ready for Drive</div>
+          <div className="text-sm font-black font-mono text-emerald-700 mt-1">{readyPdfs.length}</div>
+        </div>
+        <div className="border border-neutral-300 bg-white p-3 flex flex-col justify-between shadow-xs">
+          <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">Uploaded</div>
+          <div className="text-sm font-black font-mono text-indigo-600 mt-1">{uploadedPdfs.length}</div>
+        </div>
+        <div className="border border-neutral-300 bg-white p-3 flex flex-col justify-between shadow-xs">
+          <div className="text-[8px] uppercase font-mono font-bold text-neutral-500">Failed</div>
+          <div className="text-sm font-black font-mono text-red-600 mt-1">{failedUploads.length}</div>
         </div>
       </div>
 
@@ -424,148 +591,119 @@ export function OutputJobView({
       <div className="px-6 pb-6 space-y-4">
         <div className="border border-neutral-300 bg-white text-left shadow-xs">
           <div className="bg-neutral-900 text-white p-3 font-mono text-[10.5px] uppercase font-bold flex items-center justify-between">
-            <span>Local Pipeline Assets Inventory</span>
+            <span>Ready for Drive Queue</span>
             <span className="text-[9px] text-neutral-300 font-normal">
-              Actions execute operations inside safe sandboxes
+              Showing approved PDFs ready for Drive sync
             </span>
+          </div>
+          
+          <div className="bg-neutral-50 border-b border-neutral-200 p-2 flex items-center gap-2">
+             <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] font-mono border-neutral-300 bg-white"
+                onClick={handleUploadSelected}
+                disabled={selectedForDrive.size === 0}
+             >
+                <CloudSnow className="w-3 h-3 mr-1" />
+                Upload Selected ({selectedForDrive.size})
+             </Button>
+             <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] font-mono border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                onClick={handleUploadAllReady}
+             >
+                <Cloud className="w-3 h-3 mr-1" />
+                Upload All Ready ({readyPdfs.length - uploadedPdfs.length})
+             </Button>
+             <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] font-mono bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 ml-auto flex items-center gap-1"
+                onClick={handleAiRenameDriveReady}
+                disabled={isAiRenaming || readyPdfs.length === 0}
+             >
+                {isAiRenaming ? <Loader2 className="w-3 h-3 animate-spin mx-auto lg:mx-0" /> : <Wand2 className="w-3 h-3" />}
+                <span className="hidden lg:inline">{isAiRenaming ? "Renaming..." : "AI Normalize & Validate"}</span>
+             </Button>
+             {failedUploads.length > 0 && (
+               <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[10px] font-mono border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                  onClick={handleRetryFailed}
+               >
+                  Retry Failed ({failedUploads.length})
+               </Button>
+             )}
           </div>
 
           <div className="overflow-x-auto max-h-[500px] overflow-y-auto w-full">
             <table className="w-full text-left font-sans text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-neutral-100 border-b border-neutral-300 font-mono text-[9.5px] text-neutral-600 uppercase">
                 <tr>
-                  <th className="p-3">Asset Details</th>
-                  <th className="p-3">Category</th>
-                  <th className="p-3">Local Sync Path</th>
-                  <th className="p-3 text-right">Actions / Drive Backup</th>
+                  <th className="p-3 w-8">
+                    <input type="checkbox" className="w-3.5 h-3.5" checked={readyPdfs.length > 0 && selectedForDrive.size === readyPdfs.length} onChange={handleSelectAllReady}/>
+                  </th>
+                  <th className="p-3">Review Title</th>
+                  <th className="p-3">File Name</th>
+                  <th className="p-3">Source</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Drive Upload Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200">
-                {/* Dataset JSONL Row */}
-
-                <tr className="hover:bg-neutral-50/50">
-                  <td className="p-3 font-mono text-[10.5px] font-bold text-neutral-800">
-                    classroom_curriculum_dataset.jsonl
-                  </td>
-                  <td className="p-3">
-                    <span className="inline-block px-2 py-0.5 text-[9px] font-mono uppercase bg-purple-50 text-purple-700 border border-purple-200 font-bold">
-                      Dataset Map
-                    </span>
-                  </td>
-                  <td className="p-3 font-mono text-[10px] text-neutral-500">
-                    /dataset/classroom_curriculum_dataset.jsonl
-                  </td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {gdriveUser ? (
-                        <Button
-                          onClick={() =>
-                            triggerSingleSync(
-                              "dataset-jsonl",
-                              "dataset",
-                              "classroom_curriculum_dataset.jsonl",
-                              "dataset/classroom_curriculum_dataset.jsonl",
-                            )
-                          }
-                          disabled={syncStatus["dataset-jsonl"] === "syncing"}
-                          variant="outline"
-                          className="h-7 rounded-none px-2 text-[9px] font-mono border-amber-500 text-amber-700 hover:bg-amber-50 cursor-pointer"
-                        >
-                          {syncStatus["dataset-jsonl"] === "syncing" ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : syncStatus["dataset-jsonl"] === "success" ? (
-                            "✓ Synced"
-                          ) : (
-                            "Sync to Drive"
-                          )}
-                        </Button>
-                      ) : (
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          [Link Drive to Backup]
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-
-                {/* Dictionaries / Extraction Reports */}
-                <tr className="hover:bg-neutral-50/50">
-                  <td className="p-3 font-mono text-[10.5px] font-bold text-neutral-800">
-                    extraction-report.json
-                  </td>
-                  <td className="p-3">
-                    <span className="inline-block px-2 py-0.5 text-[9px] font-mono uppercase bg-blue-50 text-blue-700 border border-blue-250 font-bold">
-                      Diagnostic Report
-                    </span>
-                  </td>
-                  <td className="p-3 font-mono text-[10px] text-neutral-500">
-                    /reports/extraction-report.json
-                  </td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {gdriveUser ? (
-                        <Button
-                          onClick={() =>
-                            triggerSingleSync(
-                              "report-extract",
-                              "reports",
-                              "extraction-report.json",
-                              "reports/extraction-report.json",
-                            )
-                          }
-                          disabled={syncStatus["report-extract"] === "syncing"}
-                          variant="outline"
-                          className="h-7 rounded-none px-2 text-[9px] font-mono border-amber-500 text-amber-700 hover:bg-amber-50 cursor-pointer"
-                        >
-                          {syncStatus["report-extract"] === "syncing" ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : syncStatus["report-extract"] === "success" ? (
-                            "✓ Synced"
-                          ) : (
-                            "Sync to Drive"
-                          )}
-                        </Button>
-                      ) : (
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          [Link Drive to Backup]
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-
-                {/* Display 5 classified staging PDFs as direct sync rows */}
-                {stagedPdfs
-                  .filter((p) => p.status === "classified")
-                  .map((pdf, idx) => {
-                    const shortHash = pdf.hash.substring(0, 8);
+                {readyPdfs.map((pdf, idx) => {
+                    const shortHash = pdf.hash?.substring(0, 8) || "nohash";
                     const cleanFilename =
                       pdf.renamePattern ||
                       `${pdf.gradeId || "unknown"}__${pdf.subjectId || "unknown"}__${pdf.topicId || "unknown"}__${shortHash}.pdf`;
                     const localPath = `clean-pdfs/${cleanFilename}`;
                     const idOfItem = `pdf-${pdf.hash}`;
+                    
+                    const isSynced = syncStatus[idOfItem] === "success" || pdf.driveUploadStatus === "uploaded";
+                    const isError = syncStatus[idOfItem] === "error" || pdf.driveUploadStatus === "failed";
 
                     return (
                       <tr
                         key={pdf.hash || `output-pdf-${idx}`}
                         className="hover:bg-neutral-50/50"
                       >
+                        <td className="p-3 w-8">
+                          <input type="checkbox" className="w-3.5 h-3.5" checked={selectedForDrive.has(pdf.hash || "")} onChange={() => handleToggleDriveSelect(pdf.hash || "")}/>
+                        </td>
                         <td
                           className="p-3 max-w-xs truncate font-mono text-[10.5px] text-neutral-800"
+                          title={pdf.cleanTitle || "No Title"}
+                        >
+                          {pdf.cleanTitle || "Ready Document"}
+                        </td>
+                         <td
+                          className="p-3 max-w-xs truncate font-mono text-[10.5px] text-neutral-500"
                           title={cleanFilename}
                         >
                           {cleanFilename}
                         </td>
                         <td className="p-3">
-                          <span className="inline-block px-2 py-0.5 text-[9px] font-mono uppercase bg-emerald-50 text-emerald-700 border border-emerald-250 font-bold">
-                            Stamped Copy
+                          <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-mono uppercase bg-neutral-100 text-neutral-600 border border-neutral-200">
+                            {pdf.url ? new URL(pdf.url).hostname.replace("www.", "") : "Unknown source"}
                           </span>
                         </td>
-                        <td
-                          className="p-3 font-mono text-[10px] text-neutral-500 truncate max-w-xs"
-                          title={localPath}
-                        >
-                          /{localPath}
+                        <td className="p-3">
+                           {isSynced ? (
+                              <span className="inline-block px-2 py-0.5 text-[9px] font-mono uppercase bg-blue-50 text-blue-700 border border-blue-200 font-bold">
+                                Synced
+                              </span>
+                           ) : isError ? (
+                             <span className="inline-block px-2 py-0.5 text-[9px] font-mono uppercase bg-red-50 text-red-700 border border-red-200 font-bold">
+                                Failed
+                              </span>
+                           ) : (
+                              <span className="inline-block px-2 py-0.5 text-[9px] font-mono uppercase bg-emerald-50 text-emerald-700 border border-emerald-250 font-bold">
+                                Ready
+                              </span>
+                           )}
                         </td>
                         <td className="p-3 text-right">
                            <div className="flex items-center justify-end gap-2">
@@ -574,17 +712,9 @@ export function OutputJobView({
                                target="_blank"
                                rel="noopener noreferrer"
                                title="Open PDF in new tab"
-                               className="inline-flex items-center justify-center h-7 rounded-none px-2 text-[9px] font-mono border border-blue-500 text-blue-700 hover:bg-blue-50 bg-white"
+                               className="inline-flex items-center justify-center h-7 rounded-none px-2 text-[9px] font-mono border border-neutral-300 text-neutral-600 hover:bg-neutral-50 bg-white"
                              >
-                               👁️ View
-                             </a>
-                             <a
-                               href={`/api/pipeline/download-clean/${pdf.hash}`}
-                               download
-                               title="Download PDF"
-                               className="inline-flex items-center justify-center h-7 rounded-none px-2 text-[9px] font-mono border border-emerald-500 text-emerald-700 hover:bg-emerald-50 bg-white"
-                             >
-                               ⬇️ Download
+                               👁️
                              </a>
                             {gdriveUser ? (
                               <div className="flex gap-2">
@@ -597,43 +727,33 @@ export function OutputJobView({
                                       localPath,
                                     )
                                   }
-                                  disabled={syncStatus[idOfItem] === "syncing"}
+                                  disabled={syncStatus[idOfItem] === "syncing" || isSynced}
                                   variant="outline"
-                                  className="h-7 rounded-none px-2 text-[9px] font-mono border-neutral-300 text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+                                  className={`h-7 rounded-none px-2 text-[9px] font-mono border ${isSynced ? 'border-emerald-300 text-emerald-700 bg-emerald-50' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'} cursor-pointer`}
                                 >
                                   {syncStatus[idOfItem] === "syncing" ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : syncStatus[idOfItem] === "success" ? (
-                                    "✓ Backup OK"
+                                  ) : isSynced ? (
+                                    "✓ Uploaded"
                                   ) : (
-                                    "Standard Sync"
+                                    isError ? "Retry Upload" : "Upload to Drive"
                                   )}
                                 </Button>
-                                <Button
-                                  onClick={() =>
-                                    triggerGeminiSync(
-                                      idOfItem,
-                                      "clean-pdfs",
-                                      cleanFilename,
-                                      localPath,
-                                    )
-                                  }
-                                  disabled={geminiSyncStatus[idOfItem] === "syncing"}
-                                  className="h-7 rounded-none px-2 text-[9px] font-mono bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
-                                  title="Analyze with Gemini 2.5 Flash, dynamically auto-rename, and save in nesting folders"
-                                >
-                                  {geminiSyncStatus[idOfItem] === "syncing" ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : geminiSyncStatus[idOfItem] === "success" ? (
-                                    "⚡ Gemini OK"
-                                  ) : (
-                                    "Gemini 2.5 Organize"
-                                  )}
-                                </Button>
+                                {isSynced && syncDetails[idOfItem]?.fileId && (
+                                   <a 
+                                     href={`https://drive.google.com/file/d/${syncDetails[idOfItem].fileId}/view`} 
+                                     target="_blank" 
+                                     rel="noopener noreferrer"
+                                     className="inline-flex items-center justify-center h-7 px-2 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] font-mono hover:bg-indigo-100"
+                                     title="Open in Google Drive"
+                                   >
+                                     <Cloud className="w-3 h-3 mr-1" /> Open
+                                   </a>
+                                )}
                               </div>
                             ) : (
                               <span className="text-[10px] text-neutral-400 font-mono">
-                                [Link Drive to Backup]
+                                [Link Drive]
                               </span>
                             )}
                           </div>
@@ -642,15 +762,13 @@ export function OutputJobView({
                     );
                   })}
 
-                {stagedPdfs.filter((p) => p.status === "classified").length ===
-                  0 && (
+                {readyPdfs.length === 0 && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={6}
                       className="p-8 text-center text-neutral-400 font-mono"
                     >
-                      No classified stamped PDFs built in this session yet.
-                      Build stamps inside the list!
+                      No reviewed PDFs marked Ready for Drive.
                     </td>
                   </tr>
                 )}
@@ -686,6 +804,15 @@ export function OutputJobView({
     </div>
   );
 
-  return <JobWorkspaceLayout sidebar={sidebarContent} main={mainContent} />;
+  return (
+    <>
+      <JobWorkspaceLayout sidebar={sidebarContent} main={mainContent} />
+      <CustomExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        stagedPdfs={stagedPdfs}
+      />
+    </>
+  );
 }
 export default OutputJobView;

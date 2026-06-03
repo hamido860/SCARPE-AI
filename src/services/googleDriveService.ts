@@ -140,3 +140,22 @@ export const getOrCreateDriveFolder = async (accessToken: string, folderName: st
   if (existingId) return existingId;
   return await createDriveFolder(accessToken, folderName, parentId);
 };
+
+export const fetchDriveFileMetadata = async (accessToken: string, fileId: string): Promise<{ name: string; mimeType: string } | null> => {
+  try {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      }
+    });
+    if (!res.ok) throw new Error(`File fetch failed: ${res.statusText}`);
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error("Error fetching Drive file metadata:", err);
+    return null;
+  }
+};
+

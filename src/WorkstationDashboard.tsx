@@ -62,6 +62,7 @@ export default function WorkstationDashboard() {
   const [topicFilter, setTopicFilter] = useState(""); // User custom crawling topic filter
   
   const [isCrawling, setIsCrawling] = useState(false);
+  const [isAiCleaning, setIsAiCleaning] = useState(false);
   const [crawledPdfs, setCrawledPdfs] = useState<string[]>([]);
   const [selectedCrawled, setSelectedCrawled] = useState<string[]>([]);
   const [siteMapNodes, setSiteMapNodes] = useState<any[]>([]);
@@ -105,6 +106,7 @@ export default function WorkstationDashboard() {
     activeJobId,
     addFoundUrls,
     stageUrls,
+    stageItems,
     updatePdf,
     updateManyPdfs,
     selectUrls,
@@ -196,7 +198,7 @@ export default function WorkstationDashboard() {
   const [gdriveUser, setGdriveUser] = useState<User | null>(null);
   const [gdriveAutoSync, setGdriveAutoSync] = useState(() => {
     const cached = localStorage.getItem("scarpe_gdrive_auto_sync");
-    return cached === null ? true : cached === "true";
+    return cached === null ? false : cached === "true";
   });
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [isSyncingSingle, setIsSyncingSingle] = useState<Record<string, boolean>>({});
@@ -293,6 +295,9 @@ export default function WorkstationDashboard() {
   };
 
   const triggerAutoSyncIfEnabled = async (category: string, filename: string, filepath: string) => {
+    // Only auto-sync clean processed PDFs, skip raw unreviewed downloads
+    if (category === "downloads") return;
+    
     const cachedToken = getCachedToken();
     if (gdriveUser && gdriveAutoSync && cachedToken) {
       try {
@@ -317,12 +322,13 @@ export default function WorkstationDashboard() {
     }
 
     setIsSyncingAll(true);
-    toast.info("Uploading entire workspace assets to Google Drive...");
+    toast.info("Uploading reviewed ready PDFs to Google Drive...");
     try {
       const res = await axios.post("/api/gdrive/sync-all", {
-        accessToken: cachedToken
+        accessToken: cachedToken,
+        categoryFilter: "clean-pdfs"
       });
-      toast.success(`Google Drive backup complete! ${res.data.count} assets synced successfully.`);
+      toast.success(`Uploaded ${res.data.count} PDFs to: Levelspace Drive Folder`);
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message;
       toast.error(`Google Drive Bulk Backup failed: ${msg}`);
@@ -584,14 +590,49 @@ export default function WorkstationDashboard() {
     }
   };
 
-  const stagePdfUrls = (urls: string[], options?: { autoSelect?: boolean }) => {
+  const stagePdfUrlsAsync = async (urls: string[], options?: { autoSelect?: boolean }) => {
     const uniqueUrls = Array.from(new Set(urls.map(u => u.trim())));
     const existing = new Set(stagedPdfs.map(p => p.url));
     const newUrls = uniqueUrls.filter(url => !existing.has(url));
     const duplicates = uniqueUrls.length - newUrls.length;
 
     if (newUrls.length > 0) {
-      stageUrls(newUrls, options?.autoSelect !== false);
+      const gdriveToken = getCachedToken();
+      let resolvedItems = [];
+      const { fetchDriveFileMetadata } = await import("./services/googleDriveService");
+      
+      for (const url of newUrls) {
+        let isDrive = false;
+        try {
+          isDrive = new URL(url).hostname.includes("drive.google.com");
+        } catch {}
+
+        if (isDrive) {
+          const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+          if (match && match[1] && gdriveToken) {
+            try {
+              const fileData = await fetchDriveFileMetadata(gdriveToken, match[1]);
+              if (fileData && fileData.name) {
+                resolvedItems.push({ 
+                  url, 
+                  sourceTitle: fileData.name, 
+                  sourceName: fileData.name,
+                  sourceType: "Google Drive"
+                });
+                continue;
+              }
+            } catch (err) {
+              console.error("Failed to fetch drive title for", url, err);
+            }
+          }
+          // Fallback if no token or fetch failed
+          resolvedItems.push({ url, sourceType: "Google Drive" });
+        } else {
+          resolvedItems.push({ url });
+        }
+      }
+      
+      stageItems(resolvedItems, options?.autoSelect !== false);
     } else if (options?.autoSelect !== false && uniqueUrls.length > 0) {
       setSelectedPdfUrls(prev => Array.from(new Set([...prev, ...uniqueUrls])));
     }
@@ -603,20 +644,20 @@ export default function WorkstationDashboard() {
     };
   };
 
-  const handleAutoStageAndSummarize = (
+  const handleAutoStageAndSummarize = async (
     allFoundUrls: string[],
     actionName: string
   ) => {
-    // 1. Validate URLs: Must start with http:// or https:// and have .pdf extension before query/anchors
+    // 1. Validate URLs: Must start with http:// or https:// and have .pdf or drive.google.com
     const validPdfUrls = allFoundUrls.filter(url => {
       if (!url || typeof url !== "string") return false;
       const lowered = url.trim().toLowerCase();
       if (!lowered.startsWith("http://") && !lowered.startsWith("https://")) return false;
       try {
         const pathPart = lowered.split(/[?#]/)[0];
-        return pathPart.endsWith(".pdf");
+        return pathPart.endsWith(".pdf") || lowered.includes("drive.google.com");
       } catch {
-        return lowered.includes(".pdf");
+        return lowered.includes(".pdf") || lowered.includes("drive.google.com");
       }
     });
 
@@ -625,22 +666,14 @@ export default function WorkstationDashboard() {
     // 2. Add found URLs to foundUrls
     addFoundUrls(validPdfUrls);
 
-    // 3. Skip duplicates and stage
-    const existingUrls = new Set(stagedPdfs.map(p => p.url));
-    const newUrlsToStage = validPdfUrls.filter(url => !existingUrls.has(url));
-    const duplicatesCount = validPdfUrls.length - newUrlsToStage.length;
-
-    // 4. Auto-stage valid PDF URLs into stagedPdfs
-    if (newUrlsToStage.length > 0) {
-      stageUrls(newUrlsToStage, true);
+    // 3. Auto-stage valid PDF URLs
+    const report = await stagePdfUrlsAsync(validPdfUrls, { autoSelect: true });
+    if (report.staged > 0) {
       setShowReadyBanner(true);
-    } else if (validPdfUrls.length > 0) {
-      // Auto-select valid PDF URLs anyway if they are already staged but not selected
-      setSelectedPdfUrls(prev => Array.from(new Set([...prev, ...validPdfUrls])));
     }
 
     // Show clear summary toast based on real staged state change
-    if (newUrlsToStage.length > 0) {
+    if (report.staged > 0) {
       toast.success(
         <div className="font-mono text-xs text-left">
           <div className="font-bold border-b border-emerald-200 pb-1 mb-1 font-sans text-emerald-900 flex items-center gap-1">
@@ -648,8 +681,8 @@ export default function WorkstationDashboard() {
             {actionName} Summary
           </div>
           <div>Found PDFs: <span className="font-bold">{validPdfUrls.length}</span></div>
-          <div>Auto-staged: <span className="font-bold text-emerald-700">{newUrlsToStage.length}</span></div>
-          <div>Duplicates skipped: <span className="font-bold">{duplicatesCount}</span></div>
+          <div>Auto-staged: <span className="font-bold text-emerald-700">{report.staged}</span></div>
+          <div>Duplicates skipped: <span className="font-bold">{report.duplicates}</span></div>
           <div>Rejected URLs: <span className="font-bold text-red-600">{rejectedCount}</span></div>
         </div>,
         { duration: 6000 }
@@ -660,7 +693,7 @@ export default function WorkstationDashboard() {
           <div className="font-bold border-b border-blue-200 pb-1 mb-1 font-sans text-blue-900">{actionName} Summary</div>
           <div>Found PDFs: <span className="font-bold">{validPdfUrls.length}</span></div>
           <div>Auto-staged: <span className="font-bold text-neutral-500">0</span> (All duplicates skipped)</div>
-          <div>Duplicates skipped: <span className="font-bold text-amber-700">{duplicatesCount}</span></div>
+          <div>Duplicates skipped: <span className="font-bold text-amber-700">{report.duplicates}</span></div>
           <div>Rejected URLs: <span className="font-bold text-red-600">{rejectedCount}</span></div>
         </div>,
         { duration: 5000 }
@@ -669,8 +702,8 @@ export default function WorkstationDashboard() {
 
     return {
       found: validPdfUrls.length,
-      staged: newUrlsToStage.length,
-      duplicates: duplicatesCount,
+      staged: report.staged,
+      duplicates: report.duplicates,
       rejected: rejectedCount
     };
   };
@@ -690,7 +723,7 @@ export default function WorkstationDashboard() {
     // Stage direct PDFs
     if (directPdfs.length > 0) {
       const urls = directPdfs.map(p => p.url);
-      const report = stagePdfUrls(urls, { autoSelect: true });
+      const report = await stagePdfUrlsAsync(urls, { autoSelect: true });
       toast.success(
         `Found ${report.found} PDFs from selected. Auto-staged ${report.staged}. ${report.duplicates} already existed.`
       );
@@ -731,7 +764,7 @@ export default function WorkstationDashboard() {
         setSelectedCrawled(prev => Array.from(new Set([...prev, ...uniqueFound])));
         addFoundUrls(uniqueFound);
 
-        const report = stagePdfUrls(uniqueFound, { autoSelect: true });
+        const report = await stagePdfUrlsAsync(uniqueFound, { autoSelect: true });
 
         toast.success(
           `Found ${report.found} PDFs from selected pages. Auto-staged ${report.staged}. ${report.duplicates} already existed.`
@@ -802,30 +835,94 @@ export default function WorkstationDashboard() {
   };
 
   // Automated Staging Rule: Intake URL synchronizer
-  const autoStageUrls = (urls: string[]) => {
-    return stagePdfUrls(urls, { autoSelect: true });
+  const autoStageUrls = async (urls: string[]) => {
+    return await stagePdfUrlsAsync(urls, { autoSelect: true });
   };
+
+  const stagedPdfAssets = siteMapNodes.filter((n: any) => 
+    n.page_role === "pdf_asset" && 
+    n.action === "stage_asset" && 
+    n.status === "completed" && 
+    !n.rejection_reason
+  ).map((n: any) => ({
+    ...n,
+    verification_status: n.verification_status || "pending",
+    download_status: n.download_status || "pending",
+    extraction_status: n.extraction_status || "pending",
+    ocr_status: n.ocr_status || "not_needed",
+    cleaning_status: n.cleaning_status || "pending",
+    lesson_match_status: n.lesson_match_status || "pending",
+    chunking_status: n.chunking_status || "pending",
+    quality_score: n.quality_score || null,
+    processing_errors: n.processing_errors || []
+  }));
 
   // Create Batch Job function
   const createBatchJob = () => {
-    // Determine scope and filter stagedPdfs to match scope criteria
-    const scopeItems = stagedPdfs.filter(pdf => {
-      if (scopeGradeId !== "all" && pdf.gradeId !== scopeGradeId) return false;
-      if (scopeSubjectId !== "all" && pdf.subjectId !== scopeSubjectId) return false;
-      if (scopeTopicId !== "all" && pdf.topicId !== scopeTopicId) return false;
-      if (scopeDocumentTypeId !== "all" && pdf.documentTypeId !== scopeDocumentTypeId) return false;
-      if (scopeStatus !== "all") {
-        if (scopeStatus === "pending" && pdf.status !== "pending") return false;
-        if (scopeStatus === "needs_review" && pdf.status !== "needs_review") return false;
-        if (scopeStatus === "failed" && pdf.status !== "failed") return false;
-        if (scopeStatus === "ocr_needed" && pdf.extractionStatus !== "needs_ocr" && pdf.ocrStatus !== "needed") return false;
-        if (scopeStatus === "classified" && pdf.status !== "classified") return false;
+    console.log("[BATCH DEBUG] Starting Batch Job Creation");
+    console.log(`[BATCH DEBUG] Total staged PDFs before filters: ${stagedPdfAssets.length}`);
+    console.log(`[BATCH DEBUG] Selected Grade Filter: ${scopeGradeId}`);
+    console.log(`[BATCH DEBUG] Selected Subject Filter: ${scopeSubjectId}`);
+    console.log(`[BATCH DEBUG] Selected Scope Status: ${scopeStatus}`);
+    console.log(`[BATCH DEBUG] Selected OCR Mode: ${ocrBatchMode}`);
+
+    let countAfterGrade = 0;
+    let countAfterSubject = 0;
+    let countAfterStatus = 0;
+
+    // Determine scope and filter stagedPdfAssets to match scope criteria
+    const scopeItems = stagedPdfAssets.filter((pdf: any) => {
+      // If ALL is selected, do not filter by grade/subject at all
+      if (scopeGradeId !== "all") {
+        const pGrade = (pdf.extracted_grade || "").toLowerCase();
+        const sGrade = scopeGradeId.toLowerCase();
+        if (pGrade !== sGrade) {
+          console.log(`[BATCH DEBUG] Excluded ${pdf.canonical_url}: Grade mismatch "${pGrade}" !== "${sGrade}"`);
+          return false;
+        }
       }
+      countAfterGrade++;
+      
+      if (scopeSubjectId !== "all") {
+        const pSubj = (pdf.extracted_subject || "").toLowerCase();
+        const sSubj = scopeSubjectId.toLowerCase();
+        if (pSubj !== sSubj) {
+          console.log(`[BATCH DEBUG] Excluded ${pdf.canonical_url}: Subject mismatch "${pSubj}" !== "${sSubj}"`);
+          return false;
+        }
+      }
+      countAfterSubject++;
+
+      if (scopeStatus !== "all") {
+        // Normalize status checking for staged assets
+        if (scopeStatus === "pending" && pdf.verification_status !== "pending") {
+          console.log(`[BATCH DEBUG] Excluded ${pdf.canonical_url}: Status mismatch, needed pending but got ${pdf.verification_status}`);
+          return false;
+        }
+        if (scopeStatus === "needs_review" && (!pdf.processing_errors || pdf.processing_errors.length === 0)) {
+          console.log(`[BATCH DEBUG] Excluded ${pdf.canonical_url}: Status mismatch, needs review requires errors`);
+          return false;
+        }
+        if (scopeStatus === "failed" && (!pdf.processing_errors || pdf.processing_errors.length === 0)) {
+          console.log(`[BATCH DEBUG] Excluded ${pdf.canonical_url}: Status mismatch, failed requires errors`);
+          return false;
+        }
+        if (scopeStatus === "ocr_needed" && pdf.ocr_status !== "needed") {
+          console.log(`[BATCH DEBUG] Excluded ${pdf.canonical_url}: Status mismatch, needed OCR but got ${pdf.ocr_status}`);
+          return false;
+        }
+      }
+      countAfterStatus++;
       return true;
     });
 
+    console.log(`[BATCH DEBUG] Total PDFs after Grade filter: ${countAfterGrade}`);
+    console.log(`[BATCH DEBUG] Total PDFs after Subject filter: ${countAfterSubject}`);
+    console.log(`[BATCH DEBUG] Total PDFs after Status filter: ${countAfterStatus}`);
+    console.log(`[BATCH DEBUG] Final matching PDFs: ${scopeItems.length}`);
+
     if (scopeItems.length === 0) {
-      toast.error("No staged PDFs match the selected Batch Scope criteria.");
+      toast.error(`No staged PDFs match the selected Batch Scope criteria. Total staged assets: ${stagedPdfAssets.length}. Filters applied: Grade=${scopeGradeId}, Subject=${scopeSubjectId}, Scope=${scopeStatus}`);
       return;
     }
 
@@ -853,11 +950,11 @@ export default function WorkstationDashboard() {
       processedItems: 0
     };
 
-    const items: BatchJobItem[] = scopeItems.map((pdf, idx) => ({
-      id: `item_${idx}_` + Math.random().toString(36).substring(2, 9),
-      url: pdf.url,
-      filename: pdf.originalName,
-      originalName: pdf.originalName,
+    const items: BatchJobItem[] = scopeItems.map((pdf: any, idx: number) => ({
+      id: pdf.id || (`item_${idx}_` + Math.random().toString(36).substring(2, 9)),
+      url: pdf.canonical_url || pdf.url,
+      filename: pdf.file_name || pdf.originalName || "document.pdf",
+      originalName: pdf.file_name || pdf.originalName || "document.pdf",
       status: "queued" as const,
       currentStep: "download" as const,
       stepProgress: {
@@ -933,6 +1030,8 @@ export default function WorkstationDashboard() {
     updatedItems[index] = {
       ...item,
       status: "blocked" as const,
+      processing_status: "blocked",
+      review_status: "needs_text_review",
       blockReason: reason,
       hash,
       requiresUserAction: true,
@@ -995,19 +1094,30 @@ export default function WorkstationDashboard() {
     classData: any,
     cleanData?: any
   ) => {
+    const isNeedsReview = classData.status === "needs_review";
+
     const updatedItems = [...batchJobItems];
     updatedItems[index] = {
       ...item,
-      status: cleanData ? "clean_copy_done" : "classified",
+      status: isNeedsReview ? "needs_review" : (cleanData ? "clean_copy_done" : "classified"),
+      processing_status: "completed",
+      review_status: isNeedsReview ? "needs_metadata_review" : "auto_approved",
       currentStep: "done",
       hash,
-      confidenceScore: Math.round((classData.confidenceScore || 0) * 100)
+      confidenceScore: Math.round((classData.confidenceScore || 0) * 100),
+      requiresUserAction: isNeedsReview,
+      blockReason: isNeedsReview ? classData.reason : undefined
     };
     setBatchJobItems(updatedItems);
     
+    // Auto-sync is handled earlier, but doing it again if needed
     if (classData && classData.renamePattern) {
         const rawName = classData.renamePattern.replace(".pdf", "_raw.pdf");
         triggerAutoSyncIfEnabled("downloads", rawName, `downloads/${hash}.original.pdf`);
+    }
+
+    if (isNeedsReview) {
+      toast.info(`${item.filename} was processed but needs review because ${classData.reason === "low_confidence_classification" ? "classification confidence is low" : "metadata matching was uncertain"}.`);
     }
 
     setStagedPdfs(prev => {
@@ -1015,7 +1125,8 @@ export default function WorkstationDashboard() {
         if (p.url === item.url) {
           return {
             ...p,
-            status: "classified",
+            status: isNeedsReview ? "needs_review" : "classified",
+            reason: isNeedsReview ? classData.reason : undefined,
             hash,
             gradeId: classData.gradeId,
             subjectId: classData.subjectId,
@@ -1068,6 +1179,8 @@ export default function WorkstationDashboard() {
     updatedItems[index] = {
       ...item,
       status: "failed" as const,
+      processing_status: "failed",
+      review_status: "rejected",
       currentStep: "done" as const,
       blockReason: reason
     };
@@ -1244,6 +1357,24 @@ export default function WorkstationDashboard() {
       }
     }
 
+    const originalStagedItem = stagedPdfs.find(p => p.url === item.url) || stagedPdfAssets.find((p: any) => p.canonical_url === item.url || p.url === item.url) || {} as any;
+    
+    updateItemStep(index, "chunking");
+    try {
+      await axios.post("/api/pipeline/chunk", {
+        hash,
+        url: item.url,
+        title: item.filename,
+        text: finalText
+      });
+      // also update the node status locally immediately
+      if (originalStagedItem.id) {
+         handleUpdateSiteMapNode(originalStagedItem.id, { chunking_status: "rag_ready" });
+      }
+    } catch (e: any) {
+      console.warn("Chunking failed:", e.message);
+    }
+
     updateItemStep(index, "classify");
     let classifyRes;
     try {
@@ -1260,6 +1391,9 @@ export default function WorkstationDashboard() {
     const classData = classifyRes.data;
     const confidencePercent = Math.round((classData.confidenceScore || 0) * 100);
 
+    let needsReviewFlag = false;
+    let reviewReasonStr = "";
+
     if (!classData.isMatch || classData.status === "needs_review") {
       let reason: string = classData.reason || "Classification mismatch";
       let blockReason = "low_confidence_classification";
@@ -1269,56 +1403,64 @@ export default function WorkstationDashboard() {
       else if (reason.includes("Document Type")) blockReason = "document_type_uncertain";
       else if (reason.includes("Topic Filters")) blockReason = "topic_filter_mismatch";
 
-      return blockItem(index, item, blockReason, {
-        blockReason,
-        explanation: reason,
-        suggestedActions: [
-          "Select the missing or correct curricular parameters below",
-          "Map the topics or subjects properly in your active dictionary"
-        ],
-        candidateGrades: dictionary.grades,
-        candidateSubjects: dictionary.subjects,
-        candidateTopics: dictionary.topics,
-        candidateDocumentTypes: dictionary.allowedDocumentTypes,
-        confidenceScore: confidencePercent,
-        matchedTerms: classData.matchedTerms || [],
-        sourcePreview: item.url,
-        textPreview: finalText.substring(0, 1000)
-      }, hash, classData);
+      // These are soft reasons - don't block
+      needsReviewFlag = true;
+      reviewReasonStr = blockReason;
     }
 
-    if (confidencePercent < 50) {
-      return blockItem(index, item, "no_reliable_match", {
-        blockReason: "no_reliable_match",
-        explanation: `Underlying confidence too low (${confidencePercent}%), showing no safe match to Morocco classroom curriculums.`,
-        suggestedActions: ["Select grade and subject manually", "Map dictionary items carefully"],
-        candidateGrades: dictionary.grades,
-        candidateSubjects: dictionary.subjects,
-        candidateTopics: dictionary.topics,
-        candidateDocumentTypes: dictionary.allowedDocumentTypes,
-        confidenceScore: confidencePercent,
-        matchedTerms: classData.matchedTerms || [],
-        sourcePreview: item.url,
-        textPreview: finalText.substring(0, 1000)
-      }, hash, classData);
-    } else if (confidencePercent < 80) {
-      return blockItem(index, item, "low_confidence_classification", {
-        blockReason: "low_confidence_classification",
-        explanation: `Underlying confidence level (${confidencePercent}%) is below the safety auto-approval threshold of 80%.`,
-        suggestedActions: ["Review classification choices and click 'Apply & Approve' to confirm metadata"],
-        candidateGrades: dictionary.grades,
-        candidateSubjects: dictionary.subjects,
-        candidateTopics: dictionary.topics,
-        candidateDocumentTypes: dictionary.allowedDocumentTypes,
-        confidenceScore: confidencePercent,
-        matchedTerms: classData.matchedTerms || [],
-        sourcePreview: item.url,
-        textPreview: finalText.substring(0, 1000)
-      }, hash, classData);
+    if (confidencePercent < 50 && !needsReviewFlag) {
+      needsReviewFlag = true;
+      reviewReasonStr = "no_reliable_match";
+    } else if (confidencePercent < 80 && !needsReviewFlag) {
+      needsReviewFlag = true;
+      reviewReasonStr = "low_confidence_classification";
     }
 
+    // Instead of stopping, continue to generate clean copy and dataset rows
     updateItemStep(index, "done");
-    return completeItem(index, item, hash, classData);
+
+    // Add clean copy generation inside the pipeline directly
+    let cleanData;
+    try {
+      const cleanRes = await axios.post("/api/pipeline/clean-copy", {
+        hash: hash,
+        gradeId: classData.gradeId || originalStagedItem.gradeId || originalStagedItem.extracted_grade || "unknown",
+        subjectId: classData.subjectId || originalStagedItem.subjectId || originalStagedItem.extracted_subject || "unknown",
+        topicId: classData.topicId || originalStagedItem.topicId || "unknown",
+        documentTypeId: classData.documentTypeId || originalStagedItem.documentTypeId || "unknown",
+        title: item.filename,
+        url: item.url,
+        text: finalText
+      });
+      cleanData = cleanRes.data;
+    } catch (e: any) {
+      console.warn("Clean copy generation skipped or failed:", e.message);
+    }
+    
+    // Inject review flags into classData so completeItem can handle them
+    if (needsReviewFlag) {
+      classData.status = "needs_review";
+      classData.reason = reviewReasonStr;
+      
+      console.log(`[Batch Pipeline] Soft-blocked item ${item.filename}:`, {
+        confidencePercent,
+        reason: reviewReasonStr,
+        originalGrade: originalStagedItem.extracted_grade,
+        originalSubject: originalStagedItem.extracted_subject,
+        detectedGrade: classData.gradeId,
+        detectedSubject: classData.subjectId
+      });
+    } else {
+      console.log(`[Batch Pipeline] Successfully classified item ${item.filename}:`, {
+        confidencePercent,
+        detectedGrade: classData.gradeId,
+        detectedSubject: classData.subjectId,
+        topicId: classData.topicId,
+        documentTypeId: classData.documentTypeId
+      });
+    }
+
+    return completeItem(index, item, hash, classData, cleanData);
   };
 
   // Block Resolution Handler
@@ -1603,10 +1745,45 @@ export default function WorkstationDashboard() {
       const res = await axios.post("/api/site-map/update-node", { id, updates });
       if (res.data && res.data.success) {
         setSiteMapNodes(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
-        toast.success("Site map node saved.");
+        const node = siteMapNodes.find(n => n.id === id);
+        const role = updates.page_role || node?.page_role;
+        const links = updates.discovered_links_count ?? node?.discovered_links_count ?? 0;
+        
+        if (role === "pdf_asset") {
+           toast.success("PDF asset staged for Intake");
+        } else if (role === "crawl_children") {
+           toast.success(`Page saved \u2014 ${links} links discovered`);
+        } else if (role === "hub_page") {
+           toast.success("Hub page saved for crawl only");
+        } else {
+           toast.success("Site map node saved.");
+        }
       }
     } catch (e: any) {
       toast.error("Failed to update site map node.");
+    }
+  };
+
+  const handleAiCleanSiteMap = async () => {
+    setIsAiCleaning(true);
+    const resolveToast = toast.loading("AI is cleaning and organizing results...");
+    try {
+      const res = await axios.post("/api/site-map/ai-clean");
+      if (res.data) {
+        setSiteMapNodes(res.data);
+        const autoSelected = Array.from(new Set(
+          (res.data as any[])
+            .filter(n => n.is_final_asset)
+            .map(n => n.canonical_url)
+        ));
+        setCrawledPdfs(autoSelected as string[]);
+        setSelectedCrawled(autoSelected as string[]);
+        toast.success("AI Cleanup completed successfully", { id: resolveToast });
+      }
+    } catch (e: any) {
+      toast.error("Failed to run AI cleanup.", { id: resolveToast });
+    } finally {
+      setIsAiCleaning(false);
     }
   };
 
@@ -1678,14 +1855,14 @@ export default function WorkstationDashboard() {
     toast.success(`Staging finished! Staged ${newlyStagedCount} new final assets with complete grade & subject hierarchy.`);
   };
 
-  const handleStageSelectedCrawled = () => {
+  const handleStageSelectedCrawled = async () => {
     if (selectedCrawled.length === 0) {
       toast.error("Please tick at least one crawled PDF link to stage.");
       return;
     }
 
     const uniqueToStage = selectedCrawled.filter(url => !stagedPdfs.some(item => item.url === url));
-    const report = stagePdfUrls(uniqueToStage, { autoSelect: true });
+    const report = await stagePdfUrlsAsync(uniqueToStage, { autoSelect: true });
 
     setTimeout(() => {
       const el = document.getElementById("pdf-classification-workspace-card");
@@ -1727,7 +1904,7 @@ export default function WorkstationDashboard() {
           subjectId: pData.metadata?.subjectId || pData.metadata?.subjectHint || p.subjectId,
           topicId: pData.metadata?.topicId || pData.metadata?.topicHint || p.topicId,
           documentTypeId: pData.metadata?.documentTypeId || pData.metadata?.documentTypeHint || p.documentTypeId,
-          cleanTitle: pData.metadata?.cleanFilename || p.cleanTitle,
+          cleanTitle: pData.cleanTitle || p.cleanTitle,
           renamePattern: pData.renamePattern || p.renamePattern,
           isMatch: false,
           rawText: pData.metadata?.rawText || p.rawText
@@ -1752,7 +1929,8 @@ export default function WorkstationDashboard() {
         subjectId: pData.metadata?.subjectId || p.subjectId,
         topicId: pData.metadata?.topicId || p.topicId,
         documentTypeId: pData.metadata?.documentTypeId || p.documentTypeId,
-        cleanTitle: pData.metadata?.cleanFilename || p.cleanTitle
+        cleanTitle: pData.cleanTitle || p.cleanTitle,
+        renamePattern: pData.renamePattern || p.renamePattern
       } : p));
 
       // Step 2: Classify strictly against reference dictionary
@@ -2480,6 +2658,7 @@ export default function WorkstationDashboard() {
         return (
           <IntakeJobView
             stagedPdfs={stagedPdfs}
+            hasDriveConnected={!!gdriveUser}
             crawlUrl={crawlUrl}
             setCrawlUrl={setCrawlUrl}
             discoverPastedUrls={discoverPastedUrls}
@@ -2514,6 +2693,8 @@ export default function WorkstationDashboard() {
             siteMapNodes={siteMapNodes}
             onUpdateSiteMapNode={handleUpdateSiteMapNode}
             onClearSiteMap={handleClearSiteMap}
+            onAiClean={handleAiCleanSiteMap}
+            isAiCleaning={isAiCleaning}
             onStageUrlsWithMetadata={handleStageUrlsWithMetadata}
           />
         );
@@ -2537,6 +2718,8 @@ export default function WorkstationDashboard() {
             createBatchJob={createBatchJob}
             pauseBatchJob={pauseBatchJob}
             stopBatchJob={stopBatchJob}
+            siteMapNodes={siteMapNodes}
+            onUpdateSiteMapNode={handleUpdateSiteMapNode}
           />
         );
       case "indexing":
@@ -2581,6 +2764,7 @@ export default function WorkstationDashboard() {
             isSyncingSingle={isSyncingSingle}
             handleSyncSingleToDrive={handleSyncSingleToDrive}
             handleGeminiSyncToDrive={handleGeminiSyncToDrive}
+            updateManyPdfs={updateManyPdfs}
           />
         );
       case "reports":

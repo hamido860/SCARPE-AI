@@ -1,0 +1,2407 @@
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Lycée Ibn Khaldoun BOUZNIKA 
+L’examen national 2011 SR  AGOUZAL 
+Année scolaire : 2019 – 2020 
+2 BPCF 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+LYCEE  IBN KHALDOUN                                                                                               AGOUZAL 
+ 
+ 
+Exercice 1 : (2,5 pts) 
+ 
+1) a - Résoudre dans ℝ l’équation suivante : 
+              
+2
+23   0xx   
+ 
+    b – Résoudre dans ℝ l’équation suivante : 
+           
+3
+20
+x
+x
+e
+e
+     
+ 
+2) Résoudre dans ℝ l’inéquation suivante : 
+     
+1
+0
+xx
+ee
+
+
+ 
+ 
+Exercice 2 : (4 pts) 
+ 
+1) Résoudre dans l’équation : 
+2
+618    0ZZ     
+ 
+2) Dans le plan rapporté à un repère orthonormé 
+direct 
+(   ;  ;   )O u v
+ on considère les points A et B 
+d’affixes respectives  
+33ai
+  ,   
+33bi
+ 
+   a – Ecrire a et b sous forme trigonométrique  
+   b – Montrer que b l’affixe du point B image du point  
+       B par la translation de vecteur 
+OA
+est 6 
+  c – Montrer que :  
+'
+'
+bb
+i
+ab
+
+
+
+ puis en déduire que le  
+       triangle  ABB est isocèle et rectangle en B. 
+  d – En déduire que le quadrilatère  OABB est un carré 
+ 
+Exercice 3 : (3,5 pts) 
+ 
+On considère la suite  (U
+n
+) définie par : 
+    
+1
+151
+6
+n
+n
+n
+U
+U
+U
+
+
+
+    
+n
+    et    
+1
+0
+U
+ 
+1) a – Montrer que:  
+1
+1
+3
+1
+3    151
+n
+n
+n
+U
+U
+U
+
+
+
+
+  
+n
+    
+     b – Montrer que :  
+3
+1
+U
+n
+
+      
+n
+   
+2) On considère la suite  (V
+n
+) définie par : 
+              
+1
+1
+3
+n
+n
+V
+U
+
+           
+n
+ 
+    Montrer que (V
+n
+) est une suite géométrique de raison 
+6
+1
+  puis écrire  
+n
+V
+ en fonction de n. 
+3) Montrer que 
+
+
+1
+1
+32
+6
+n
+n
+U
+
+     
+n
+   et en 
+déduire  
+lim
+n
+U
+ 
+ 
+   
+ 
+ 
+Problème : :  (10 pts) 
+Partie I :   
+On considère la fonction g définie sur   
+
+0;I  
+   
+par : 
+(  )1   lng xxx   
+ 
+1) a –  Montrer que  
+1
+'(  )
+x
+x
+gx
+
+
+         
+Ix
+ 
+    b – Montrer que g est croissante sur I 
+ 
+2) En déduire que :       
+(  )    0gx
+ sur 
+
+1,
+  
+et 
+(  )    0gx
+  sur 
+
+0,1
+    (Remarquer que  g(1) = 0)
+ 
+Deuxième partie 
+On considère la fonction f définie sur  
+
+0;I  
+ 
+par : 
+
+
+1
+(  )ln
+x
+f  xx
+x
+
+
+ 
+(C
+f
+) est la courbe représentative de f dans le repère 
+orthonormé 
+(   ; ;  )O i  j
+ (unité : 1 cm) 
+1) a – Montrer que   
+lim(  )
+0
+fx
+x
+
+ 
+
+ et 
+interpréter le résultat géométriquement. 
+  b – Montrer que 
+lim(  )fx
+x
+ 
+
+  et  
+()
+lim0
+fx
+x
+x
+
+
+  
+(Remarquer que   
+
+
+()
+1  ln
+fx
+xx
+xxx
+
+
+    
+Ix
+ )    
+   c – En déduire que la courbe  (C
+f
+)  admet au 
+voisinage de +  une branche parabolique de 
+direction  à  déterminer.                                         
+2) a – Montrer que 
+2
+()
+'(  )
+gx
+x
+fx
+        
+xI
+    
+b – En déduire que  f est croissante sur 
+
+1,
+ 
+        et décroissante sur 
+
+0,1
+. 
+   c – Dresser le tableau des variations de f.
+ 
+3) Construire la courbe (C
+f
+) ( on admettra que (C
+f
+) 
+possède un seul point d’inflexion dont l’abscisse est 
+comprise entre 1,5 et 2). 
+4) a – Montrer que 
+
+2
+1
+:ln
+2
+H  xx
+ est une 
+primitive de 
+ln
+:
+x
+hx
+x
+
+ sur 
+
+0;
+  
+   b – Montrer que :  
+1
+ln1
+2
+e
+x
+dx
+x
+
+
+ 
+  c – A l’aide d’une intégration par parties montrer 
+que :  
+1
+ln1
+e
+xdx
+
+ 
+5) a – Vérifier que : 
+ln
+(  )    ln
+x
+f  xx
+x
+
+   
+xI
+ 
+    b – Montrer que l’aire du domaine limité par   
+        (C
+f
+) , l’axe des abscisses  et les droites 
+         d’équations x = 1 et x = e est  0,5 cm
+2
+. 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Lycée Ibn Khaldoun BOUZNIKA 
+Solution de  
+l’examen national 2011 SR 
+AGOUZAL 
+Année scolaire : 2019 – 2020 
+2 BPCF 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+LYCEE  IBN KHALDOUN                                                                                               AGOUZAL 
+ 
+ 
+Exercice 1 : (2,5 pts) 
+1) a - Résoudre dans ℝ l’équation suivante : 
+              
+2
+23   0xx   
+ 
+  
+2
+(  2)4 01   (  3)    16      
+ l’équation  admet 
+deux solutions distincts. 
+1
+216
+2
+24
+3
+2
+x
+
+
+
+
+                 et                
+2
+216
+2
+24
+1
+2
+x
+
+
+
+ 
+ 
+
+1;3S
+ 
+    b – Résoudre dans ℝ l’équation suivante : 
+           
+3
+20
+x
+x
+e
+e
+     
+               
+0
+x
+e
+      
+x
+ 
+
+
+2
+23
+0
+xx
+x
+ee
+e
+
+
+   
+
+
+2
+23    0
+xx
+ee    
+ 
+On pose  
+x
+te
+   donc    
+2
+23   0tt   
+ 
+                                 donc    
+3t
+   ou    
+1t
+   
+donc    
+3
+x
+e
+   ou    
+1
+x
+e
+  or   
+0
+x
+e
+    
+x
+ 
+donc    
+3ln 3
+x
+ex   
+ 
+D’où 
+
+ln 3S
+ 
+2) Résoudre dans ℝ l’inéquation suivante : 
+     
+1
+0
+xx
+ee
+
+
+ 
+11
+01
+1
+21
+2
+xxxx
+eeeexx
+xx
+        
+                
+        
+ 
+D’où 
+1
+;
+2
+S
+
+   
+
+ 
+Exercice 2 : (4 pts) 
+1) Résoudre dans l’équation : 
+2
+618    0ZZ     
+ 
+2
+2
+(  6)4   1   1836    0
+(6 )i
+            
+
+ 
+Donc l’équation admet deux solutions complexes 
+conjuguées : 
+1
+66
+33
+2
+i
+zi
+
+  
+   et     
+21
+33zzi   
+ 
+D’où 
+
+3   3 ;3   3Sii     
+ 
+2) Dans le plan rapporté à un repère orthonormé 
+direct 
+(   ;  ;   )O u v
+ on considère les points A et B 
+d’affixes respectives  
+33ai
+  ,   
+33bi
+ 
+   a – Ecrire a et b sous forme trigonométrique  
+22
+3(1)3 13  113  2aii                
+ 
+ 
+1122
+3(1)    3  2()    3  2()
+22
+22
+aiii     
+ 
+3  2(cossin   )
+44
+i
+
+
+                 d’où 
+3  2;
+4
+a
+
+
+
+
+
+ 
+On a 
+ba
+   donc  
+3  2;
+4
+b
+
+
+
+
+
+ 
+   b – Montrer que b l’affixe du point B image du 
+point B par la translation de vecteur 
+OA
+est 6 
+ B image du point B par la translation de vecteur 
+OA
+  
+Donc    
+'()    b   abb   aff  OA   
+   
+               
+'    3   33   36bii      
+      d’où 
+'6b
+ 
+  c – Montrer que :  
+'
+'
+bb
+i
+ab
+
+
+
+ puis en déduire que 
+le triangle  ABB est isocèle et rectangle en B. 
+2
+'3   363   3
+'3   363   3
+3(1)
+'
+1
+'3(1)1
+(1)
+'
+2
+'(1)(1)2
+b    bii
+a    bii
+i
+bb
+i
+a    bii
+i
+bb
+i
+a    bii
+      
+
+      
+
+
+
+
+      
+
+
+
+   
+ 
+D’où  
+'
+'
+bb
+i
+ab
+
+
+
+       
+On a 
+'
+cossin1;
+'222
+bb
+i
+ab
+    
+
+ 
+
+
+ 
+On a  
+'
+1;
+'2
+bb
+ab
+
+
+
+
+
+      donc 
+'
+1
+'
+bb
+ab
+
+
+
+ 
+Donc 
+'
+1
+'
+BB
+AB
+
+  et    
+
+
+
+'
+arg2
+'2
+bb
+ab
+
+
+
+
+
+ 
+Donc 
+''ABBB
+  et 
+
+
+
+'   ;   '2
+2
+B  A B  B
+
+
+ 
+D’où le triangle  ABB est isocèle et rectangle en B. 
+  d – En déduire que le quadrilatère  OABB est un 
+carré 
+Le point B image du point B par la translation de 
+vecteur 
+OA
+  donc 
+'BBOA
+ 
+Donc le quadrilatère  OABB est un parallélogramme 
+On a 
+''ABBB
+  et 
+
+
+
+'   ;   '2
+2
+B  A B  B
+
+
+Donc  
+D’où le quadrilatère  OABB est un carré 
+Exercice 3 : (3,5 pts) 
+On considère la suite  (U
+n
+) définie par : 
+    
+1
+151
+6
+n
+n
+n
+U
+U
+U
+
+
+
+    
+n
+    et    
+1
+0
+U
+ 
+1) a – Montrer que:  
+1
+1
+3
+1
+3    151
+n
+n
+n
+U
+U
+U
+
+
+
+
+  
+n
+    
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+LYCEE  IBN KHALDOUN                                                                                               AGOUZAL 
+ 
+ 
+1
+1
+151
+11
+3    151    33(151)
+11
+)
+33
+1
+33(151)151
+618
+3(
+nnn
+n
+nn
+nn
+n
+nn
+UUU
+U
+UU
+UU
+U
+UU
+
+
+
+    
+
+
+  
+
+ 
+D’où 
+1
+1
+3
+1
+3    151
+n
+n
+n
+U
+U
+U
+
+
+
+
+ 
+b – Montrer que :  
+3
+1
+U
+n
+
+      
+n
+   
+Pour n = 0 on a    
+0
+1U
+    donc     
+0
+1
+3
+U
+ 
+Soit n  ℕ  supposons que  
+3
+1
+U
+n
+
+  et   montrons 
+que   
+3
+1
+1
+U
+n
+
+
+  c’est-à-dire  
+3
+1
+0
+1
+U
+n
+
+
+ 
+On a     
+3
+1
+U
+n
+
+    donc  
+3
+1
+0U
+n
+
+  et  
+151   6
+n
+U
+    donc 
+1
+1
+3
+1
+0
+3    151
+n
+n
+n
+U
+U
+U
+
+
+  
+
+    
+D’où     
+3
+1
+U
+n
+
+      
+n
+         
+2) On considère la suite  (V
+n
+) définie par : 
+              
+1
+1
+3
+n
+n
+V
+U
+
+           
+n
+ 
+    Montrer que (V
+n
+) est une suite géométrique de raison 
+6
+1
+  puis écrire  
+n
+V
+ en fonction de n. 
+Montrons que 
+1
+1
+6
+nn
+VV
+
+
+ ? 
+1
+1
+11
+11
+3
+151
+18
+n
+n
+n
+n
+V
+U
+U
+U
+
+
+  
+
+ 
+1
+1
+151    18151
+1
+1818
+313
+1
+181818
+nnn
+n
+nn
+nn
+n
+nnn
+UUU
+V
+UU
+UU
+V
+UUU
+
+
+
+ 
+
+
+ 
+1
+1111
+(1)
+6    1863
+n
+nn
+V
+UU
+
+     
+ 
+D’où 
+1
+1
+6
+nn
+VV
+
+
+ 
+ 
+D’où (V
+n
+) est une suite géométrique de raison 
+6
+1
+ 
+ 
+(V
+n
+) est une suite géométrique de raison 
+6
+1
+ de premier 
+terme 
+0
+0
+12
+1
+33
+V
+U
+     
+       
+
+
+0
+1
+6
+n
+n
+VV
+ 
+n
+  
+D’où     
+
+
+21
+36
+n
+n
+V
+       
+n
+ 
+ 
+ 
+3) Montrer que 
+
+
+1
+1
+32
+6
+n
+n
+U
+
+     
+n
+   et 
+en déduire  
+lim
+n
+U
+ 
+ 
+On a 
+
+
+
+
+11
+11
+33
+11
+3
+1
+21
+33
+36
+1
+1
+32
+6
+nn
+nn
+nn
+n
+n
+n
+n
+VV
+UU
+UU
+V
+U
+  
+   
+
+
+
+
+   
+D’où 
+
+
+1
+1
+32
+6
+n
+n
+U
+
+     
+n
+ 
+On a  
+
+
+1
+1
+32
+6
+n
+n
+U
+
+     
+n
+    
+
+
+111
+limlim
+3   23
+1
+32
+6
+n
+n
+U
+O
+
+
+
+ 
+D’où     
+1
+lim
+3
+n
+U
+ 
+Problème :   (10 pts) 
+Partie I :   
+On considère la fonction g définie sur   
+
+0;I  
+   
+par : 
+(  )1   lng xxx   
+ 
+1) a –  Montrer que  
+1
+'(  )
+x
+x
+gx
+
+
+         
+Ix
+ 
+    
+(  )1   lng xxx   
+ 
+Donc 
+1
+'(  )    1gx
+x
+
+    d’où  
+1
+'(  )
+x
+x
+gx
+
+
+  
+Ix
+ 
+    b – Montrer que g est croissante sur I 
+On a 
+1
+'(  )
+x
+x
+gx
+
+
+     
+
+0;x
+ 
+Donc 
+'(  )   0gx
+ 
+D’où g est croissante sur I 
+ 
+2) En déduire que :     
+(  )    0gx
+      
+
+0,1x
+     
+            Et que      
+(  )    0gx
+       
+
+1,x   
+                                                
+On sait que g est croissante sur 
+
+0;
+ 
+(1)    0g
+ 
+
+0,1x
+   donc   
+01x
+ 
+                   donc     
+1x
+   donc  
+(  )(1)g xg
+ 
+Or 
+(1)    0g
+   
+D’où 
+(  )    0gx
+   
+
+0,1x
+ 
+
+1,x   
+  donc   
+1x
+   donc   
+(  )(1)g xg
+ 
+D’où      
+(  )    0gx
+      
+
+1,x   
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+LYCEE  IBN KHALDOUN                                                                                               AGOUZAL 
+ 
+ 
+Deuxième partie 
+On considère la fonction f définie sur  
+
+0;
+ par 
+
+
+1
+(  )ln
+x
+f  xx
+x
+
+
+ 
+(C
+f
+) est la courbe représentative de f dans le repère 
+orthonormé 
+(   ; ;  )O i  j
+ (unité : 1 cm) 
+1) a – Montrer que   
+lim(  )
+0
+fx
+x
+
+ 
+
+ et e interpréter 
+le résultat géométriquement 
+ 
+
+
+1
+lim(  )limln
+00
+x
+f  xx
+x
+xx
+
+
+ 
+
+ 
+  car 
+lim   ln
+0
+x
+x
+
+ 
+
+ et 
+1
+lim  ()
+0
+x
+x
+x
+
+
+ 
+
+ 
+On a 
+lim(  )
+0
+fx
+x
+
+ 
+
+ la droite d’équation  x = 0 
+Est une asymptote verticale à  la courbe (C). 
+2) a – Montrer que  
+lim(  )fx
+x
+ 
+
+ 
+11
+lim   () lnlim   (1) ln
+x
+xx
+xx
+xx
+
+ 
+
+   
+car       et  
+1
+lim   11
+x
+x
+
+
+ 
+  et 
+()
+lim0
+fx
+x
+x
+
+
+   ?    
+( Remarquer que   
+
+
+()
+1  ln
+fx
+xx
+xxx
+
+
+    
+Ix
+ ) 
+1
+(1) ln
+()
+limlim
+x
+fx
+x
+xx
+xx
+
+
+
+ 
+                      
+1  ln
+lim   (1)0
+x
+xx
+x
+
+
+ 
+Car 
+ln
+lim0
+x
+x
+x
+
+
+ et 
+1
+lim   11
+x
+x
+
+
+ 
+   c – En déduire que la courbe  (C
+f
+)  admet au voisinage 
+de +  une branche parabolique de direction à  
+déterminer.                                         
+On a 
+()
+lim0
+fx
+x
+x
+
+
+ 
+D’où la courbe (C) admet au voisinage de +  une 
+branche parabolique de direction l’axe des abscisses. 
+2) a – Montrer que 
+2
+()
+'(  )
+gx
+x
+fx
+        
+xI
+    
+
+
+'
+1
+'(  )() ln
+x
+f   xx
+x
+
+
+ 
+11  1
+'(  )    (1) ' ln(1)f   xx
+xx  x
+    
+  
+222
+1111   ln
+'(  )ln
+xx
+f   xx
+x
+xxx
+
+     
+ 
+         
+       
+ 
+ 
+D’où 
+2
+()
+'(  )
+gx
+fx
+x
+
+       
+
+0;x   
+ 
+b – En déduire que  g est croissante sur 
+
+1,
+ 
+      et décroissante sur 
+
+0,1
+. 
+b) On sait que 
+2
+()
+'(  )
+gx
+fx
+x
+
+    
+
+0;x   
+  
+donc le signe 
+'(  )fx
+ est celui de 
+()gx
+ 
+On a 
+(  )    0gx
+  
+
+0,1x
+  
+donc 
+
+0,1x
+ 
+D’où f est décroissante sur 
+
+0,1
+ 
+On a    
+(  )    0gx
+      
+
+1,x   
+  
+donc 
+'(  )    0fx
+  
+ 
+
+1,x   
+ 
+D’où f est croissante sur 
+
+1,
+ 
+c – Dresser le tableau des variations de f. 
+ 
+X 
+0                             1                                + 
+f(x)                              0                  + 
+ 
+f(x) 
+ 
+ 
+ +                                                          + 
+ 
+                                 0                                   
+ 
+3) Construire la courbe (C
+f
+) ( on admettra que (C
+f
+) 
+possède un seul point d’inflexion dont l’abscisse est 
+comprise entre 1,5 et 2). 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+LYCEE  IBN KHALDOUN                                                                                               AGOUZAL 
+ 
+ 
+4) a – Montrer que 
+
+2
+1
+:ln
+2
+H  xx
+ est une primitive 
+de 
+ln
+:
+x
+hx
+x
+
+ sur 
+
+0;
+  
+
+2
+111ln
+'(  )(ln   )'2ln
+22
+x
+H  xxx
+xx
+
+   
+
+ 
+'(  )(  )H  xh x
+         
+xI
+ 
+D’où 
+
+2
+1
+:ln
+2
+H  xx
+ est une primitive de 
+ln
+:
+x
+hx
+x
+
+ sur 
+
+0;
+  
+   b – Montrer que :  
+1
+ln1
+2
+e
+x
+dx
+x
+
+
+ 
+
+222
+1
+1
+1
+ln11
+lnlneln1
+22
+ln1
+2
+e
+e
+e
+x
+dxx
+x
+x
+dx
+x
+
+
+
+
+
+
+
+ 
+  c – A l’aide d’une intégration par parties montrer que :  
+1
+ln1
+e
+xdx
+
+ 
+1
+ln1
+e
+xdx
+
+ ? 
+   
+(  )    lnxfx
+                          
+1
+'(  )fx
+x
+
+ 
+      
+'(  )   1gx
+                     
+()g xx
+ 
+
+1
+11
+lnln
+ee
+e
+xdxx    xdx
+
+ 
+
+1
+(ln  )   1ln11   1
+e
+eexe   e           
+ 
+1
+ln1
+e
+xdx
+
+ 
+5) a – Vérifier que : 
+ln
+(  )    ln
+x
+f  xx
+x
+
+   
+xI
+ 
+
+
+11ln
+(  )ln(1) lnln
+xx
+f  xxxx
+xxx
+
+     
+ 
+D’où  
+ln
+(  )    ln
+x
+f  xx
+x
+
+   
+xI
+ 
+    b – Montrer que l’aire du domaine limité par   
+        (C
+f
+) , l’axe des abscisses  et les droites 
+         d’équations x = 1 et x = e est  0,5 cm
+2
+. 
+On sait que la courbe (C) est au-dessous de l’axe des 
+abscisses  sur l’intervalle 
+
+1;e
+ 
+1
+22
+11
+22
+ln
+lnx11
+ln
+lnx
+11
+(1)
+22
+e
+ee
+x
+Adx cmcm
+x
+x
+dxcmdxcm
+x
+cmcm
+
+
+  
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
