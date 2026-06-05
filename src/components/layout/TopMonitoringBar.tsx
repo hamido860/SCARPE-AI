@@ -88,11 +88,19 @@ export function TopMonitoringBar({
                     : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50"
                 }`}
               >
-                <div className="flex items-center gap-1.5">
-                  {view === "settings" && <Settings className="w-3.5 h-3.5" />}
-                  {view === "processing" && <Activity className="w-3.5 h-3.5" />}
-                  <span>{view}</span>
-                </div>
+                  <div className="flex items-center gap-1.5">
+                    {view === "settings" && <Settings className="w-3.5 h-3.5" />}
+                    {view === "processing" && <Activity className="w-3.5 h-3.5" />}
+                    <span>
+                      {view === "intake" ? "Collect PDFs" :
+                       view === "processing" ? "Clean & OCR" :
+                       view === "indexing" ? "Build RAG" :
+                       view === "review" ? "Validate" :
+                       view === "output" ? "Export" :
+                       view === "reports" ? "Audit" :
+                       view === "settings" ? "Settings" : view}
+                    </span>
+                  </div>
                 {isActive && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600" />
                 )}

@@ -27,6 +27,48 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
+// Local JSON file fallbacks for PDF management to handle missing Supabase tables/connections
+const PDF_DOCS_STORE_PATH = path.join(process.cwd(), "pdf_documents_local.json");
+const PDF_DRIVE_FILES_STORE_PATH = path.join(process.cwd(), "pdf_drive_files_local.json");
+
+function getLocalPdfDocs(): any[] {
+  try {
+    if (fs.existsSync(PDF_DOCS_STORE_PATH)) {
+      return JSON.parse(fs.readFileSync(PDF_DOCS_STORE_PATH, "utf8"));
+    }
+  } catch (e) {
+    console.error("Failed to read local PDF docs db:", e);
+  }
+  return [];
+}
+
+function saveLocalPdfDocs(docs: any[]) {
+  try {
+    fs.writeFileSync(PDF_DOCS_STORE_PATH, JSON.stringify(docs, null, 2), "utf8");
+  } catch (e) {
+    console.error("Failed to save local PDF docs db:", e);
+  }
+}
+
+function getLocalDriveFiles(): any[] {
+  try {
+    if (fs.existsSync(PDF_DRIVE_FILES_STORE_PATH)) {
+      return JSON.parse(fs.readFileSync(PDF_DRIVE_FILES_STORE_PATH, "utf8"));
+    }
+  } catch (e) {
+    console.error("Failed to read local drive files db:", e);
+  }
+  return [];
+}
+
+function saveLocalDriveFiles(files: any[]) {
+  try {
+    fs.writeFileSync(PDF_DRIVE_FILES_STORE_PATH, JSON.stringify(files, null, 2), "utf8");
+  } catch (e) {
+    console.error("Failed to save local drive files db:", e);
+  }
+}
+
 // Initialize Google GenAI
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -466,11 +508,11 @@ async function startServer() {
       gradeHint = "TC";
       gradeSlug = "tronc_commun";
       sourceGradeRaw = "TC";
-    } else if (lowerCombined.includes("1bac") || lowerCombined.includes("1ere_bac") || lowerCombined.includes("الأولى بكالوريا")) {
+    } else if (lowerCombined.includes("1bac") || lowerCombined.includes("1ere_bac") || lowerCombined.includes("1ere-bac") || lowerCombined.includes("الأولى بكالوريا") || lowerCombined.includes("الاولى بكالوريا") || lowerCombined.includes("أولى باك") || lowerCombined.includes("اولى باك") || lowerCombined.includes("الاولى باك") || lowerCombined.includes("الاولى-باك")) {
       gradeHint = "1BAC";
       gradeSlug = "1ere_bac";
       sourceGradeRaw = "1BAC";
-    } else if (lowerCombined.includes("2bac") || lowerCombined.includes("2eme_bac") || lowerCombined.includes("الثانية بكالوريا")) {
+    } else if (lowerCombined.includes("2bac") || lowerCombined.includes("2eme_bac") || lowerCombined.includes("2eme-bac") || lowerCombined.includes("الثانية بكالوريا") || lowerCombined.includes("الثانية باك") || lowerCombined.includes("الثانية-باك") || lowerCombined.includes("2ème_bac")) {
       gradeHint = "2BAC";
       gradeSlug = "2eme_bac";
       sourceGradeRaw = "2BAC";
@@ -1272,8 +1314,8 @@ For each valid item, return EXACTLY this structure:
   {
     "id": "the-original-id",
     "isValid": true,
-    "grade": "extracted grade (e.g., 3AC, TCS, 1BAC, 2BAC...)",
-    "subject": "extracted subject (e.g., SVT, PC, Math, Arabic...)",
+    "grade": "extracted grade (e.g., 1AEP, 2AEP...6AEP, 1AC, 2AC, 3AC, TC, 1BAC, 2BAC...)",
+    "subject": "extracted subject (e.g., SVT, PC, Math, Arabic, French...)",
     "docType": "extracted document type (e.g., Cours, Exercices, Examen...)",
     "topic": "the specific lesson or exam name (keep it clean and precise)"
   },
@@ -3549,8 +3591,7 @@ Respond strictly in raw JSON without markdown:
         if (
           existingProcessingStatus === "completed" && 
           existingChunksCount > 0 &&
-          (existingReviewStatus === "auto_approved" || existingReviewStatus === "needs_metadata_review" || existingReviewStatus === "needs_review") &&
-          existingReviewStatus !== "rejected"
+          (existingReviewStatus === "auto_approved" || existingReviewStatus === "needs_metadata_review" || existingReviewStatus === "needs_review")
         ) {
           shouldSkip = true;
         }
@@ -5816,6 +5857,12 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     target_module_id?: string | null;
     target_lesson_id?: string | null;
     verification_status?: string;
+    hash?: string;
+    raw_file_hash?: string;
+    processing_status?: string;
+    review_status?: string;
+    block_reason?: string;
+    blockReason?: string;
   }
 
   function classifyDocumentTypeWithPriority(urlStr: string, textContext: string = ""): string {
@@ -5989,7 +6036,12 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     isFinal: boolean;
   } {
     const canonical = canonicalizeUrl(urlStr);
-    const urlLower = canonical.toLowerCase();
+    let urlLower = canonical.toLowerCase();
+    try {
+      urlLower = decodeURIComponent(urlLower);
+    } catch (e) {
+      // Ignored
+    }
     
     let role = "unknown";
     let action: "crawl_children" | "stage_asset" | "ignore" = "crawl_children";
@@ -6002,7 +6054,19 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
     let isFinal = false;
 
     // 1. Grade extraction
-    if (urlLower.includes("1ac") || urlLower.includes("1ere-annee-college") || urlLower.includes("الاولى-اعدادي") || urlLower.includes("الأولى-إعدادي") || urlLower.includes("1ere_annee_college")) {
+    if (urlLower.includes("1ap") || urlLower.includes("الاول-ابتدائي") || urlLower.includes("الأول-ابتدائي")) {
+      grade = "1AEP";
+    } else if (urlLower.includes("2ap") || urlLower.includes("الثاني-ابتدائي") || urlLower.includes("الثانية-ابتدائي")) {
+      grade = "2AEP";
+    } else if (urlLower.includes("3ap") || urlLower.includes("الثالث-ابتدائي") || urlLower.includes("الثالثة-ابتدائي")) {
+      grade = "3AEP";
+    } else if (urlLower.includes("4ap") || urlLower.includes("الرابع-ابتدائي") || urlLower.includes("الرابعة-ابتدائي")) {
+      grade = "4AEP";
+    } else if (urlLower.includes("5ap") || urlLower.includes("الخامس-ابتدائي") || urlLower.includes("الخامسة-ابتدائي")) {
+      grade = "5AEP";
+    } else if (urlLower.includes("6ap") || urlLower.includes("السادس-ابتدائي") || urlLower.includes("السادسة-ابتدائي")) {
+      grade = "6AEP";
+    } else if (urlLower.includes("1ac") || urlLower.includes("1ere-annee-college") || urlLower.includes("الاولى-اعدادي") || urlLower.includes("الأولى-إعدادي") || urlLower.includes("1ere_annee_college")) {
       grade = "1AC";
     } else if (urlLower.includes("2ac") || urlLower.includes("2eme-annee-college") || urlLower.includes("الثانية-إعدادي") || urlLower.includes("2eme_annee_college")) {
       grade = "2AC";
@@ -6010,9 +6074,9 @@ Respond strictly with valid JSON. Do not include markdown block fences or conver
       grade = "3AC";
     } else if (urlLower.includes("tcs") || urlLower.includes("tronc-commun") || urlLower.includes("الجذع-المشترك")) {
       grade = "TC";
-    } else if (urlLower.includes("1bac") || urlLower.includes("السنة-الأولى-بكالوريا") || urlLower.includes("1ere-bac")) {
+    } else if (urlLower.includes("1bac") || urlLower.includes("السنة-الأولى-بكالوريا") || urlLower.includes("1ere-bac") || urlLower.includes("الاولى-باك")) {
       grade = "1BAC";
-    } else if (urlLower.includes("2bac") || urlLower.includes("السنة-الثانية-بكالوريا") || urlLower.includes("2eme-bac")) {
+    } else if (urlLower.includes("2bac") || urlLower.includes("السنة-الثانية-بكالوريا") || urlLower.includes("2eme-bac") || urlLower.includes("الثانية-باك")) {
       grade = "2BAC";
     }
 
@@ -6207,8 +6271,8 @@ For each accepted item, return exactly this structure:
 [
   {
     "id": "the-original-id",
-    "grade": "extracted grade (e.g., 3AC, TCS, 1BAC, 2BAC...)",
-    "subject": "extracted subject (e.g., SVT, PC, Math, Arabic...)",
+    "grade": "extracted grade (e.g., 1AEP..6AEP, 1AC, 2AC, 3AC, TC, 1BAC, 2BAC...)",
+    "subject": "extracted subject (e.g., SVT, PC, Math, Arabic, French...)",
     "docType": "extracted document type (e.g., Cours, Exercices, Examen...)",
     "topic": "the specific lesson or exam name",
     "isFinalAsset": true
@@ -7033,6 +7097,71 @@ For each accepted item, return exactly this structure:
     }
   });
 
+  app.post("/api/export-pdfs-zip", async (req, res) => {
+    try {
+      const archiver = require("archiver");
+      const { urls } = req.body;
+      if (!Array.isArray(urls)) {
+        return res.status(400).json({ error: "urls array is required" });
+      }
+
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', 'attachment; filename="staged_pdfs.zip"');
+
+      const archive = archiver('zip', {
+        zlib: { level: 5 } // moderate compression for speed
+      });
+
+      archive.on('error', (err) => {
+        console.error("Archiver error:", err);
+        res.status(500).end();
+      });
+
+      archive.pipe(res);
+
+      for (let i = 0; i < urls.length; i++) {
+        const rawUrl = urls[i];
+        try {
+          const url = resolveUrl(rawUrl);
+          const fetchUrl = url.includes("drive.google.com/file/d/") 
+            ? `https://drive.google.com/uc?id=${url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1]}&export=download` 
+            : url;
+            
+          const response = await axios.get(fetchUrl, {
+            responseType: 'arraybuffer',
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+            },
+            timeout: 60000,
+            httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
+            validateStatus: (status) => status < 400
+          });
+
+          let fileName = rawUrl.split('/').pop() || `document_${i}.pdf`;
+          fileName = `${i}_${fileName}`;
+          fileName = fileName.replace(/[^a-zA-Z0-9_.-]/g, "_"); // sanitize
+          if (!fileName.toLowerCase().endsWith('.pdf')) fileName += '.pdf';
+
+          archive.append(Buffer.from(response.data), { name: fileName });
+          
+          // await stream to finish appending? archiver handles streams internally.
+          // actually appending a stream works asynchronously, but since we are fetching streams, 
+          // we might want to let archiver process it. Archiver consumes streams nicely.
+          
+        } catch (err: any) {
+          console.error(`[Zip Export] Error fetching ${rawUrl}:`, err.message);
+          archive.append(`Error fetching this file: ${err.message}`, { name: `ERROR_${i}.txt` });
+        }
+      }
+
+      await archive.finalize();
+
+    } catch (err: any) {
+      console.error("[Zip Export] Fatal error:", err.message);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/proxy-download", async (req, res) => {
     try {
       const { url: rawUrl } = req.body;
@@ -7436,17 +7565,7 @@ Do not include any markdown format blocks or conversational text, specify valid 
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-  }
+    // The dist path serving and index.html catch-all was moved to the very end of server.ts
 
   app.post("/api/crawl-moutamadris-advanced", async (req, res) => {
     try {
@@ -7638,8 +7757,473 @@ Do not include any markdown format blocks or conversational text, specify valid 
     }
   });
 
-  if (process.env.NODE_ENV === "production") {
+  app.post("/api/collector/collect", async (req, res) => {
+    try {
+      const { url, accessToken } = req.body;
+      if (!accessToken) return res.status(400).json({ ok: false, stage: "missing_google_token", error: "Missing required parameters." });
+      if (!url) return res.status(400).json({ ok: false, stage: "source_url_missing", error: "Missing required parameters." });
+      
+      console.log(`[Collector] Starting sequence for ${url}`);
+      
+      let fetchUrl = url;
+      if (fetchUrl.includes("drive.google.com/file/d/")) {
+        const fileIdMatch = fetchUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileIdMatch && fileIdMatch[1]) {
+          fetchUrl = `https://drive.google.com/uc?id=${fileIdMatch[1]}&export=download`;
+        }
+      }
+      
+      let fileBytes: Buffer | null = null;
+      let contentType = "";
+      let fetchStatus = 0;
+      try {
+        const response = await axios.get(fetchUrl, {
+          responseType: "arraybuffer",
+          headers: {
+             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          timeout: 60000,
+          maxContentLength: 60 * 1024 * 1024, // 60 MB
+          validateStatus: (status) => status < 400,
+          httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
+        });
+        fetchStatus = response.status;
+        fileBytes = Buffer.from(response.data);
+        contentType = (response.headers['content-type'] || '').toLowerCase();
+      } catch (dlErr: any) {
+        console.error(`[Collector] Fetch fail for ${url}:`, dlErr.message);
+        return res.json({ 
+          ok: false, 
+          stage: "source_fetch_failed", 
+          error: dlErr.message,
+          status: dlErr.response?.status 
+        });
+      }
+      
+      if (!fileBytes || fileBytes.length === 0) {
+         return res.json({ ok: false, stage: "source_fetch_failed", error: "Empty file downloaded" });
+      }
+
+      if (fileBytes.length > 50 * 1024 * 1024) {
+        return res.json({ ok: false, stage: "pdf_too_large", error: "File exceeds 50MB" });
+      }
+
+      const textSnippet = fileBytes.toString("utf8", 0, 1000).toLowerCase();
+      
+      if (
+        textSnippet.includes("<!doctype html>") || 
+        textSnippet.includes("<html") ||
+        textSnippet.includes("please wait while your application starts") ||
+        textSnippet.includes("starting server") ||
+        textSnippet.includes("reload now") ||
+        textSnippet.includes("ai studio logo")
+      ) {
+         return res.json({ 
+           ok: false, 
+           stage: "placeholder_html_rejected", 
+           contentType, 
+           sample: textSnippet.substring(0, 200) 
+         });
+      }
+      
+      const fileHeader = fileBytes.toString("utf8", 0, 5);
+      const isPdfContent = contentType.includes("application/pdf");
+      
+      if (fileHeader !== "%PDF-" && !isPdfContent) {
+         return res.json({ 
+           ok: false, 
+           stage: "source_not_pdf", 
+           contentType, 
+           sample: textSnippet.substring(0, 200) 
+         });
+      }
+      
+      const hash = crypto.createHash("sha256").update(fileBytes).digest("hex");
+      
+      let existingRecord = null;
+      if (supabase) {
+         try {
+            const { data, error } = await supabase.from('pdf_documents').select('processing_status, review_status').eq('hash', hash).maybeSingle();
+            if (!error && data) {
+               existingRecord = data;
+            }
+         } catch(e) {}
+      }
+      if (!existingRecord) {
+         const localDocs = getLocalPdfDocs();
+         existingRecord = localDocs.find((d: any) => d.hash === hash) || null;
+      }
+      if (existingRecord && existingRecord.processing_status === 'completed') {
+         return res.json({ ok: true, status: "duplicate", hash, record: existingRecord });
+      }
+      
+      const destFilename = `${hash}.original.pdf`;
+      let driveResult;
+      try {
+        const rootFolderId = await getOrCreateDriveFolderServer(accessToken, "AI Studio Curriculum Pipeline Workspace");
+        const collectFolderId = await getOrCreateDriveFolderServer(accessToken, "Collected-Originals", rootFolderId);
+        driveResult = await uploadToDriveServer(accessToken, destFilename, "application/pdf", fileBytes, collectFolderId);
+      } catch (driveErr: any) {
+        console.error("[Collector] Drive Upload Error:", driveErr.message, driveErr.response?.data);
+        return res.json({
+          ok: false,
+          stage: "drive_upload_failed",
+          error: driveErr.message,
+          status: driveErr.response?.status,
+          googleError: driveErr.response?.data?.error?.message
+        });
+      }
+      
+      const driveUrl = `https://drive.google.com/file/d/${driveResult.id}/view`;
+      
+      const documentData = {
+         url,
+         file_name: url.split('/').pop() || "document.pdf",
+         hash,
+         drive_file_id: driveResult.id,
+         drive_url: driveUrl,
+         storage_status: 'saved_to_drive',
+         processing_status: 'not_started',
+         review_status: 'not_reviewed',
+         updated_at: new Date().toISOString(),
+         created_at: new Date().toISOString()
+      };
+
+      let supabaseLogFailed = false;
+      if (supabase) {
+         try {
+           const { error } = await supabase.from('pdf_documents').upsert(documentData, { onConflict: 'hash' });
+           if (error) throw error;
+         } catch(e: any) {
+           console.error("[Collector] Supabase save error, using local fallback:", e.message);
+           supabaseLogFailed = true;
+         }
+      } else {
+         supabaseLogFailed = true;
+      }
+
+      // Always save to local JSON DB as fallback/mirror
+      try {
+         const localDocs = getLocalPdfDocs();
+         const idx = localDocs.findIndex((d: any) => d.hash === hash);
+         if (idx >= 0) {
+            localDocs[idx] = { ...localDocs[idx], ...documentData };
+         } else {
+            localDocs.push(documentData);
+         }
+         saveLocalPdfDocs(localDocs);
+      } catch (errLocal: any) {
+         console.error("Failed to write PDF doc locally:", errLocal.message);
+      }
+      
+      return res.json({ 
+        ok: true, 
+        status: "saved", 
+        hash, 
+        driveUrl,
+        supabaseLogFailed 
+      });
+      
+    } catch(err: any) {
+      console.error("[Collector Error]", err);
+      // Unexpected top-level error
+      res.status(500).json({ ok: false, stage: "drive_upload_failed", error: err.message });
+    }
+  });
+
+  app.get("/api/processor/queue", async (req, res) => {
+     try {
+       let items: any[] = [];
+       let fetchedFromSupabase = false;
+       if (supabase) {
+          try {
+             const { data, error } = await supabase.from('pdf_documents').select('*')
+                 .eq('storage_status', 'saved_to_drive')
+                 .order('created_at', { ascending: false });
+             if (!error && data) {
+                items = data;
+                fetchedFromSupabase = true;
+             }
+          } catch(e) {}
+       }
+       if (!fetchedFromSupabase) {
+          const localDocs = getLocalPdfDocs();
+          items = localDocs
+             .filter((d: any) => d.storage_status === 'saved_to_drive')
+             .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+       }
+       res.json({ items });
+     } catch (e: any) { 
+        res.status(500).json({ error: e.message }); 
+     }
+  });
+
+  app.post("/api/processor/process", async (req, res) => {
+    try {
+      const { accessToken, driveFileId, hash } = req.body;
+      if (!accessToken || !driveFileId) return res.status(400).json({ error: "Missing required parameters." });
+
+      const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!driveRes.ok) {
+        throw new Error(`Failed to download from Drive. Status: ${driveRes.status}`);
+      }
+      const fileBytes = Buffer.from(await driveRes.arrayBuffer());
+
+      let rawText = "";
+      try {
+         const data = await pdf(fileBytes);
+         rawText = data.text.replace(/\s+/g, " ").trim();
+      } catch (err: any) {
+         console.warn("[Processor] Error extracting text with pdf-parse", err);
+      }
+
+      if (rawText.length < 50) {
+         // TODO: Fallback to OCR. Assuming text extraction via API. Focus mode or quick gemini vision
+         rawText = "OCR NOT FULLY IMPLEMENTED IN MOCK - " + rawText;
+      }
+
+      const promptMetadata = `Analyze the following educational text from the Moroccan curriculum and classify it:
+Text snippet: ${rawText.substring(0, 3000)}
+
+Return JSON with format:
+{
+  "grade": "grade name or null (e.g. 1AEP, 2AEP, 3AC, TC, 1BAC, 2BAC - must be null if unknown)",
+  "subject": "subject name or null",
+  "topic": "topic name or null",
+  "confidenceScore": 0.95
+}`;
+      const aiResponse = await nvidia.chat.completions.create({
+         model: 'meta/llama-3.1-70b-instruct',
+         messages: [{ role: 'user', content: promptMetadata }]
+      });
+      
+      let classData: any = {};
+      try {
+         classData = JSON.parse(aiResponse.choices[0].message.content || '{}');
+      } catch(e) {}
+      
+      const confidence = classData.confidenceScore || 0;
+      let reviewStatus = "auto_approved";
+      
+      if (confidence < 0.7 || !classData.grade || !classData.subject) {
+         reviewStatus = "needs_metadata_review";
+      }
+
+      // 6. Create chunks
+      const chunks = [];
+      const lines = rawText.split('\n');
+      for (let i = 0; i < lines.length; i += 20) {
+         const chunkText = lines.slice(i, i + 20).join('\n').trim();
+         if (chunkText.length > 10) chunks.push(chunkText);
+      }
+
+      // 7. Save chunks
+      if (supabase) {
+         try {
+            for (const chunk of chunks) {
+               await supabase.from('rag_chunks').insert({
+                 content: chunk,
+                 source_type: 'pdf_document',
+                 source_id: hash,
+                 metadata: { grade: classData.grade, subject: classData.subject, topic: classData.topic, confidence }
+               });
+            }
+         } catch (chunkErr: any) {
+            console.error("Warning: Failed to insert chunks to Supabase, continuing:", chunkErr.message);
+         }
+      }
+
+      // 8. Set processing_status
+      if (supabase) {
+         try {
+            await supabase.from('pdf_documents').update({
+              processing_status: 'completed',
+              review_status: reviewStatus,
+              updated_at: new Date().toISOString()
+            }).eq('hash', hash);
+         } catch (statusErr: any) {
+            console.error("Warning: Failed to update status in Supabase pdf_documents, using local fallback copy:", statusErr.message);
+         }
+      }
+
+      // Mirror the status update in the local database
+      try {
+         const localDocs = getLocalPdfDocs();
+         const idx = localDocs.findIndex((d: any) => d.hash === hash);
+         if (idx >= 0) {
+            localDocs[idx] = {
+               ...localDocs[idx],
+               processing_status: 'completed',
+               review_status: reviewStatus,
+               updated_at: new Date().toISOString()
+            };
+            saveLocalPdfDocs(localDocs);
+         }
+      } catch (errLocal: any) {
+         console.error("Failed to mirror status update locally:", errLocal.message);
+      }
+
+      res.json({ success: true, chunksCount: chunks.length, reviewStatus, classData });
+    } catch(err: any) {
+      console.error("[Processor Error]", err);
+      res.status(500).json({ status: "failed", error: err.message });
+    }
+  });
+
+  app.post("/api/pdf/fetch-source", async (req, res) => {
+    try {
+      const { url } = req.body;
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ ok: false, stage: "source_url_missing", error: "Invalid URL provided." });
+      }
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        return res.status(400).json({ ok: false, stage: "source_url_missing", error: "URL must start with http or https." });
+      }
+
+      console.log(`[Fetch Source] Fetching external PDF: ${url}`);
+      
+      let fetchUrl = url;
+      if (fetchUrl.includes("drive.google.com/file/d/")) {
+        const fileIdMatch = fetchUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileIdMatch && fileIdMatch[1]) {
+          fetchUrl = `https://drive.google.com/uc?id=${fileIdMatch[1]}&export=download`;
+        }
+      }
+
+      let response;
+      try {
+        response = await axios.get(fetchUrl, {
+          responseType: "arraybuffer",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          timeout: 60000,
+          maxContentLength: 60 * 1024 * 1024, // 60 MB matching MAX_FILE_SIZE_MB
+          validateStatus: (status) => status < 400,
+          httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
+        });
+      } catch (dlErr: any) {
+         return res.status(400).json({ 
+           ok: false, 
+           stage: "source_fetch_failed", 
+           error: dlErr.message,
+           status: dlErr.response?.status 
+         });
+      }
+
+      if (response.status !== 200) {
+        return res.status(400).json({ ok: false, stage: "source_fetch_failed", status: response.status, error: `Source responded with status ${response.status}` });
+      }
+
+      const fileBytes = Buffer.from(response.data);
+      if (fileBytes.length === 0) {
+        return res.status(400).json({ ok: false, stage: "source_fetch_failed", error: "Source file is empty." });
+      }
+
+      const contentType = (response.headers["content-type"] || "").toLowerCase();
+      const fileHeader = fileBytes.toString("utf8", 0, 5);
+      const isPdfContent = contentType.includes("application/pdf");
+      const hasPdfHeader = fileHeader === "%PDF-";
+
+      const textSnippet = fileBytes.toString("utf8", 0, 1000).toLowerCase();
+
+      if (
+        textSnippet.includes("<!doctype html>") || 
+        textSnippet.includes("<html") || 
+        textSnippet.includes("please wait while your application starts") ||
+        textSnippet.includes("starting server") ||
+        textSnippet.includes("reload now") ||
+        textSnippet.includes("ai studio logo")
+      ) {
+        return res.status(400).json({ 
+          ok: false, 
+          stage: "placeholder_html_rejected", 
+          contentType,
+          error: "Source URL returned an HTML page or placeholder instead of a PDF.",
+          sample: textSnippet.substring(0, 200)
+        });
+      }
+
+      if (!isPdfContent && !hasPdfHeader) {
+        return res.status(400).json({ 
+          ok: false, 
+          stage: "source_not_pdf", 
+          contentType, 
+          error: "File is not a valid PDF document.",
+          sample: textSnippet.substring(0, 200) 
+        });
+      }
+
+      // Generate a clean filename if needed
+      let fileName = url.split("/").pop() || "document.pdf";
+      if (!fileName.toLowerCase().endsWith(".pdf")) {
+        fileName += ".pdf";
+      }
+      
+      // Clean up messy URL parameters in the filename
+      fileName = fileName.split("?")[0].split("#")[0];
+
+      res.json({
+        ok: true,
+        fileName,
+        mimeType: "application/pdf",
+        size: fileBytes.length,
+        base64: fileBytes.toString("base64")
+      });
+
+    } catch (err: any) {
+      console.error("[Fetch Source Error]", err.message);
+      res.status(500).json({ ok: false, stage: "source_fetch_failed", error: `Failed to fetch PDF: ${err.message}` });
+    }
+  });
+
+  app.post("/api/pdf/log-drive-upload", async (req, res) => {
+    try {
+      const { source_url, drive_file_id, drive_view_url, file_name, mime_type, file_size, status, error_message } = req.body;
+      const logData = {
+        source_url, drive_file_id, drive_view_url, file_name, mime_type, file_size, status, error_message,
+        created_at: new Date().toISOString()
+      };
+
+      if (supabase) {
+         try {
+           const { error } = await supabase.from('pdf_drive_files').insert([logData]);
+           if (error) {
+              console.warn("[Supabase] Failed to insert to pdf_drive_files, recording locally:", error.message);
+           }
+         } catch (dbErr: any) {
+            console.warn("[Supabase] Error inserting to pdf_drive_files, using local JSON fallback:", dbErr.message);
+         }
+      }
+
+      // Always save to local JSON file
+      try {
+         const localDriveFiles = getLocalDriveFiles();
+         localDriveFiles.push(logData);
+         saveLocalDriveFiles(localDriveFiles);
+      } catch (localErr: any) {
+         console.error("Failed to save drive upload log locally:", localErr.message);
+      }
+
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.warn("[Supabase Logging Error]", err.message);
+      res.json({ ok: false }); // non-blocking
+    }
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
     const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });

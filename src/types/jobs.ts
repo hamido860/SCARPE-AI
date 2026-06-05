@@ -1,4 +1,4 @@
-export type JobView = "intake" | "processing" | "indexing" | "review" | "output" | "reports" | "settings";
+export type JobView = "intake" | "collector" | "processing" | "indexing" | "review" | "output" | "reports" | "settings";
 
 export interface BatchJob {
   id: string; // uuid

@@ -33,6 +33,8 @@ import { JobNavigation } from "./components/jobs/JobNavigation";
 
 // Job Views Modular Imports
 import { IntakeJobView } from "./components/jobs/intake/IntakeJobView";
+import { CollectorJobView } from "./components/jobs/collector/CollectorJobView";
+import { ProcessorJobView } from "./components/jobs/processor/ProcessorJobView";
 import { ProcessingJobView } from "./components/jobs/processing/ProcessingJobView";
 import { IndexingJobView } from "./components/jobs/indexing/IndexingJobView";
 import { ReviewJobView } from "./components/jobs/review/ReviewJobView";
@@ -56,7 +58,7 @@ import { createStagedPdfFromUrl } from "./utils/createStagedPdfFromUrl";
 
 export default function WorkstationDashboard() {
   // App states
-  const [crawlUrl, setCrawlUrl] = useState("https://talamidi.com/%D8%AF%D8%B1%D9%88%D8%B3-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6%D9%8A%D8%A7%D8%AA-%D9%84%D9%84%D8%B3%D9%86%D8%A9-%D8%A7%D9%84%D8%A7%D9%88%D9%84%D9%89-%D8%A7%D8%B9%D8%AF%D8%A7%D8%AF%D9%8A/");
+  const [crawlUrl, setCrawlUrl] = useState("");
   const [maxPages, setMaxPages] = useState(9999);
   const [maxDepth, setMaxDepth] = useState(15);
   const [topicFilter, setTopicFilter] = useState(""); // User custom crawling topic filter
@@ -183,7 +185,6 @@ export default function WorkstationDashboard() {
   const setFilterGrade = (grade: string) => setFilters({ grade });
   const setFilterSubject = (subject: string) => setFilters({ subject });
 
-  type JobView = "intake" | "processing" | "indexing" | "review" | "output" | "reports" | "settings";
   const [activeJobView, setActiveJobView] = useState<JobView>("intake");
   const [activeTab, setActiveTab] = useState<"crawl" | "discover">("crawl");
 
@@ -338,7 +339,7 @@ export default function WorkstationDashboard() {
   };
 
   const [activeDiscoverTab, setActiveDiscoverTab] = useState<"query" | "paste">("query");
-  const [discoverQuery, setDiscoverQuery] = useState("3eme annee college examens de physique pdf option francaise");
+  const [discoverQuery, setDiscoverQuery] = useState("");
   const [discoverPastedUrls, setDiscoverPastedUrls] = useState("");
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveredResults, setDiscoveredResults] = useState<{ url: string; isDirectPdf: boolean; accepted: boolean; reason: string; }[]>([]);
@@ -922,7 +923,19 @@ export default function WorkstationDashboard() {
     console.log(`[BATCH DEBUG] Final matching PDFs: ${scopeItems.length}`);
 
     if (scopeItems.length === 0) {
-      toast.error(`No staged PDFs match the selected Batch Scope criteria. Total staged assets: ${stagedPdfAssets.length}. Filters applied: Grade=${scopeGradeId}, Subject=${scopeSubjectId}, Scope=${scopeStatus}`);
+      toast.error("No PDFs match these filters.", {
+        description: "Try setting Grade, Subject, Topic, Document Type, and Status to All, or go back to Collect PDFs and stage more PDFs.",
+        action: {
+          label: "Clear Filters",
+          onClick: () => {
+            setScopeGradeId("all");
+            setScopeSubjectId("all");
+            setScopeTopicId("all");
+            setScopeDocumentTypeId("all");
+            setScopeStatus("all");
+          }
+        }
+      });
       return;
     }
 
@@ -2654,6 +2667,8 @@ export default function WorkstationDashboard() {
 
   const renderActiveJobView = () => {
     switch (activeJobView) {
+      case "collector":
+        return <CollectorJobView />;
       case "intake":
         return (
           <IntakeJobView
@@ -2699,29 +2714,7 @@ export default function WorkstationDashboard() {
           />
         );
       case "processing":
-        return (
-          <ProcessingJobView
-            dictionary={dictionary}
-            scopeGradeId={scopeGradeId}
-            setScopeGradeId={setScopeGradeId}
-            scopeSubjectId={scopeSubjectId}
-            setScopeSubjectId={setScopeSubjectId}
-            scopeStatus={scopeStatus}
-            setScopeStatus={setScopeStatus}
-            ocrBatchMode={ocrBatchMode}
-            handleApplyOcrModePreset={handleApplyOcrModePreset}
-            isBatchJobRunning={isBatchJobRunning}
-            activeBatchJob={activeBatchJob}
-            batchJobItems={batchJobItems}
-            stagedPdfs={stagedPdfs}
-            startBatchJob={startBatchJob}
-            createBatchJob={createBatchJob}
-            pauseBatchJob={pauseBatchJob}
-            stopBatchJob={stopBatchJob}
-            siteMapNodes={siteMapNodes}
-            onUpdateSiteMapNode={handleUpdateSiteMapNode}
-          />
-        );
+        return <ProcessorJobView />;
       case "indexing":
         return (
           <IndexingJobView

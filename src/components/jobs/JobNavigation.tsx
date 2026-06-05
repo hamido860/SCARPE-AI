@@ -9,12 +9,13 @@ interface JobNavigationProps {
 
 export function JobNavigation({ activeJobView, onJobViewChange, className = "" }: JobNavigationProps) {
   const views: { id: JobView; label: string }[] = [
-    { id: "intake", label: "Intake" },
-    { id: "processing", label: "Processing" },
-    { id: "indexing", label: "Levelspace Indexing" },
-    { id: "review", label: "Review" },
-    { id: "output", label: "Outputs" },
-    { id: "reports", label: "Reports" },
+    { id: "intake", label: "Collect PDFs" },
+    { id: "collector", label: "Drive Collector" },
+    { id: "processing", label: "Clean & OCR" },
+    { id: "indexing", label: "Build RAG" },
+    { id: "review", label: "Validate" },
+    { id: "output", label: "Export" },
+    { id: "reports", label: "Audit" },
     { id: "settings", label: "Settings" }
   ];
 

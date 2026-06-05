@@ -15,7 +15,7 @@ const auth = getAuth(app);
 
 // Configure Google OAuth Provider
 const provider = new GoogleAuthProvider();
-provider.addScope("https://www.googleapis.com/auth/drive");
+provider.addScope("https://www.googleapis.com/auth/drive.file");
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = typeof window !== "undefined" ? localStorage.getItem("scarpe_gdrive_access_token") : null;

@@ -202,9 +202,18 @@ export function ReviewJobView({
         return rName.includes(g.id) || g.id.includes(rName);
       }).length;
 
-      counts[g.id] = Math.max(g.defaultCount, realMatches);
+      counts[g.id] = realMatches;
     });
     setGroupCounts(counts);
+
+    // Auto-select first active group if current selection has 0
+    if (counts[selectedGroupId] === 0 || !counts[selectedGroupId]) {
+      const firstActive = Object.keys(counts).find(id => counts[id] > 0);
+      if (firstActive) {
+        setSelectedGroupId(firstActive);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stagedPdfs]);
 
   // Handle active selection change resetting inline forms
@@ -306,7 +315,7 @@ export function ReviewJobView({
             {totalBlocked} PENDING
           </div>
           <div className="text-[10px] font-mono mt-1 text-neutral-400">
-            {resolvedGroups.size} / {GROUP_METRICS.length} CATEGORIES SOLVED
+            {resolvedGroups.size} / {GROUP_METRICS.filter(g => (groupCounts[g.id] ?? 0) > 0 || resolvedGroups.has(g.id)).length} CATEGORIES SOLVED
           </div>
         </div>
 
@@ -348,23 +357,35 @@ export function ReviewJobView({
             <BadgeAlert className="w-3 h-3 mr-1 text-red-600" /> Active Block Groups
           </div>
           <div id="review-stat-blocked" className="font-mono text-lg font-bold text-red-800 mt-1">
-            {GROUP_METRICS.length - resolvedGroups.size}
+            {GROUP_METRICS.filter(g => (groupCounts[g.id] ?? 0) > 0 && !resolvedGroups.has(g.id)).length}
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-neutral-200">
-        {/* Left pane: Actionable reasons list */}
-        <div className="flex-1 overflow-y-auto p-4 min-w-0">
-          <h3 className="font-mono text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-3">
-            BLOCK ROOT-CAUSE GROUPS ({GROUP_METRICS.length - resolvedGroups.size} ACTIONABLE CATEGORIES)
-          </h3>
+        {totalBlocked === 0 ? (
+          <div className="flex-1 flex flex-col justify-center items-center text-center text-neutral-400 font-mono text-xs p-10">
+            <CheckCircle className="w-12 h-12 text-emerald-400 mb-4" />
+            <span className="text-sm font-bold text-neutral-800 uppercase block mb-1">Queue Empty</span>
+            <p className="text-[10px] text-neutral-500 max-w-sm">
+              There are no documents requiring validation or conflict resolution at this time.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Left pane: Actionable reasons list */}
+            <div className="flex-1 overflow-y-auto p-4 min-w-0">
+              <h3 className="font-mono text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-3">
+                BLOCK ROOT-CAUSE GROUPS ({GROUP_METRICS.filter(g => (groupCounts[g.id] ?? 0) > 0 && !resolvedGroups.has(g.id)).length} ACTIONABLE CATEGORIES)
+              </h3>
 
           <div className="space-y-2">
             {GROUP_METRICS.map((g) => {
               const isSelected = g.id === selectedGroupId;
               const isResolved = resolvedGroups.has(g.id);
-              const count = isResolved ? 0 : (groupCounts[g.id] ?? g.defaultCount);
+              const count = isResolved ? 0 : (groupCounts[g.id] ?? 0);
+
+              if (count === 0 && !isSelected) return null;
 
               return (
                 <div 
@@ -698,6 +719,8 @@ export function ReviewJobView({
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ import { JobWorkspaceLayout } from "../../layout/JobWorkspaceLayout";
 import { StagedPdf } from "../../../types/pdf";
 import { generateCurriculumFilename } from "../../../utils/filenameGenerator";
 import { ScrapedDataExporter } from "./ScrapedDataExporter";
+import { toast } from "sonner";
+import axios from "axios";
 
 interface IntakeJobViewProps {
   stagedPdfs: StagedPdf[];
@@ -57,6 +59,95 @@ interface IntakeJobViewProps {
   onStageUrlsWithMetadata?: (assets: Array<{ url: string; grade: string; subject: string; topic: string; docType: string }>) => void;
   hasDriveConnected?: boolean;
 }
+
+const getAssetTypeFromUrl = (url: string, isDirectPdf?: boolean): string => {
+  const lowered = url.toLowerCase();
+  if (isDirectPdf || lowered.split(/[?#]/)[0].endsWith(".pdf")) {
+    return "PDF";
+  }
+  return "HTML Lesson";
+};
+
+const getFilenameFromUrl = (url: string): string => {
+  try {
+    const filename = url.split("/").pop() || url;
+    return decodeURIComponent(filename).split(/[?#]/)[0] || "unnamed";
+  } catch {
+    return url;
+  }
+};
+
+const getDomainFromUrl = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace("www.", "");
+  } catch {
+    return "";
+  }
+};
+
+const getGradeFromUrl = (url: string): string => {
+  const low = url.toLowerCase();
+  try {
+    const decoded = decodeURIComponent(url).toLowerCase();
+    const l = decoded;
+    if (l.includes("1ap") || l.includes("الاول-ابتدائي") || l.includes("الأول-ابتدائي") || l.includes("الاول ابتدائي")) return "1AEP";
+    if (l.includes("2ap") || l.includes("الثاني-ابتدائي") || l.includes("الثانية-ابتدائي") || l.includes("الثاني ابتدائي")) return "2AEP";
+    if (l.includes("3ap") || l.includes("الثالث-ابتدائي") || l.includes("الثالثة-ابتدائي") || l.includes("الثالث ابتدائي")) return "3AEP";
+    if (l.includes("4ap") || l.includes("الرابع-ابتدائي") || l.includes("الرابعة-ابتدائي") || l.includes("الرابع ابتدائي")) return "4AEP";
+    if (l.includes("5ap") || l.includes("الخامس-ابتدائي") || l.includes("الخامسة-ابتدائي") || l.includes("الخامس ابتدائي")) return "5AEP";
+    if (l.includes("6ap") || l.includes("السادس-ابتدائي") || l.includes("السادسة-ابتدائي") || l.includes("السادس ابتدائي")) return "6AEP";
+    
+    if (l.includes("1ac") || l.includes("1ere_annee_college") || l.includes("1ere annee") || l.includes("الاولى-اعدادي") || l.includes("الاولى اعدادي")) return "1AC";
+    if (l.includes("2ac") || l.includes("2eme_annee_college") || l.includes("2eme annee") || l.includes("الثانية-اعدادي") || l.includes("الثانية اعدادي")) return "2AC";
+    if (l.includes("3ac") || l.includes("3eme_annee_college") || l.includes("3eme annee") || l.includes("الثالثة-اعدادي") || l.includes("الثالثة اعدادي")) return "3AC";
+    if (l.includes("tcs") || l.includes("tronc") || l.includes("commun") || l.includes("جذع")) return "TC";
+    if (l.includes("1bac") || l.includes("1ere_bac") || l.includes("الاولى-باك") || l.includes("اولى باك")) return "1BAC";
+    if (l.includes("2bac") || l.includes("2eme_bac") || l.includes("الثانية-باك") || l.includes("ثانية باك") || l.includes("الثانية باك") || l.includes("البكالوريا")) return "2BAC";
+  } catch (e) {}
+
+  if (low.includes("1ac") || low.includes("1ere_annee_college") || low.includes("1ere annee")) return "1AC";
+  if (low.includes("2ac") || low.includes("2eme_annee_college") || low.includes("2eme annee")) return "2AC";
+  if (low.includes("3ac") || low.includes("3eme_annee_college") || low.includes("3eme annee")) return "3AC";
+  if (low.includes("tcs") || low.includes("tronc") || low.includes("commun")) return "TC";
+  if (low.includes("1bac") || low.includes("1ere_bac")) return "1BAC";
+  if (low.includes("2bac") || low.includes("2eme_bac")) return "2BAC";
+  
+  return "-";
+};
+
+const getSubjectFromUrl = (url: string): string => {
+  const low = url.toLowerCase();
+  
+  try {
+    const decoded = decodeURIComponent(url).toLowerCase();
+    const l = decoded;
+    if (l.includes("math") || l.includes("mathematiques") || l.includes("رياضيات")) return "Maths";
+    if (l.includes("physique") || l.includes("chimie") || l.includes("pc_") || l.includes("_pc") || l.includes(" pc ") || l.includes("فيزياء") || l.includes("كيمياء")) return "PC";
+    if (l.includes("svt") || l.includes("علوم") || l.includes("الحياة") || l.includes("الارض")) return "SVT";
+    if (l.includes("francais") || l.includes("français") || l.includes("french") || l.includes("فرنسي")) return "French";
+    if (l.includes("arab") || l.includes("عربي")) return "Arabic";
+    if (l.includes("islam") || l.includes("إسلامي") || l.includes("اسلامي") || l.includes("التربية")) return "Islamic";
+    if (l.includes("philo") || l.includes("فلسف")) return "Philosophy";
+    if (l.includes("hg") || l.includes("hist") || l.includes("geo") || l.includes("اجتماعيات") || l.includes("تاريخ") || l.includes("جغرافيا")) return "HG";
+    if (l.includes("anglais") || l.includes("english") || l.includes("انجليزي")) return "English";
+  } catch (e) {}
+
+  if (low.includes("math") || low.includes("mathematiques")) return "Maths";
+  if (low.includes("physique") || low.includes("chimie") || low.includes("pc_") || low.includes("_pc") || low.includes(" pc ")) return "PC";
+  if (low.includes("svt")) return "SVT";
+  if (low.includes("francais") || low.includes("français") || low.includes("french")) return "French";
+  return "-";
+};
+
+const getTopicFromUrl = (url: string): string => {
+  try {
+    const segments = new URL(url).pathname.split("/").filter(Boolean);
+    const ignored = ["college", "1ac", "2ac", "3ac", "math", "pc", "svt", "french", "cours", "exercices"];
+    const candidate = segments.find(seg => !ignored.includes(seg.toLowerCase()));
+    if (candidate) return decodeURIComponent(candidate).replace(/[-_]/g, " ");
+  } catch {}
+  return "General";
+};
 
 export function IntakeJobView({
   stagedPdfs,
@@ -109,69 +200,147 @@ export function IntakeJobView({
     n.action === "stage_asset" && 
     n.status === "completed" && 
     !n.rejection_reason
-  ).map((n: any) => ({
-    ...n,
-    drive_status: n.drive_status || "not_uploaded",
-    download_status: n.download_status || "not_downloaded",
-    verification_status: n.verification_status || "unverified",
-    selected: false,
-    validation_errors: n.validation_errors || []
-  }));
-
-  const getAssetTypeFromUrl = (url: string, isDirectPdf?: boolean): string => {
-    const lowered = url.toLowerCase();
-    if (isDirectPdf || lowered.split(/[?#]/)[0].endsWith(".pdf")) {
-      return "PDF";
+  ).map((n: any) => {
+    let finalGrade = n.extracted_grade;
+    const computedUrlGrade = getGradeFromUrl(n.url || n.canonical_url || "");
+    if (computedUrlGrade !== "-" && finalGrade !== computedUrlGrade) {
+       finalGrade = computedUrlGrade;
     }
-    return "HTML Lesson";
-  };
 
-  const getFilenameFromUrl = (url: string): string => {
-    try {
-      const filename = url.split("/").pop() || url;
-      return decodeURIComponent(filename).split(/[?#]/)[0] || "unnamed";
-    } catch {
-      return url;
+    return {
+      ...n,
+      extracted_grade: finalGrade,
+      drive_status: n.drive_status || "not_uploaded",
+      download_status: n.download_status || "not_downloaded",
+      verification_status: n.verification_status || "unverified",
+      selected: false,
+      validation_errors: n.validation_errors || []
+    };
+  });
+
+  const [isSavingToDrive, setIsSavingToDrive] = React.useState(false);
+
+  const handleBulkSaveToDrive = async (urlsToSave: string[]) => {
+    if (urlsToSave.length === 0) {
+      toast.error("Please select at least one Link to save to Google Drive.");
+      return;
+    }
+
+    const { getCachedToken, googleSignIn } = await import("../../../services/googleDriveService");
+    let token = getCachedToken();
+    if (!token) {
+      toast.info("Connecting to Google Drive...");
+      try {
+        const result = await googleSignIn();
+        token = result?.accessToken || null;
+      } catch (err) {
+        toast.error("Google Drive connection failed. Cannot start upload.");
+        return;
+      }
+    }
+    
+    if (!token) {
+      toast.error("Please connect your Google Drive account first.");
+      return;
+    }
+
+    setIsSavingToDrive(true);
+    let success = 0, failed = 0;
+    
+    const stats: Record<string, number> = {
+      missing_google_token: 0,
+      source_url_missing: 0,
+      source_fetch_failed: 0,
+      source_not_pdf: 0,
+      placeholder_html_rejected: 0,
+      pdf_too_large: 0,
+      drive_upload_failed: 0,
+      supabase_log_failed: 0
+    };
+    const first10Errors: string[] = [];
+    
+    toast.info(`Saving ${urlsToSave.length} files to Google Drive (this may take a few minutes)...`);
+    
+    // Test the first upload to ensure the pipeline isn't completely broken
+    if (urlsToSave.length > 0) {
+      try {
+        const testUrl = urlsToSave[0];
+        const testRes = await axios.post("/api/collector/collect", {
+          url: testUrl, accessToken: token
+        });
+        
+        if (!testRes.data.ok && testRes.data.stage === "missing_google_token") {
+          setIsSavingToDrive(false);
+          toast.error("Google Drive token invalid. Please reconnect.");
+          return;
+        }
+        if (!testRes.data.ok && testRes.data.stage === "drive_upload_failed") {
+          setIsSavingToDrive(false);
+          const errm = testRes.data.googleError || testRes.data.error;
+          toast.error(`Drive Upload Failed Globally: ${errm}`);
+          return;
+        }
+      } catch (e) {
+        // Will be caught in normal loop anyway, ignoring for now unless it's a fatal network error
+      }
+    }
+
+    const batchSize = 5;
+    for (let i = 0; i < urlsToSave.length; i += batchSize) {
+      const batch = urlsToSave.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (url) => {
+        try {
+          const res = await axios.post("/api/collector/collect", {
+            url, accessToken: token
+          });
+          
+          if (res.data.ok) {
+            success++;
+            if (res.data.supabaseLogFailed) {
+              stats.supabase_log_failed++;
+            }
+            if (onUpdateSiteMapNode && siteMapNodes) {
+               const node = siteMapNodes.find((n: any) => n.canonical_url === url);
+               if (node) {
+                   onUpdateSiteMapNode(node.id, { drive_status: "uploaded" });
+               }
+            }
+          } else {
+            failed++;
+            const stage = res.data.stage || "unknown_error";
+            stats[stage] = (stats[stage] || 0) + 1;
+            
+            const errMsg = `[${stage}] ${url}: ${res.data.error || "No error details"}`;
+            if (first10Errors.length < 10) first10Errors.push(errMsg);
+            console.error(`Save to Drive Failed for ${url}:`, res.data);
+          }
+        } catch (err: any) {
+          failed++;
+          stats.drive_upload_failed = (stats.drive_upload_failed || 0) + 1;
+          const errMsg = `[Network Exception] ${url}: ${err.message}`;
+          if (first10Errors.length < 10) first10Errors.push(errMsg);
+          console.error(`Save to Drive Exception for ${url}:`, err.message);
+        }
+      }));
+    }
+    
+    setIsSavingToDrive(false);
+    
+    if (failed > 0) {
+       console.log("Drive Sync Summary:", { 
+         total: urlsToSave.length, 
+         saved: success, 
+         failed, 
+         byStage: stats, 
+         first10Errors 
+       });
+       toast.warning(`Drive Save: ${success} saved, ${failed} failed. See console for details. (e.g. ${failed} failed on ${Object.keys(stats).filter(k => stats[k]>0).join(", ")})`);
+    } else {
+       toast.success(`Google Drive Save Completed: All ${success} files saved successfully.`);
     }
   };
 
-  const getDomainFromUrl = (url: string): string => {
-    try {
-      return new URL(url).hostname.replace("www.", "");
-    } catch {
-      return "";
-    }
-  };
 
-  const getGradeFromUrl = (url: string): string => {
-    const low = url.toLowerCase();
-    if (low.includes("1ac") || low.includes("1ere_annee_college") || low.includes("1ere annee")) return "1AC";
-    if (low.includes("2ac") || low.includes("2eme_annee_college") || low.includes("2eme annee")) return "2AC";
-    if (low.includes("3ac") || low.includes("3eme_annee_college") || low.includes("3eme annee")) return "3AC";
-    if (low.includes("tcs") || low.includes("tronc") || low.includes("commun")) return "TC";
-    if (low.includes("1bac") || low.includes("1ere_bac")) return "1BAC";
-    if (low.includes("2bac") || low.includes("2eme_bac")) return "2BAC";
-    return "-";
-  };
-
-  const getSubjectFromUrl = (url: string): string => {
-    const low = url.toLowerCase();
-    if (low.includes("math") || low.includes("mathematiques")) return "Maths";
-    if (low.includes("physique") || low.includes("chimie") || low.includes("pc_") || low.includes("_pc") || low.includes(" pc ")) return "PC";
-    if (low.includes("svt")) return "SVT";
-    if (low.includes("francais") || low.includes("français") || low.includes("french")) return "French";
-    return "-";
-  };
-
-  const getTopicFromUrl = (url: string): string => {
-    try {
-      const segments = new URL(url).pathname.split("/").filter(Boolean);
-      const ignored = ["college", "1ac", "2ac", "3ac", "math", "pc", "svt", "french", "cours", "exercices"];
-      const candidate = segments.find(seg => !ignored.includes(seg.toLowerCase()));
-      if (candidate) return decodeURIComponent(candidate).replace(/[-_]/g, " ");
-    } catch {}
-    return "General";
-  };
 
   const getComputedItemStatus = (url: string, res?: any) => {
     const staged = stagedPdfs?.find(s => s.url === url);
@@ -604,22 +773,46 @@ export function IntakeJobView({
         </div>
 
         {showAdvancedStaging && activeTab === "crawl" && crawledPdfs.length > 0 && (
-          <Button 
-            id="intake-stage-crawled-btn"
-            onClick={handleStageSelectedCrawled} 
-            className="bg-[#141414] hover:bg-neutral-800 text-white rounded-none font-mono text-[10px] uppercase h-8"
-          >
-            Stage {selectedCrawled.length} to Workspace
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              id="intake-stage-crawled-btn"
+              onClick={handleStageSelectedCrawled} 
+              className="bg-[#141414] hover:bg-neutral-800 text-white rounded-none font-mono text-[10px] uppercase h-8"
+            >
+              Stage {selectedCrawled.length} to Workspace
+            </Button>
+            {selectedCrawled.length > 0 && (
+              <Button 
+                variant="outline"
+                onClick={() => handleBulkSaveToDrive(selectedCrawled)} 
+                disabled={isSavingToDrive}
+                className="h-8 rounded-none font-mono text-[10px] uppercase border-[#141414] text-[#141414]"
+              >
+                {isSavingToDrive ? "Saving..." : `Add ${selectedCrawled.length} to Drive`}
+              </Button>
+            )}
+          </div>
         )}
         {showAdvancedStaging && activeTab === "discover" && discoveredResults.length > 0 && (
-          <Button 
-            id="intake-stage-discovered-btn"
-            onClick={handleIncorporateDiscovered} 
-            className="bg-[#141414] hover:bg-neutral-800 text-white rounded-none font-mono text-[10px] uppercase h-8"
-          >
-            Stage {selectedDiscovered.length} Approved Links
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              id="intake-stage-discovered-btn"
+              onClick={handleIncorporateDiscovered} 
+              className="bg-[#141414] hover:bg-neutral-800 text-white rounded-none font-mono text-[10px] uppercase h-8"
+            >
+              Stage {selectedDiscovered.length} Approved Links
+            </Button>
+            {selectedDiscovered.length > 0 && (
+              <Button 
+                variant="outline"
+                onClick={() => handleBulkSaveToDrive(selectedDiscovered)} 
+                disabled={isSavingToDrive}
+                className="h-8 rounded-none font-mono text-[10px] uppercase border-[#141414] text-[#141414]"
+              >
+                {isSavingToDrive ? "Saving..." : `Add ${selectedDiscovered.length} to Drive`}
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -924,6 +1117,14 @@ export function IntakeJobView({
                     >
                       Stage Checked Assets ({selectedSiteMapUrls.length})
                     </Button>
+                    <Button 
+                      variant="outline"
+                      disabled={selectedSiteMapUrls.length === 0 || isSavingToDrive}
+                      onClick={() => handleBulkSaveToDrive(selectedSiteMapUrls)}
+                      className="h-9 rounded-none font-mono text-[10px] uppercase border-[#141414] text-[#141414] shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                    >
+                      {isSavingToDrive ? "Saving..." : `Add Checked to Drive (${selectedSiteMapUrls.length})`}
+                    </Button>
                   </div>
                 </div>
 
@@ -1038,9 +1239,11 @@ export function IntakeJobView({
                               )}
                             </td>
                             <td className="p-3 text-center">
-                              <a href={node.canonical_url} target="_blank" rel="noreferrer" className="text-neutral-400 hover:text-neutral-900 inline-block align-middle">
-                                <ExternalLink className="w-3.5 h-3.5"/>
-                              </a>
+                              <div className="flex flex-col items-center gap-2">
+                                <a href={node.canonical_url} target="_blank" rel="noreferrer" className="text-neutral-400 hover:text-neutral-900 inline-block align-middle">
+                                  <ExternalLink className="w-3.5 h-3.5"/>
+                                </a>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1097,36 +1300,89 @@ export function IntakeJobView({
                     variant="outline" 
                     size="sm"
                     className="text-[10px] uppercase font-mono bg-indigo-50 border-indigo-200 text-indigo-700"
-                    onClick={() => {
-                       if (onUpdateSiteMapNode) {
-                          selectedStagedUrls.forEach(url => {
-                             const node = siteMapNodes.find((n: any) => n.canonical_url === url);
-                             if (node) {
-                                onUpdateSiteMapNode(node.id, { drive_status: "uploaded" });
-                             }
-                          });
-                       }
-                    }}
-                    disabled={selectedStagedUrls.length === 0 || !hasDriveConnected}
+                    onClick={() => handleBulkSaveToDrive(selectedStagedUrls)}
+                    disabled={selectedStagedUrls.length === 0 || !hasDriveConnected || isSavingToDrive}
                   >
-                    {hasDriveConnected ? "Add to Drive" : "Drive Not Configured"}
+                    {isSavingToDrive ? "Saving..." : (hasDriveConnected ? "Add to Drive" : "Drive Not Configured")}
                   </Button>
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="text-[10px] uppercase font-mono bg-emerald-50 border-emerald-200 text-emerald-700"
-                    onClick={() => {
-                       const data = stagedPdfAssets.filter((a: any) => selectedStagedUrls.includes(a.canonical_url));
-                       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-                       const urlObj = URL.createObjectURL(blob);
-                       const a = document.createElement("a");
-                       a.href = urlObj;
-                       a.download = "staged_assets.json";
-                       a.click();
+                    className="text-[10px] uppercase font-mono bg-emerald-50 border-emerald-200 text-emerald-700 relative group overflow-hidden"
+                    onClick={async () => {
+                       try {
+                         const JSZip = (await import("jszip")).default;
+                         const zip = new JSZip();
+                         
+                         let completed = 0;
+                         let failed = 0;
+                         const total = selectedStagedUrls.length;
+                         
+                         const toastId = toast.loading(`Preparing PDF ZIP archive... 0/${total} downloaded`);
+                         
+                         // Process in small batches to preserve memory and avoid 429s/timeouts
+                         const BATCH_SIZE = 5;
+                         for (let i = 0; i < total; i += BATCH_SIZE) {
+                           const batch = selectedStagedUrls.slice(i, i + BATCH_SIZE);
+                           await Promise.all(batch.map(async (rawUrl) => {
+                             try {
+                               const response = await fetch("/api/proxy-download", {
+                                 method: "POST",
+                                 headers: { "Content-Type": "application/json" },
+                                 body: JSON.stringify({ url: rawUrl })
+                               });
+                               if (!response.ok) throw new Error("Download failed");
+                               const blob = await response.blob();
+                               
+                               let fileName = rawUrl.split('/').pop() || `document.pdf`;
+                               try {
+                                 fileName = decodeURIComponent(fileName);
+                               } catch (e) {}
+                               fileName = fileName.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
+                               
+                               if (fileName.length > 80) {
+                                 fileName = fileName.substring(fileName.length - 80);
+                               }
+                               
+                               if (!fileName.toLowerCase().endsWith('.pdf')) fileName += '.pdf';
+                               
+                               // lookup grade
+                               const record = stagedPdfAssets.find((a: any) => a.canonical_url === rawUrl || a.url === rawUrl);
+                               const grade = record?.extracted_grade || "Unknown_Grade";
+                               const safeGrade = grade.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
+                               
+                               // prefix with index to prevent duplicate names replacing each other
+                               const fileIndex = selectedStagedUrls.indexOf(rawUrl);
+                               zip.file(`${safeGrade}/${fileIndex + 1}_${fileName}`, blob);
+                               completed++;
+                             } catch (err) {
+                               console.error("Failed to fetch", rawUrl, err);
+                               failed++;
+                               zip.file(`Failed_Downloads/ERROR_${selectedStagedUrls.indexOf(rawUrl) + 1}.txt`, `Failed to download: ${rawUrl}`);
+                             }
+                           }));
+                           
+                           toast.loading(`Zipping PDFs... ${completed + failed}/${total} processed`, { id: toastId });
+                         }
+
+                         toast.loading(`Compressing final archive... (This may take a moment)`, { id: toastId });
+                         const zipBlob = await zip.generateAsync({ type: "blob" });
+                         
+                         const urlObj = URL.createObjectURL(zipBlob);
+                         const a = document.createElement("a");
+                         a.href = urlObj;
+                         a.download = `All_Grades_Export_${total}.zip`;
+                         a.click();
+                         
+                         toast.success(`Successfully created ZIP archive! (${completed} success, ${failed} failed)`, { id: toastId });
+                       } catch (e: any) {
+                         console.error(e);
+                         toast.error("Failed to export as ZIP.", { description: e.message });
+                       }
                     }}
                     disabled={selectedStagedUrls.length === 0}
                   >
-                    Export Selected
+                    Export ZIP Archive
                   </Button>
                 </div>
 
@@ -1379,14 +1635,16 @@ export function IntakeJobView({
                       </td>
 
                       <td className="p-3 text-center">
-                        <a 
-                          href={item.url} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="text-neutral-400 hover:text-neutral-900 inline-block align-middle"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5"/>
-                        </a>
+                        <div className="flex flex-col items-center gap-2">
+                          <a 
+                            href={item.url} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="text-neutral-400 hover:text-neutral-900 inline-block align-middle"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5"/>
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -130,62 +130,64 @@ export function extractClassifyingMetadata(urlStr: string, textContext: string =
 
   let decodedUrl = urlStr;
   try {
-    decodedUrl = decodeURIComponent(urlStr);
+    decodedUrl = decodeURIComponent(urlStr).toLowerCase();
   } catch {}
 
-  const combinedText = `${decodedUrl} ${textContext}`.toLowerCase();
+  const rootText = textContext.toLowerCase();
+  
+  const checkGrades = (source: string) => {
+    if (source.match(/(1ap|الاول-ابتدائي|الأول-ابتدائي|الاول ابتدائي|السنة الأولى ابتدائي)/)) return "1AEP";
+    if (source.match(/(2ap|الثاني-ابتدائي|الثانية-ابتدائي|الثاني ابتدائي|السنة الثانية ابتدائي)/)) return "2AEP";
+    if (source.match(/(3ap|الثالث-ابتدائي|الثالثة-ابتدائي|الثالث ابتدائي|السنة الثالثة ابتدائي)/)) return "3AEP";
+    if (source.match(/(4ap|الرابع-ابتدائي|الرابعة-ابتدائي|الرابع ابتدائي|السنة الرابعة ابتدائي)/)) return "4AEP";
+    if (source.match(/(5ap|الخامس-ابتدائي|الخامسة-ابتدائي|الخامس ابتدائي|السنة الخامسة ابتدائي)/)) return "5AEP";
+    if (source.match(/(6ap|السادس-ابتدائي|السادسة-ابتدائي|السادس ابتدائي|السنة السادسة ابتدائي)/)) return "6AEP";
+    if (source.match(/(3apic|3ac|3eme|3ème|ثالثة اعدادي|السنة الثالثة اعدادي)/)) return "3AC";
+    if (source.match(/(2ac|ثانية اعدادي|السنة الثانية اعدادي)/)) return "2AC";
+    if (source.match(/(1ac|اولى اعدادي|السنة الاولى اعدادي|الاولى اعدادي)/)) return "1AC";
+    if (source.match(/(tronc commun|جذع مشترك|tc|tcs)/)) return "Tronc Commun";
+    if (source.match(/(1bac|1ere bac|اولى باك|الأولى بكالوريا|الاولى باك)/)) return "1BAC";
+    if (source.match(/(2bac|2eme bac|ثانية باك|الثانية باك|البكالوريا|ثانية بكالوريا)/)) return "2BAC";
+    return null;
+  };
 
-  if (combinedText.includes("3apic") || combinedText.includes("3ac") || combinedText.includes("3eme") || combinedText.includes("3ème") || combinedText.includes("ثالثة اعدادي") || combinedText.includes("السنة الثالثة اعدادي")) {
-    grade = "3AC";
-  } else if (combinedText.includes("2ac") || combinedText.includes("ثانية اعدادي") || combinedText.includes("السنة الثانية اعدادي")) {
-    grade = "2AC";
-  } else if (combinedText.includes("1ac") || combinedText.includes("اولى اعدادي") || combinedText.includes("السنة الاولى اعدادي")) {
-    grade = "1AC";
-  } else if (combinedText.includes("tronc commun") || combinedText.includes("جذع مشترك") || combinedText.includes("tc") || combinedText.includes("tcs")) {
-    grade = "Tronc Commun";
-  } else if (combinedText.includes("2bac") || combinedText.includes("ثانية باك") || combinedText.includes("البكالوريا")) {
-    grade = "2BAC";
-  } else if (combinedText.includes("1bac") || combinedText.includes("اولى باك") || combinedText.includes("الأولى بكالوريا")) {
-    grade = "1BAC";
-  }
+  grade = checkGrades(decodedUrl) || checkGrades(rootText);
 
-  if (combinedText.includes("math") || combinedText.includes("رياضيات") || combinedText.includes("الرياضيات")) {
-    subject = "Mathématiques";
-  } else if (combinedText.includes("physique") || combinedText.includes("chimie") || combinedText.includes("pc") || combinedText.includes("الفيزياء")) {
-    subject = "Physique-Chimie";
-  } else if (combinedText.includes("svt") || combinedText.includes("sciences de la vie") || combinedText.includes("الارض") || combinedText.includes("الأرض")) {
-    subject = "SVT";
-  } else if (combinedText.includes("francais") || combinedText.includes("français") || combinedText.includes("الفرنسية")) {
-    subject = "Français";
-  } else if (combinedText.includes("arabe") || combinedText.includes("العربية")) {
-    subject = "Arabe";
-  } else if (combinedText.includes("anglais") || combinedText.includes("الانجليزية") || combinedText.includes("الإنجليزية")) {
-    subject = "Anglais";
-  }
+  const checkSubjects = (source: string) => {
+    if (source.match(/(math|رياضيات|الرياضيات)/)) return "Mathématiques";
+    if (source.match(/(physique|chimie|pc|الفيزياء)/)) return "Physique-Chimie";
+    if (source.match(/(svt|sciences de la vie|الارض|الأرض)/)) return "SVT";
+    if (source.match(/(francais|français|الفرنسية)/)) return "Français";
+    if (source.match(/(anglais|english|الانجليزية|الإنجليزية)/)) return "Anglais";
+    if (source.match(/(islamic|education islamique|التربية الاسلامية|التربية الإسلامية)/)) return "Education Islamique";
+    if (source.match(/(arabe|العربية)/)) return "Arabe";
+    return null;
+  };
 
-  if (combinedText.includes("biof") || combinedText.includes("خيار فرنسي") || combinedText.includes("option francais") || combinedText.includes("option français")) {
-    track = "Sciences Expérimentales BIOF";
-  } else if (combinedText.includes("خيار عربي") || combinedText.includes("option arabe")) {
-    track = "Option Arabe";
-  } else if (!combinedText.includes("sciences de la vie") && !combinedText.includes("علوم الحياة") && (combinedText.includes("science ") || combinedText.includes("sciences ") || combinedText.includes("علوم") || combinedText.includes("العلوم"))) {
-    track = "Sciences";
-  } else if (combinedText.includes("lettres") || combinedText.includes("اداب") || combinedText.includes("الآداب")) {
-    track = "Lettres";
-  }
+  subject = checkSubjects(decodedUrl) || checkSubjects(rootText);
 
-  if (combinedText.includes("examen régional") || combinedText.includes("examen regional") || combinedText.includes("régional") || combinedText.includes("regional") || combinedText.includes("جهوي")) {
-    documentType = "Examen régional";
-  } else if (combinedText.includes("cours") || combinedText.includes("lesson") || combinedText.includes("درس")) {
-    documentType = "Cours";
-  } else if (combinedText.includes("exercice") || combinedText.includes("serie") || combinedText.includes("تمارين")) {
-    documentType = "Exercices";
-  } else if (combinedText.includes("corrige") || combinedText.includes("correction") || combinedText.includes("تصحيح")) {
-    documentType = "Devoir corrigé";
-  } else if (combinedText.includes("devoir") || combinedText.includes("controle") || combinedText.includes("فرض")) {
-    documentType = "Devoir";
-  } else if (combinedText.includes("resume") || combinedText.includes("ملخص")) {
-    documentType = "Résumé";
-  }
+  const checkTracks = (source: string) => {
+    if (source.match(/(biof|خيار فرنسي|option francais|option français)/)) return "Sciences Expérimentales BIOF";
+    if (source.match(/(خيار عربي|option arabe)/)) return "Option Arabe";
+    if (!source.match(/(sciences de la vie|علوم الحياة)/) && source.match(/(science |sciences |علوم|العلوم)/)) return "Sciences";
+    if (source.match(/(lettres|اداب|الآداب)/)) return "Lettres";
+    return null;
+  };
+  
+  track = checkTracks(decodedUrl) || checkTracks(rootText);
+
+  const checkDocTypes = (source: string) => {
+    if (source.match(/(examen régional|examen regional|régional|regional|جهوي)/)) return "Examen régional";
+    if (source.match(/(examen national|national|وطني)/)) return "Examen national";
+    if (source.match(/(cours|lesson|درس|دروس)/)) return "Cours";
+    if (source.match(/(exercice|serie|تمارين|سلسلة)/)) return "Exercices";
+    if (source.match(/(corrige|correction|تصحيح)/)) return "Devoir corrigé";
+    if (source.match(/(devoir|controle|فرض|فروض)/)) return "Devoir";
+    if (source.match(/(resume|ملخص|ملخصات)/)) return "Résumé";
+    return null;
+  };
+
+  documentType = checkDocTypes(decodedUrl) || checkDocTypes(rootText);
 
   // Common Moroccan regions
   const regions = [

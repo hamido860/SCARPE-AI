@@ -102,3 +102,46 @@ create table if not exists classification_dictionary (
 alter table classification_dictionary enable row level security;
 create policy "Enable all access for service role on classification_dictionary" on classification_dictionary for all using (true) with check (true);
 create policy "Enable read access for all on classification_dictionary" on classification_dictionary for select using (true);
+
+-- ==========================================
+-- Schema for Workflow PDF Documents & Storage Logs
+-- ==========================================
+
+-- Table to store custom tracked PDF documents in the extraction workflow pipeline
+create table if not exists public.pdf_documents (
+    hash text primary key,
+    url text not null,
+    file_name text not null,
+    drive_file_id text,
+    drive_url text,
+    storage_status text default 'not_started',    -- 'not_started', 'saved_to_drive'
+    processing_status text default 'not_started', -- 'not_started', 'in_progress', 'completed', 'failed'
+    review_status text default 'not_reviewed',     -- 'not_reviewed', 'auto_approved', 'needs_metadata_review'
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Table to log Drive uploads specifically
+create table if not exists public.pdf_drive_files (
+    id uuid default gen_random_uuid() primary key,
+    source_url text,
+    drive_file_id text,
+    drive_view_url text,
+    file_name text,
+    mime_type text,
+    file_size bigint,
+    status text,
+    error_message text,
+    created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Setup Row Level Security (RLS) for the new tables
+alter table public.pdf_documents enable row level security;
+alter table public.pdf_drive_files enable row level security;
+
+-- Create service role policies (server-side actions)
+create policy "Enable all access for service role on pdf_documents" on public.pdf_documents for all using (true) with check (true);
+create policy "Enable all access for service role on pdf_drive_files" on public.pdf_drive_files for all using (true) with check (true);
+create policy "Enable read-only access for authenticated/anon on pdf_documents" on public.pdf_documents for select using (true);
+create policy "Enable read-only access for authenticated/anon on pdf_drive_files" on public.pdf_drive_files for select using (true);
+

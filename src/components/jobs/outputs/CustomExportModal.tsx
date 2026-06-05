@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   X, Download, FileJson, FileSpreadsheet, CheckSquare, Square, 
-  Settings2, Info, Check, Eye, HelpCircle, LayoutGrid, CheckCircle
+  Settings2, Info, Check, Eye, HelpCircle, LayoutGrid, CheckCircle, FileText
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
