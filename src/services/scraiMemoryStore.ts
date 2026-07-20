@@ -58,8 +58,8 @@ export async function recordScraiAction(
   reason?: string,
   metadata?: Record<string, unknown>,
 ): Promise<void> {
-  const id = typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
+  const id = typeof globalThis.crypto?.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await putLocalRecord(LOCAL_MEMORY_STORES.actionHistory, {
     id,
