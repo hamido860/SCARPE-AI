@@ -88,7 +88,6 @@ async function saveCrawlState(
   const existing = await getLocalRecord<CrawlUrlRecord>(LOCAL_MEMORY_STORES.crawlUrls, canonicalUrl);
   const now = new Date().toISOString();
   const record: CrawlUrlRecord = {
-    canonicalUrl,
     originalUrl: existing?.originalUrl || url,
     domain: new URL(canonicalUrl).hostname,
     status: existing?.status || "crawling",
@@ -99,7 +98,6 @@ async function saveCrawlState(
     pdfCount: existing?.pdfCount || 0,
     httpStatus: existing?.httpStatus || null,
     errorMessage: existing?.errorMessage || null,
-    updatedAt: now,
     ...patch,
     canonicalUrl,
     updatedAt: now,
