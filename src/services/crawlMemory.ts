@@ -14,6 +14,7 @@ export interface CrawlUrlRecord {
   canonicalUrl: string;
   originalUrl: string;
   domain: string;
+  requestFingerprint: string;
   status: CrawlMemoryStatus;
   firstSeenAt: string;
   lastCrawledAt: string | null;
@@ -41,24 +42,29 @@ export function canonicalizeCrawlerUrl(input: string): string {
   const url = new URL(input.trim());
   url.hash = "";
   url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-
-  for (const parameter of TRACKING_PARAMETERS) {
-    url.searchParams.delete(parameter);
-  }
+  for (const parameter of TRACKING_PARAMETERS) url.searchParams.delete(parameter);
   url.searchParams.sort();
-
-  if (url.pathname !== "/") {
-    url.pathname = url.pathname.replace(/\/+$/, "");
-  }
-
+  if (url.pathname !== "/") url.pathname = url.pathname.replace(/\/+$/, "");
   return url.toString();
 }
 
+export function buildCrawlRequestFingerprint(input: {
+  topicFilter?: unknown;
+  maxPages?: unknown;
+  maxDepth?: unknown;
+}): string {
+  const topicFilter = String(input.topicFilter || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const maxPages = Number(input.maxPages ?? 50);
+  const maxDepth = Number(input.maxDepth ?? 3);
+  return JSON.stringify({
+    topicFilter,
+    maxPages: Number.isFinite(maxPages) ? maxPages : 50,
+    maxDepth: Number.isFinite(maxDepth) ? maxDepth : 3,
+  });
+}
+
 export async function getCrawlMemory(url: string): Promise<CrawlUrlRecord | null> {
-  return getLocalRecord<CrawlUrlRecord>(
-    LOCAL_MEMORY_STORES.crawlUrls,
-    canonicalizeCrawlerUrl(url),
-  );
+  return getLocalRecord<CrawlUrlRecord>(LOCAL_MEMORY_STORES.crawlUrls, canonicalizeCrawlerUrl(url));
 }
 
 export async function listCrawlMemory(): Promise<CrawlUrlRecord[]> {
@@ -73,23 +79,21 @@ export function isFreshCompletedCrawl(
   record: CrawlUrlRecord | null,
   freshDays = DEFAULT_FRESH_DAYS,
   now = Date.now(),
+  requestFingerprint?: string,
 ): boolean {
-  if (!record || !["completed", "no_pdf"].includes(record.status) || !record.lastCrawledAt) {
-    return false;
-  }
+  if (!record || !["completed", "no_pdf"].includes(record.status) || !record.lastCrawledAt) return false;
+  if (requestFingerprint && record.requestFingerprint !== requestFingerprint) return false;
   return now - new Date(record.lastCrawledAt).getTime() < freshDays * 24 * 60 * 60 * 1000;
 }
 
-async function saveCrawlState(
-  url: string,
-  patch: Partial<CrawlUrlRecord>,
-): Promise<CrawlUrlRecord> {
+async function saveCrawlState(url: string, patch: Partial<CrawlUrlRecord>): Promise<CrawlUrlRecord> {
   const canonicalUrl = canonicalizeCrawlerUrl(url);
   const existing = await getLocalRecord<CrawlUrlRecord>(LOCAL_MEMORY_STORES.crawlUrls, canonicalUrl);
   const now = new Date().toISOString();
   const record: CrawlUrlRecord = {
     originalUrl: existing?.originalUrl || url,
     domain: new URL(canonicalUrl).hostname,
+    requestFingerprint: existing?.requestFingerprint || "",
     status: existing?.status || "crawling",
     firstSeenAt: existing?.firstSeenAt || now,
     lastCrawledAt: existing?.lastCrawledAt || null,
@@ -108,11 +112,7 @@ async function saveCrawlState(
 
 function parseBody(data: unknown): Record<string, any> {
   if (typeof data === "string") {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return {};
-    }
+    try { return JSON.parse(data); } catch { return {}; }
   }
   return data && typeof data === "object" ? { ...(data as Record<string, any>) } : {};
 }
@@ -123,9 +123,7 @@ function uniqueUrls(value: unknown): string[] {
 }
 
 export function installCrawlerMemoryInterceptor(): void {
-  const globalMarker = globalThis as typeof globalThis & {
-    __scarpeCrawlerMemoryInstalled?: boolean;
-  };
+  const globalMarker = globalThis as typeof globalThis & { __scarpeCrawlerMemoryInstalled?: boolean };
   if (globalMarker.__scarpeCrawlerMemoryInstalled) return;
   globalMarker.__scarpeCrawlerMemoryInstalled = true;
 
@@ -138,28 +136,23 @@ export function installCrawlerMemoryInterceptor(): void {
     if (!body.url) return config;
 
     let canonicalUrl: string;
-    try {
-      canonicalUrl = canonicalizeCrawlerUrl(String(body.url));
-    } catch {
-      return config;
-    }
+    try { canonicalUrl = canonicalizeCrawlerUrl(String(body.url)); } catch { return config; }
 
     const crawlMode: CrawlMode = body.crawlMode || "new_only";
+    const requestFingerprint = buildCrawlRequestFingerprint(body);
     const metadata = {
       canonicalUrl,
       originalUrl: String(body.url),
       crawlMode,
+      requestFingerprint,
       memoryHit: false,
     };
     config.__scarpeCrawlMemory = metadata;
 
     try {
-      const existing = await getLocalRecord<CrawlUrlRecord>(
-        LOCAL_MEMORY_STORES.crawlUrls,
-        canonicalUrl,
-      );
-
-      if (crawlMode === "new_only" && isFreshCompletedCrawl(existing)) {
+      const existing = await getLocalRecord<CrawlUrlRecord>(LOCAL_MEMORY_STORES.crawlUrls, canonicalUrl);
+      const cacheAllowed = crawlMode === "new_only" || (crawlMode === "retry_failed" && existing?.status !== "failed");
+      if (cacheAllowed && isFreshCompletedCrawl(existing, DEFAULT_FRESH_DAYS, Date.now(), requestFingerprint)) {
         metadata.memoryHit = true;
         config.adapter = async (adapterConfig: any) => ({
           data: {
@@ -177,9 +170,9 @@ export function installCrawlerMemoryInterceptor(): void {
         });
         return config;
       }
-
       await saveCrawlState(canonicalUrl, {
         originalUrl: String(body.url),
+        requestFingerprint,
         status: "crawling",
         errorMessage: null,
         nextRetryAt: null,
@@ -197,10 +190,10 @@ export function installCrawlerMemoryInterceptor(): void {
     async (response: any) => {
       const metadata = response.config?.__scarpeCrawlMemory;
       if (!metadata || metadata.memoryHit) return response;
-
       const pdfUrls = uniqueUrls(response.data?.pdfs);
       try {
         await saveCrawlState(metadata.canonicalUrl, {
+          requestFingerprint: metadata.requestFingerprint,
           status: pdfUrls.length > 0 ? "completed" : "no_pdf",
           lastCrawledAt: new Date().toISOString(),
           pdfUrls,
@@ -220,6 +213,7 @@ export function installCrawlerMemoryInterceptor(): void {
         const nextRetryAt = new Date(Date.now() + FAILED_RETRY_HOURS * 60 * 60 * 1000).toISOString();
         try {
           await saveCrawlState(metadata.canonicalUrl, {
+            requestFingerprint: metadata.requestFingerprint,
             status: "failed",
             lastCrawledAt: new Date().toISOString(),
             nextRetryAt,
