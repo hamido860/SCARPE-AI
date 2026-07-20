@@ -17,6 +17,16 @@ export async function markDraftSaved(input: {
   taskId?: string | null;
 }): Promise<ScraiLessonMemory> {
   const memory = await getOrCreateScraiLessonMemory(input.identity);
+  const evidenceReady =
+    memory.markdown.exists &&
+    Boolean(memory.markdown.contentHash) &&
+    memory.chunks.available &&
+    memory.chunks.trustedCount > 0 &&
+    memory.chunks.sourceMarkdownHash === memory.markdown.contentHash;
+  if (!evidenceReady) {
+    throw new Error("SCRAI cannot mark a draft saved until Markdown and trusted chunks match.");
+  }
+
   const evidenceFingerprint = buildEvidenceFingerprint({
     markdownHash: memory.markdown.contentHash,
     chunkIds: memory.chunks.chunkIds,
