@@ -81,7 +81,7 @@ const EXCLUDED_LINK_ANCESTORS = [
 
 // Arabic is matched after normalization: ة -> ه and ى -> ي.
 const CONTENT_LINK_PATTERN = /(cours|le[cç]on|lesson|dars|sourate|درس|دروس|شرح|ملخص|تمارين|exercice|تمرين|correction|solution|سوره|مدخل|تزكيه|اقتداء|استجابه|قسط|حكمه)/i;
-const BLOCKED_LINK_PATTERN = /(login|register|contact|privacy|policy|about|author|tag|category|feed|wp-admin|wp-login|facebook|twitter|instagram|youtube|telegram|whatsapp|امتحانات|فروض|اختبارات|جذاذات|توزيع|استعمال الزمن|عطل|توجيه)/i;
+const BLOCKED_LINK_PATTERN = /(login|register|contact|privacy|policy|about|author|tag|category|feed|wp-admin|wp-login|facebook|twitter|instagram|youtube|telegram|whatsapp|all subjects|جميع المواد|باقي المواد|كل المواد|امتحانات|فروض|اختبارات|جذاذات|توزيع|استعمال الزمن|عطل|توجيه)/i;
 
 const httpsAgent = new https.Agent({
   rejectUnauthorized: false,
@@ -356,11 +356,11 @@ function isCandidatePageLink(params: {
   if (!isScopeCompatible(rootScope, candidateScope)) return false;
 
   if (isPagination) return true;
-  if (!CONTENT_LINK_PATTERN.test(normalized)) return false;
+  if (CONTENT_LINK_PATTERN.test(normalized)) return true;
+  if (rootScope.subject && candidateScope.subject === rootScope.subject) return true;
+  if (rootScope.grade && candidateScope.grade === rootScope.grade && !candidateScope.subject) return true;
 
-  // A subject page may link to lesson pages that name only the grade and lesson.
-  // Explicit mismatches are rejected above; unknown subject is allowed within main content.
-  return Boolean(candidateScope.grade || candidateScope.subject || rootScope.grade || rootScope.subject);
+  return false;
 }
 
 export async function discoverPdfsFromInput(
@@ -369,18 +369,18 @@ export async function discoverPdfsFromInput(
   options: Partial<CrawlerOptions> = {},
 ): Promise<DiscoveredItem[]> {
   const opts: CrawlerOptions = {
-    maxPages: 20,
+    maxPages: 30,
     maxDepth: 2,
-    maxPdfs: 100,
-    maxLinksPerPage: 20,
+    maxPdfs: 150,
+    maxLinksPerPage: 30,
     batchSize: 4,
     timeLimitMs: 90_000,
     ...options,
   };
 
-  opts.maxPages = Math.max(1, Math.min(opts.maxPages, 20));
+  opts.maxPages = Math.max(1, Math.min(opts.maxPages, 30));
   opts.maxDepth = Math.max(0, Math.min(opts.maxDepth, 3));
-  opts.maxPdfs = Math.max(1, Math.min(opts.maxPdfs, 100));
+  opts.maxPdfs = Math.max(1, Math.min(opts.maxPdfs, 150));
   opts.maxLinksPerPage = Math.max(1, Math.min(opts.maxLinksPerPage, 30));
   opts.batchSize = Math.max(1, Math.min(opts.batchSize, 5));
 
