@@ -1,21 +1,21 @@
-import https from 'https';
-import crypto from 'crypto';
+import https from "https";
+import crypto from "crypto";
 import axios from "axios";
 import { load } from "cheerio";
-import { formatLevelspaceReviewTitle, formatLevelspaceSafeFilename } from "./filenameGenerator";
+import { formatLevelspaceReviewTitle } from "./filenameGenerator";
 
 export interface DiscoveredItem {
-  url: string;               // direct pdf link (resolved) - maps to item.url in frontend
-  raw_url: string;           // original user-input pasted URL with hash
-  normalized_url: string;    // split + no hash
-  source_page_url: string;   // normalized_url of source html page (if not direct pdf) or equal to pdf_url (if direct pdf)
-  pdf_url: string;           // direct pdf link (resolved)
+  url: string;
+  raw_url: string;
+  normalized_url: string;
+  source_page_url: string;
+  pdf_url: string;
   url_type: "direct_pdf" | "source_page" | "source_page_no_pdfs";
-  pdf_count: number;         // count of uniquely discovered PDFs
-  isDirectPdf: boolean;      // standard helper for client-side staging
-  accepted: boolean;         // default acceptance state
-  reason: string;            // status explanation
-  title?: string;            // page/doc title
+  pdf_count: number;
+  isDirectPdf: boolean;
+  accepted: boolean;
+  reason: string;
+  title?: string;
   cleanTitle?: string;
   metadata?: {
     grade: string | null;
@@ -23,212 +23,16 @@ export interface DiscoveredItem {
     track: string | null;
     documentType: string | null;
     schoolYear: string | null;
+    region: string | null;
     source: string | null;
   };
-}
-
-export function splitConcatenatedUrls(input: string): string[] {
-  if (!input) return [];
-  const parts = input.split(/\s+/).filter(Boolean);
-  const results: string[] = [];
-  const regex = /https?:\/\//gi;
-  
-  for (const part of parts) {
-    const matches: number[] = [];
-    let match;
-    while ((match = regex.exec(part)) !== null) {
-      matches.push(match.index);
-    }
-    if (matches.length <= 1) {
-      results.push(part);
-    } else {
-      for (let i = 0; i < matches.length; i++) {
-        const start = matches[i];
-        const end = i + 1 < matches.length ? matches[i + 1] : part.length;
-        results.push(part.substring(start, end));
-      }
-    }
-  }
-  return results;
-}
-
-export function removeHashFragment(urlStr: string): string {
-  if (!urlStr) return "";
-  return urlStr.split("#")[0];
-}
-
-export function normalizeUrlSafe(urlStr: string): string {
-  const noHash = removeHashFragment(urlStr);
-  try {
-    const parsed = new URL(noHash);
-    if (parsed.pathname.length > 1 && parsed.pathname.endsWith("/")) {
-      parsed.pathname = parsed.pathname.slice(0, -1);
-    }
-    return parsed.toString();
-  } catch {
-    return noHash.replace(/\/$/, "");
-  }
-}
-
-export function isDirectPdfUrl(urlStr: string): boolean {
-  try {
-    const cleanUrl = urlStr.split(/[?#]/)[0];
-    const lowerUrl = cleanUrl.toLowerCase();
-    return lowerUrl.endsWith(".pdf") || lowerUrl.includes("drive.google.com/file/d/");
-  } catch {
-    return urlStr.toLowerCase().includes(".pdf") || urlStr.toLowerCase().includes("drive.google.com/file/d/");
-  }
-}
-
-export function resolveRelativeUrl(href: string, baseUrl: string): string {
-  try {
-    const resolved = new URL(href, baseUrl);
-    return resolved.href;
-  } catch {
-    return href;
-  }
-}
-
-export function isAssetUrl(urlStr: string): boolean {
-  try {
-    const cleanUrl = urlStr.split(/[?#]/)[0].toLowerCase();
-    return [".jpg", ".png", ".webp", ".gif", ".css", ".js", ".zip", ".rar"].some(ext => cleanUrl.endsWith(ext));
-  } catch {
-    return false;
-  }
-}
-
-export function isPaginationLink($el: any, href: string): boolean {
-  if ($el.attr("rel") === "next") return true;
-  
-  const text = $el.text().toLowerCase().trim();
-  const paginationTexts = ["next", "suivant", "suivante", "page suivante", "التالي", "الصفحة التالية", "older posts"];
-  if (paginationTexts.some(t => text.includes(t))) return true;
-
-  const className = ($el.attr("class") || "").toLowerCase();
-  const paginationClasses = ["next", "pagination-next", "nav-next", "page-numbers"];
-  if (paginationClasses.some(c => className.includes(c))) return true;
-
-  if (href.match(/[?&](page|paged|p)=\d+/i)) return true;
-  if (href.match(/\/page\/\d+\/?/i)) return true;
-
-  if (/^\d+$/.test(text) && (className.includes("page") || $el.parents('.pagination, .nav-links').length > 0)) {
-    return true;
-  }
-
-  return false;
-}
-
-export function extractClassifyingMetadata(urlStr: string, textContext: string = "") {
-  let grade: string | null = null;
-  let subject: string | null = null;
-  let track: string | null = null;
-  let documentType: string | null = null;
-  let schoolYear: string | null = null;
-  let region: string | null = null;
-  let source: string | null = null;
-
-  let decodedUrl = urlStr;
-  try {
-    decodedUrl = decodeURIComponent(urlStr).toLowerCase();
-  } catch {}
-
-  const rootText = textContext.toLowerCase();
-  
-  const checkGrades = (source: string) => {
-    if (source.match(/(1ap|الاول-ابتدائي|الأول-ابتدائي|الاول ابتدائي|السنة الأولى ابتدائي)/)) return "1AEP";
-    if (source.match(/(2ap|الثاني-ابتدائي|الثانية-ابتدائي|الثاني ابتدائي|السنة الثانية ابتدائي)/)) return "2AEP";
-    if (source.match(/(3ap|الثالث-ابتدائي|الثالثة-ابتدائي|الثالث ابتدائي|السنة الثالثة ابتدائي)/)) return "3AEP";
-    if (source.match(/(4ap|الرابع-ابتدائي|الرابعة-ابتدائي|الرابع ابتدائي|السنة الرابعة ابتدائي)/)) return "4AEP";
-    if (source.match(/(5ap|الخامس-ابتدائي|الخامسة-ابتدائي|الخامس ابتدائي|السنة الخامسة ابتدائي)/)) return "5AEP";
-    if (source.match(/(6ap|السادس-ابتدائي|السادسة-ابتدائي|السادس ابتدائي|السنة السادسة ابتدائي)/)) return "6AEP";
-    if (source.match(/(3apic|3ac|3eme|3ème|ثالثة اعدادي|السنة الثالثة اعدادي)/)) return "3AC";
-    if (source.match(/(2ac|ثانية اعدادي|السنة الثانية اعدادي)/)) return "2AC";
-    if (source.match(/(1ac|اولى اعدادي|السنة الاولى اعدادي|الاولى اعدادي)/)) return "1AC";
-    if (source.match(/(tronc commun|جذع مشترك|tc|tcs)/)) return "Tronc Commun";
-    if (source.match(/(1bac|1ere bac|اولى باك|الأولى بكالوريا|الاولى باك)/)) return "1BAC";
-    if (source.match(/(2bac|2eme bac|ثانية باك|الثانية باك|البكالوريا|ثانية بكالوريا)/)) return "2BAC";
-    return null;
-  };
-
-  grade = checkGrades(decodedUrl) || checkGrades(rootText);
-
-  const checkSubjects = (source: string) => {
-    if (source.match(/(math|رياضيات|الرياضيات)/)) return "Mathématiques";
-    if (source.match(/(physique|chimie|pc|الفيزياء)/)) return "Physique-Chimie";
-    if (source.match(/(svt|sciences de la vie|الارض|الأرض)/)) return "SVT";
-    if (source.match(/(francais|français|الفرنسية)/)) return "Français";
-    if (source.match(/(anglais|english|الانجليزية|الإنجليزية)/)) return "Anglais";
-    if (source.match(/(islamic|education islamique|التربية الاسلامية|التربية الإسلامية)/)) return "Education Islamique";
-    if (source.match(/(arabe|العربية)/)) return "Arabe";
-    return null;
-  };
-
-  subject = checkSubjects(decodedUrl) || checkSubjects(rootText);
-
-  const checkTracks = (source: string) => {
-    if (source.match(/(biof|خيار فرنسي|option francais|option français)/)) return "Sciences Expérimentales BIOF";
-    if (source.match(/(خيار عربي|option arabe)/)) return "Option Arabe";
-    if (!source.match(/(sciences de la vie|علوم الحياة)/) && source.match(/(science |sciences |علوم|العلوم)/)) return "Sciences";
-    if (source.match(/(lettres|اداب|الآداب)/)) return "Lettres";
-    return null;
-  };
-  
-  track = checkTracks(decodedUrl) || checkTracks(rootText);
-
-  const checkDocTypes = (source: string) => {
-    if (source.match(/(examen régional|examen regional|régional|regional|جهوي)/)) return "Examen régional";
-    if (source.match(/(examen national|national|وطني)/)) return "Examen national";
-    if (source.match(/(cours|lesson|درس|دروس)/)) return "Cours";
-    if (source.match(/(exercice|serie|تمارين|سلسلة)/)) return "Exercices";
-    if (source.match(/(corrige|correction|تصحيح)/)) return "Devoir corrigé";
-    if (source.match(/(devoir|controle|فرض|فروض)/)) return "Devoir";
-    if (source.match(/(resume|ملخص|ملخصات)/)) return "Résumé";
-    return null;
-  };
-
-  documentType = checkDocTypes(decodedUrl) || checkDocTypes(rootText);
-
-  // Common Moroccan regions
-  const regions = [
-    "Casablanca-Settat", "Rabat-Salé-Kénitra", "Fès-Meknès", "Marrakech-Safi", 
-    "Tanger-Tétouan-Al Hoceïma", "Souss-Massa", "Béni Mellal-Khénifra", 
-    "Drâa-Tafilalet", "Oriental", "Guelmim-Oued Noun", "Laâyoune-Sakia El Hamra", 
-    "Dakhla-Oued Ed-Dahab"
-  ];
-  
-  for (const r of regions) {
-    if (combinedText.replace(/-/g, " ").includes(r.toLowerCase().replace(/-/g, " "))) {
-      region = r;
-      break;
-    }
-  }
-
-  const yearMatch = combinedText.match(/20\d{2}(-20\d{2})?/);
-  if (yearMatch) {
-    schoolYear = yearMatch[0];
-  }
-
-  try {
-    if (urlStr.startsWith("http")) {
-      const hostname = new URL(urlStr).hostname;
-      const parts = hostname.replace("www.", "").split(".");
-      source = parts.length > 1 ? parts[parts.length - 2] : parts[0];
-      source = source.charAt(0).toUpperCase() + source.slice(1);
-    }
-  } catch {}
-
-  // Google Drive override
-  if (urlStr.includes("drive.google.com")) {
-    source = "Google Drive";
-  }
-
-  return { grade, subject, track, documentType, schoolYear, region, source };
 }
 
 export interface CrawlerOptions {
   maxPages: number;
   maxDepth: number;
+  maxPdfs: number;
+  maxLinksPerPage: number;
   batchSize: number;
   timeLimitMs: number;
 }
@@ -238,18 +42,338 @@ interface QueuedUrl {
   depth: number;
 }
 
+interface ScopeMetadata {
+  grade: string | null;
+  subject: string | null;
+  track: string | null;
+  documentType: string | null;
+  schoolYear: string | null;
+  region: string | null;
+  source: string | null;
+}
+
+interface PdfEvidence {
+  sourcePageUrl: string;
+  context: string;
+}
+
+const MAIN_CONTENT_SELECTORS = [
+  ".entry-content",
+  ".post-content",
+  "article",
+  "main",
+  "#content",
+  ".content-area",
+];
+
+const EXCLUDED_LINK_ANCESTORS = [
+  "header",
+  "footer",
+  "nav",
+  "#sidebar",
+  ".sidebar",
+  ".widget",
+  ".social-share",
+  "#secondary",
+  ".menu",
+  ".navigation",
+].join(", ");
+
+const CONTENT_LINK_PATTERN = /(cours|le[cç]on|lesson|dars|درس|دروس|شرح|ملخص|تمارين|exercice|تمرين|correction|solution|سورة|مدخل|تزكية|اقتداء|استجابة|قسط|حكمة)/i;
+const BLOCKED_LINK_PATTERN = /(login|register|contact|privacy|policy|about|author|tag|category|feed|wp-admin|wp-login|facebook|twitter|instagram|youtube|telegram|whatsapp|امتحانات|فروض|اختبارات|جذاذات|توزيع|استعمال الزمن|عطل|توجيه)/i;
+
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false,
+  secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
+});
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeMatchText(value: string): string {
+  return safeDecode(String(value || ""))
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F]/g, "")
+    .replace(/[_\-./%+]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function splitConcatenatedUrls(input: string): string[] {
+  if (!input) return [];
+  const results: string[] = [];
+
+  for (const part of input.split(/\s+/).filter(Boolean)) {
+    const indexes: number[] = [];
+    const matcher = /https?:\/\//gi;
+    let match: RegExpExecArray | null;
+
+    while ((match = matcher.exec(part)) !== null) indexes.push(match.index);
+
+    if (indexes.length <= 1) {
+      results.push(part);
+      continue;
+    }
+
+    for (let index = 0; index < indexes.length; index += 1) {
+      results.push(part.slice(indexes[index], indexes[index + 1] ?? part.length));
+    }
+  }
+
+  return results;
+}
+
+export function removeHashFragment(urlStr: string): string {
+  return String(urlStr || "").split("#")[0];
+}
+
+export function normalizeUrlSafe(urlStr: string): string {
+  const noHash = removeHashFragment(urlStr);
+  try {
+    const parsed = new URL(noHash);
+    parsed.hash = "";
+    parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (parsed.pathname.length > 1) parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+    return parsed.toString();
+  } catch {
+    return noHash.replace(/\/+$/, "");
+  }
+}
+
+export function isDirectPdfUrl(urlStr: string): boolean {
+  try {
+    const cleanUrl = String(urlStr || "").split(/[?#]/)[0].toLowerCase();
+    return cleanUrl.endsWith(".pdf") || cleanUrl.includes("drive.google.com/file/d/");
+  } catch {
+    return false;
+  }
+}
+
+export function resolveRelativeUrl(href: string, baseUrl: string): string {
+  try {
+    return new URL(href, baseUrl).href;
+  } catch {
+    return href;
+  }
+}
+
+export function isAssetUrl(urlStr: string): boolean {
+  const cleanUrl = String(urlStr || "").split(/[?#]/)[0].toLowerCase();
+  return [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".gif",
+    ".svg",
+    ".css",
+    ".js",
+    ".zip",
+    ".rar",
+    ".7z",
+    ".mp3",
+    ".mp4",
+  ].some((extension) => cleanUrl.endsWith(extension));
+}
+
+export function isPaginationLink($el: any, href: string): boolean {
+  if ($el.attr("rel") === "next") return true;
+
+  const text = String($el.text() || "").toLowerCase().trim();
+  const className = String($el.attr("class") || "").toLowerCase();
+  const paginationTexts = [
+    "next",
+    "suivant",
+    "suivante",
+    "page suivante",
+    "التالي",
+    "الصفحة التالية",
+    "older posts",
+  ];
+
+  if (paginationTexts.some((candidate) => text.includes(candidate))) return true;
+  if (["next", "pagination-next", "nav-next", "page-numbers"].some((candidate) => className.includes(candidate))) return true;
+  if (/[?&](page|paged|p)=\d+/i.test(href)) return true;
+  if (/\/page\/\d+\/?/i.test(href)) return true;
+
+  return /^\d+$/.test(text) && Boolean($el.parents(".pagination, .nav-links").length);
+}
+
+export function extractClassifyingMetadata(urlStr: string, textContext = ""): ScopeMetadata {
+  const decodedUrl = normalizeMatchText(urlStr);
+  const rootText = normalizeMatchText(textContext);
+  const combinedText = `${decodedUrl} ${rootText}`.trim();
+
+  const checkGrade = (source: string): string | null => {
+    if (/(1ap|الاول ابتدائي|السنه الاولي ابتدائي)/.test(source)) return "1AEP";
+    if (/(2ap|الثاني ابتدائي|السنه الثانيه ابتدائي)/.test(source)) return "2AEP";
+    if (/(3ap|الثالث ابتدائي|السنه الثالثه ابتدائي)/.test(source)) return "3AEP";
+    if (/(4ap|الرابع ابتدائي|السنه الرابعه ابتدائي)/.test(source)) return "4AEP";
+    if (/(5ap|الخامس ابتدائي|السنه الخامسه ابتدائي)/.test(source)) return "5AEP";
+    if (/(6ap|السادس ابتدائي|السنه السادسه ابتدائي)/.test(source)) return "6AEP";
+    if (/(3apic|3ac|3eme|3eme annee college|الثالثه اعدادي|السنه الثالثه اعدادي)/.test(source)) return "3AC";
+    if (/(2apic|2ac|2eme|2eme annee college|الثانيه اعدادي|السنه الثانيه اعدادي)/.test(source)) return "2AC";
+    if (/(1apic|1ac|1ere|1ere annee college|الاولي اعدادي|اولي اعدادي|السنه الاولي اعدادي)/.test(source)) return "1AC";
+    if (/(tronc commun|جذع مشترك|\btc\b|\btcs\b)/.test(source)) return "Tronc Commun";
+    if (/(1bac|1ere bac|اولي باك|الاولي بكالوريا)/.test(source)) return "1BAC";
+    if (/(2bac|2eme bac|ثانيه باك|الثانيه بكالوريا|البكالوريا)/.test(source)) return "2BAC";
+    return null;
+  };
+
+  const checkSubject = (source: string): string | null => {
+    if (/(math|رياضيات)/.test(source)) return "Mathématiques";
+    if (/(physique|chimie|\bpc\b|فيزياء|الكيمياء)/.test(source)) return "Physique-Chimie";
+    if (/(svt|sciences de la vie|علوم الحياه|علوم الارض)/.test(source)) return "SVT";
+    if (/(francais|français|الفرنسيه)/.test(source)) return "Français";
+    if (/(anglais|english|الانجليزيه)/.test(source)) return "Anglais";
+    if (/(education islamique|islamic|التربيه الاسلاميه|تربيه اسلاميه|اسلاميه)/.test(source)) return "Education Islamique";
+    if (/(arabe|اللغه العربيه|العربيه)/.test(source)) return "Arabe";
+    if (/(الاجتماعيات|histoire|geographie|géographie)/.test(source)) return "Sciences Sociales";
+    return null;
+  };
+
+  const checkDocumentType = (source: string): string | null => {
+    if (/(examen regional|regional|جهوي)/.test(source)) return "Examen régional";
+    if (/(examen national|national|وطني)/.test(source)) return "Examen national";
+    if (/(resume|ملخص)/.test(source)) return "Résumé";
+    if (/(corrige|correction|تصحيح|حلول)/.test(source)) return "Devoir corrigé";
+    if (/(devoir|controle|فرض|فروض)/.test(source)) return "Devoir";
+    if (/(exercice|serie|تمارين|سلسله)/.test(source)) return "Exercices";
+    if (/(cours|lesson|درس|دروس|شرح)/.test(source)) return "Cours";
+    return null;
+  };
+
+  const checkTrack = (source: string): string | null => {
+    if (/(biof|خيار فرنسي|option francais)/.test(source)) return "Sciences Expérimentales BIOF";
+    if (/(خيار عربي|option arabe)/.test(source)) return "Option Arabe";
+    if (/(lettres|اداب)/.test(source)) return "Lettres";
+    return null;
+  };
+
+  const regions = [
+    "Casablanca-Settat",
+    "Rabat-Salé-Kénitra",
+    "Fès-Meknès",
+    "Marrakech-Safi",
+    "Tanger-Tétouan-Al Hoceïma",
+    "Souss-Massa",
+    "Béni Mellal-Khénifra",
+    "Drâa-Tafilalet",
+    "Oriental",
+    "Guelmim-Oued Noun",
+    "Laâyoune-Sakia El Hamra",
+    "Dakhla-Oued Ed-Dahab",
+  ];
+
+  const region = regions.find((candidate) =>
+    combinedText.includes(normalizeMatchText(candidate)),
+  ) || null;
+  const schoolYear = combinedText.match(/20\d{2}(?:\s*[-/]\s*20\d{2})?/)?.[0]?.replace(/\s+/g, "") || null;
+
+  let source: string | null = null;
+  try {
+    const hostname = new URL(urlStr).hostname.replace(/^www\./, "");
+    const parts = hostname.split(".");
+    const sourceName = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+    source = sourceName.charAt(0).toUpperCase() + sourceName.slice(1);
+  } catch {
+    source = null;
+  }
+  if (urlStr.includes("drive.google.com")) source = "Google Drive";
+
+  return {
+    grade: checkGrade(decodedUrl) || checkGrade(rootText),
+    subject: checkSubject(decodedUrl) || checkSubject(rootText),
+    track: checkTrack(decodedUrl) || checkTrack(rootText),
+    documentType: checkDocumentType(decodedUrl) || checkDocumentType(rootText),
+    schoolYear,
+    region,
+    source,
+  };
+}
+
+function mergeScope(primary: ScopeMetadata, fallback: ScopeMetadata): ScopeMetadata {
+  return {
+    grade: primary.grade || fallback.grade,
+    subject: primary.subject || fallback.subject,
+    track: primary.track || fallback.track,
+    documentType: primary.documentType || fallback.documentType,
+    schoolYear: primary.schoolYear || fallback.schoolYear,
+    region: primary.region || fallback.region,
+    source: primary.source || fallback.source,
+  };
+}
+
+function isScopeCompatible(expected: ScopeMetadata, candidate: ScopeMetadata): boolean {
+  if (expected.grade && candidate.grade && expected.grade !== candidate.grade) return false;
+  if (expected.subject && candidate.subject && expected.subject !== candidate.subject) return false;
+  return true;
+}
+
+function getMainText($: ReturnType<typeof load>): string {
+  for (const selector of MAIN_CONTENT_SELECTORS) {
+    const text = $(selector).first().text().replace(/\s+/g, " ").trim();
+    if (text.length > 80) return text.slice(0, 5000);
+  }
+  return $("body").text().replace(/\s+/g, " ").trim().slice(0, 5000);
+}
+
+function isCandidatePageLink(params: {
+  href: string;
+  text: string;
+  currentUrl: string;
+  rootOrigin: string;
+  rootScope: ScopeMetadata;
+  isPagination: boolean;
+}): boolean {
+  const { href, text, currentUrl, rootOrigin, rootScope, isPagination } = params;
+  if (!href.startsWith(rootOrigin)) return false;
+  if (href === currentUrl || isAssetUrl(href) || isDirectPdfUrl(href)) return false;
+
+  const normalized = normalizeMatchText(`${href} ${text}`);
+  if (BLOCKED_LINK_PATTERN.test(normalized)) return false;
+
+  const candidateScope = extractClassifyingMetadata(href, text);
+  if (!isScopeCompatible(rootScope, candidateScope)) return false;
+
+  if (isPagination) return true;
+  if (!CONTENT_LINK_PATTERN.test(normalized)) return false;
+
+  // A subject page may link to lesson pages that name only the grade and lesson.
+  // Explicit mismatches are rejected above; unknown subject is allowed within main content.
+  return Boolean(candidateScope.grade || candidateScope.subject || rootScope.grade || rootScope.subject);
+}
+
 export async function discoverPdfsFromInput(
   pastedText: string,
   topicFilter?: string,
-  options: Partial<CrawlerOptions> = {}
+  options: Partial<CrawlerOptions> = {},
 ): Promise<DiscoveredItem[]> {
-  const opts = {
-    maxPages: 50,
-    maxDepth: 3,
-    batchSize: 5,
-    timeLimitMs: 90000,
-    ...options
+  const opts: CrawlerOptions = {
+    maxPages: 20,
+    maxDepth: 2,
+    maxPdfs: 100,
+    maxLinksPerPage: 20,
+    batchSize: 4,
+    timeLimitMs: 90_000,
+    ...options,
   };
+
+  opts.maxPages = Math.max(1, Math.min(opts.maxPages, 20));
+  opts.maxDepth = Math.max(0, Math.min(opts.maxDepth, 3));
+  opts.maxPdfs = Math.max(1, Math.min(opts.maxPdfs, 100));
+  opts.maxLinksPerPage = Math.max(1, Math.min(opts.maxLinksPerPage, 30));
+  opts.batchSize = Math.max(1, Math.min(opts.batchSize, 5));
 
   const rawUrls = splitConcatenatedUrls(pastedText);
   const results: DiscoveredItem[] = [];
@@ -258,9 +382,8 @@ export async function discoverPdfsFromInput(
     const rootNormalized = normalizeUrlSafe(rawUrl);
 
     if (isDirectPdfUrl(rootNormalized)) {
-      const meta = extractClassifyingMetadata(rootNormalized);
-      const cleanTitle = formatLevelspaceReviewTitle(meta);
-      
+      const metadata = extractClassifyingMetadata(rootNormalized);
+      const cleanTitle = formatLevelspaceReviewTitle(metadata);
       results.push({
         url: rootNormalized,
         raw_url: rawUrl,
@@ -273,241 +396,161 @@ export async function discoverPdfsFromInput(
         accepted: true,
         reason: "Direct PDF document link detected",
         title: cleanTitle || rootNormalized.split("/").pop() || "Direct PDF",
-        cleanTitle: cleanTitle,
-        metadata: meta
+        cleanTitle,
+        metadata,
       });
       continue;
     }
 
-    console.log(`[Discover Service] Starting crawl for root HTML page: ${rootNormalized}`);
-    
-    const queue: QueuedUrl[] = [{ url: rootNormalized, depth: 0 }];
-    const visited = new Set<string>();
-    const pagePdfLinks = new Set<string>();
-    let pagesCrawled = 0;
-    const startTime = Date.now();
-    
-    let rootPageTitle = "";
-    let rootPageHtml = "";
-
-    while (queue.length > 0) {
-      if (pagesCrawled >= opts.maxPages) {
-        console.log(`[Discover Service] Stop reason: maxPages (${opts.maxPages}) reached`);
-        break;
-      }
-      if (Date.now() - startTime > opts.timeLimitMs) {
-        console.log(`[Discover Service] Stop reason: timeLimitMs (${opts.timeLimitMs}) reached`);
-        break;
-      }
-      
-      const batch = queue.splice(0, opts.batchSize);
-      const validBatch = batch.filter(q => !visited.has(q.url));
-      
-      if (validBatch.length === 0) continue;
-
-      validBatch.forEach(q => visited.add(q.url));
-      pagesCrawled += validBatch.length;
-
-      const mainContentSelectors = [
-        ".entry-content", ".post-content", "article", "main", "#content", ".content-area"
-      ];
-
-      await Promise.all(validBatch.map(async ({ url: currentUrl, depth }) => {
-        console.log(`[Discover Service] Crawl page ${pagesCrawled} depth ${depth}: ${currentUrl}`);
-        
-        try {
-          const htmlRes = await axios.get(currentUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-              "Accept-Language": "fr,en-US;q=0.7,en;q=0.3"
-            },
-            httpsAgent: new https.Agent({ rejectUnauthorized: false, secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT }),
-            timeout: currentUrl === rootNormalized ? 60000 : 12000,
-            validateStatus: () => true
-          });
-
-          if (htmlRes.status >= 400 && htmlRes.status !== 404) {
-            console.log(`[Discover Service] Request failed for ${currentUrl} with status ${htmlRes.status}`);
-            return;
-          }
-
-          const pageHtml = typeof htmlRes.data === "string" ? htmlRes.data : "";
-          const $ = load(pageHtml);
-          const pageTitle = $("title").text().trim();
-          
-          if (currentUrl === rootNormalized) {
-             rootPageTitle = pageTitle;
-             rootPageHtml = pageHtml;
-          }
-
-          let foundPdfsOnPage = 0;
-          let foundInMain = false;
-          
-          for (const selector of mainContentSelectors) {
-             const $main = $(selector);
-             if ($main.length > 0) {
-               $main.find("a").each((_, el) => {
-                 const href = $(el).attr("href");
-                 if (!href) return;
-                 try {
-                   const absoluteStr = resolveRelativeUrl(href, currentUrl);
-                   const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
-                   if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                     pagePdfLinks.add(cleanAbsoluteStr);
-                     foundInMain = true;
-                     foundPdfsOnPage++;
-                   }
-                 } catch {}
-               });
-             }
-          }
-
-          if (!foundInMain && foundPdfsOnPage === 0) {
-            $("a").each((_, el) => {
-               const isExcluded = $(el).parents("#sidebar, .sidebar, .widget, .social-share, footer, header, #secondary").length > 0;
-               if (isExcluded) return;
-               const href = $(el).attr("href");
-               if (!href) return;
-               try {
-                 const absoluteStr = resolveRelativeUrl(href, currentUrl);
-                 const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
-                 if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                   pagePdfLinks.add(cleanAbsoluteStr);
-                   foundPdfsOnPage++;
-                 }
-               } catch {}
-            });
-          }
-
-          if (foundPdfsOnPage === 0) {
-            $("a").each((_, el) => {
-               const href = $(el).attr("href");
-               if (!href) return;
-               try {
-                 const absoluteStr = resolveRelativeUrl(href, currentUrl);
-                 const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
-                 if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                   pagePdfLinks.add(cleanAbsoluteStr);
-                   foundPdfsOnPage++;
-                 }
-               } catch {}
-            });
-            
-            $("iframe, embed, object").each((_, el) => {
-               const src = $(el).attr("src") || $(el).attr("data") || $(el).attr("href");
-               if (!src) return;
-               try {
-                 const absoluteStr = resolveRelativeUrl(src, currentUrl);
-                 const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
-                 if (isDirectPdfUrl(cleanAbsoluteStr)) {
-                   pagePdfLinks.add(cleanAbsoluteStr);
-                   foundPdfsOnPage++;
-                 }
-               } catch {}
-            });
-          }
-
-          console.log(`[Discover Service] Found ${foundPdfsOnPage} PDFs on URL: ${currentUrl}`);
-
-          if (depth < opts.maxDepth) {
-            const paginationCandidates = new Set<string>();
-            const deepCandidateLinks = new Set<string>();
-            const origin = new URL(currentUrl).origin;
-            
-            $("a").each((_, el) => {
-               const href = $(el).attr("href");
-               if (!href) return;
-               
-               let absoluteStr = "";
-               try {
-                 absoluteStr = resolveRelativeUrl(href, currentUrl);
-               } catch { return; }
-               
-               const cleanAbsoluteStr = normalizeUrlSafe(absoluteStr);
-               
-               if (
-                 cleanAbsoluteStr.startsWith(origin) && 
-                 !isAssetUrl(cleanAbsoluteStr) && 
-                 !isDirectPdfUrl(cleanAbsoluteStr) &&
-                 !visited.has(cleanAbsoluteStr)
-               ) {
-                  const isPagination = isPaginationLink($(el), href);
-                  
-                  if (isPagination) {
-                    paginationCandidates.add(cleanAbsoluteStr);
-                  } else {
-                    if (foundPdfsOnPage === 0) {
-                      const inMain = $(el).parents(mainContentSelectors.join(", ")).length > 0;
-                      if (inMain) {
-                        deepCandidateLinks.add(cleanAbsoluteStr);
-                      }
-                    }
-                  }
-               }
-            });
-
-            for (const link of paginationCandidates) {
-              if (!queue.find(q => q.url === link)) {
-                queue.unshift({ url: link, depth: depth });
-                console.log(`[Discover Service] Enqueued next page (pagination): ${link}`);
-              }
-            }
-            
-            const candidateArray = Array.from(deepCandidateLinks).slice(0, 50);
-            for (const link of candidateArray) {
-              if (!queue.find(q => q.url === link)) {
-                queue.push({ url: link, depth: depth + 1 });
-              }
-            }
-          }
-        } catch (err: any) {
-           console.log(`[Discover Service] Crawl failed for ${currentUrl}: ${err.message}`);
-        }
-      }));
-      
-      if (queue.length === 0) {
-        console.log(`[Discover Service] Stop reason: noMoreUrls`);
-      } else {
-        await new Promise(r => setTimeout(r, 600));
-      }
+    let rootOrigin: string;
+    try {
+      rootOrigin = new URL(rootNormalized).origin;
+    } catch {
+      results.push({
+        url: rootNormalized,
+        raw_url: rawUrl,
+        normalized_url: rootNormalized,
+        source_page_url: rootNormalized,
+        pdf_url: rootNormalized,
+        url_type: "source_page_no_pdfs",
+        pdf_count: 0,
+        isDirectPdf: false,
+        accepted: false,
+        reason: "Invalid source URL",
+      });
+      continue;
     }
 
-    const uniquePdfLinks = Array.from(pagePdfLinks);
-    
-    if (uniquePdfLinks.length > 0) {
-      for (const pdfLink of uniquePdfLinks) {
-        let meta: Record<string, any> = { grade: null, subject: null, track: null, documentType: null, schoolYear: null, source: null };
+    const queue: QueuedUrl[] = [{ url: rootNormalized, depth: 0 }];
+    const queued = new Set<string>([rootNormalized]);
+    const visited = new Set<string>();
+    const pdfEvidence = new Map<string, PdfEvidence>();
+    const startTime = Date.now();
+    let pagesCrawled = 0;
+    let rootPageTitle = "";
+    let rootPageContext = "";
+    let rootScope = extractClassifyingMetadata(rootNormalized, topicFilter || "");
+
+    while (queue.length > 0 && pdfEvidence.size < opts.maxPdfs) {
+      if (pagesCrawled >= opts.maxPages) break;
+      if (Date.now() - startTime > opts.timeLimitMs) break;
+
+      const batch = queue.splice(0, opts.batchSize).filter(({ url }) => !visited.has(url));
+      if (batch.length === 0) continue;
+
+      for (const item of batch) {
+        if (pagesCrawled >= opts.maxPages || pdfEvidence.size >= opts.maxPdfs) break;
+        if (Date.now() - startTime > opts.timeLimitMs) break;
+
+        visited.add(item.url);
+        pagesCrawled += 1;
+
         try {
-          meta = extractClassifyingMetadata(pdfLink, rootPageTitle + " " + rootPageHtml.substring(0, 5000));
-        } catch {}
-        
-        const cleanTitle = formatLevelspaceReviewTitle(meta as any);
+          const response = await axios.get(item.url, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+              "Accept-Language": "fr,en-US;q=0.7,en;q=0.3",
+            },
+            httpsAgent,
+            timeout: item.depth === 0 ? 60_000 : 12_000,
+            validateStatus: () => true,
+          });
 
-        results.push({
-          url: pdfLink,
-          raw_url: rawUrl,
-          normalized_url: rootNormalized,
-          source_page_url: rootNormalized,
-          pdf_url: pdfLink,
-          url_type: "source_page",
-          pdf_count: uniquePdfLinks.length,
-          isDirectPdf: true,
-          accepted: true,
-          reason: `Extracted from educational source page: ${rootNormalized}`,
-          title: cleanTitle || pdfLink.split("/").pop() || rootPageTitle,
-          cleanTitle: cleanTitle,
-          metadata: meta as any
-        });
+          if (response.status >= 400) continue;
+          const pageHtml = typeof response.data === "string" ? response.data : "";
+          if (!pageHtml) continue;
+
+          const $ = load(pageHtml);
+          const pageTitle = $("title").text().trim();
+          const mainText = getMainText($);
+          const pageContext = `${pageTitle} ${mainText}`.trim();
+          const pageScope = extractClassifyingMetadata(item.url, pageContext);
+
+          if (item.depth === 0) {
+            rootPageTitle = pageTitle;
+            rootPageContext = pageContext;
+            rootScope = mergeScope(pageScope, rootScope);
+          } else if (!isScopeCompatible(rootScope, pageScope)) {
+            continue;
+          }
+
+          const pageAnchors: Array<{ href: string; text: string; inMain: boolean; isPagination: boolean }> = [];
+          $("a").each((_, element) => {
+            const $element = $(element);
+            if ($element.parents(EXCLUDED_LINK_ANCESTORS).length > 0) return;
+
+            const rawHref = $element.attr("href");
+            if (!rawHref || rawHref.startsWith("javascript:") || rawHref.startsWith("#")) return;
+
+            const href = normalizeUrlSafe(resolveRelativeUrl(rawHref, item.url));
+            const text = $element.text().replace(/\s+/g, " ").trim();
+            const inMain = $element.parents(MAIN_CONTENT_SELECTORS.join(", ")).length > 0;
+            const isPagination = isPaginationLink($element, rawHref);
+            pageAnchors.push({ href, text, inMain, isPagination });
+          });
+
+          for (const anchor of pageAnchors) {
+            if (!isDirectPdfUrl(anchor.href)) continue;
+            if (pdfEvidence.size >= opts.maxPdfs) break;
+
+            const pdfScope = extractClassifyingMetadata(
+              anchor.href,
+              `${anchor.text} ${pageContext} ${rootPageContext}`,
+            );
+            if (!isScopeCompatible(rootScope, pdfScope)) continue;
+
+            pdfEvidence.set(anchor.href, {
+              sourcePageUrl: item.url,
+              context: `${anchor.text} ${pageTitle} ${rootPageTitle}`.trim(),
+            });
+          }
+
+          if (item.depth >= opts.maxDepth) continue;
+
+          const paginationLinks: string[] = [];
+          const contentLinks: string[] = [];
+          for (const anchor of pageAnchors) {
+            if (!anchor.inMain && !anchor.isPagination) continue;
+            if (visited.has(anchor.href) || queued.has(anchor.href)) continue;
+
+            const allowed = isCandidatePageLink({
+              href: anchor.href,
+              text: anchor.text,
+              currentUrl: item.url,
+              rootOrigin,
+              rootScope,
+              isPagination: anchor.isPagination,
+            });
+            if (!allowed) continue;
+
+            if (anchor.isPagination) paginationLinks.push(anchor.href);
+            else contentLinks.push(anchor.href);
+          }
+
+          for (const href of paginationLinks.slice(0, 3)) {
+            if (queued.has(href)) continue;
+            queued.add(href);
+            queue.unshift({ url: href, depth: item.depth });
+          }
+
+          for (const href of contentLinks.slice(0, opts.maxLinksPerPage)) {
+            if (queued.has(href)) continue;
+            queued.add(href);
+            queue.push({ url: href, depth: item.depth + 1 });
+          }
+        } catch (error) {
+          console.warn(`[Discover Service] Crawl failed for ${item.url}:`, error);
+        }
       }
-    } else {
-      let meta: Record<string, any> = { grade: null, subject: null, track: null, documentType: null, schoolYear: null, source: null };
-      try {
-        meta = extractClassifyingMetadata(rootNormalized, rootPageTitle + " " + rootPageHtml.substring(0, 5000));
-      } catch {}
-      
-      const cleanTitle = formatLevelspaceReviewTitle(meta as any);
 
+      if (queue.length > 0) await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+
+    const uniquePdfLinks = Array.from(pdfEvidence.keys());
+    if (uniquePdfLinks.length === 0) {
+      const metadata = rootScope;
+      const cleanTitle = formatLevelspaceReviewTitle(metadata);
       results.push({
         url: rootNormalized,
         raw_url: rawUrl,
@@ -518,10 +561,36 @@ export async function discoverPdfsFromInput(
         pdf_count: 0,
         isDirectPdf: false,
         accepted: true,
-        reason: "No educational PDFs discovered on page. Staged for manual review.",
+        reason: `No scoped educational PDFs discovered after crawling ${pagesCrawled} page(s).`,
         title: cleanTitle || rootPageTitle || rootNormalized,
-        cleanTitle: cleanTitle,
-        metadata: meta as any
+        cleanTitle,
+        metadata,
+      });
+      continue;
+    }
+
+    for (const pdfLink of uniquePdfLinks) {
+      const evidence = pdfEvidence.get(pdfLink)!;
+      const metadata = mergeScope(
+        extractClassifyingMetadata(pdfLink, `${evidence.context} ${rootPageContext}`),
+        rootScope,
+      );
+      const cleanTitle = formatLevelspaceReviewTitle(metadata);
+
+      results.push({
+        url: pdfLink,
+        raw_url: rawUrl,
+        normalized_url: rootNormalized,
+        source_page_url: evidence.sourcePageUrl,
+        pdf_url: pdfLink,
+        url_type: "source_page",
+        pdf_count: uniquePdfLinks.length,
+        isDirectPdf: true,
+        accepted: true,
+        reason: `Extracted from scoped educational source page: ${evidence.sourcePageUrl}`,
+        title: cleanTitle || pdfLink.split("/").pop() || rootPageTitle,
+        cleanTitle,
+        metadata,
       });
     }
   }
