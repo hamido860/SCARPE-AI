@@ -1,7 +1,7 @@
 import https from "https";
 import crypto from "crypto";
 import axios from "axios";
-import { load } from "cheerio";
+import { load, type CheerioAPI } from "cheerio";
 import { formatLevelspaceReviewTitle } from "./filenameGenerator";
 
 export interface DiscoveredItem {
@@ -79,7 +79,8 @@ const EXCLUDED_LINK_ANCESTORS = [
   ".navigation",
 ].join(", ");
 
-const CONTENT_LINK_PATTERN = /(cours|le[cç]on|lesson|dars|درس|دروس|شرح|ملخص|تمارين|exercice|تمرين|correction|solution|سورة|مدخل|تزكية|اقتداء|استجابة|قسط|حكمة)/i;
+// Arabic is matched after normalization: ة -> ه and ى -> ي.
+const CONTENT_LINK_PATTERN = /(cours|le[cç]on|lesson|dars|sourate|درس|دروس|شرح|ملخص|تمارين|exercice|تمرين|correction|solution|سوره|مدخل|تزكيه|اقتداء|استجابه|قسط|حكمه)/i;
 const BLOCKED_LINK_PATTERN = /(login|register|contact|privacy|policy|about|author|tag|category|feed|wp-admin|wp-login|facebook|twitter|instagram|youtube|telegram|whatsapp|امتحانات|فروض|اختبارات|جذاذات|توزيع|استعمال الزمن|عطل|توجيه)/i;
 
 const httpsAgent = new https.Agent({
@@ -221,12 +222,12 @@ export function extractClassifyingMetadata(urlStr: string, textContext = ""): Sc
     if (/(4ap|الرابع ابتدائي|السنه الرابعه ابتدائي)/.test(source)) return "4AEP";
     if (/(5ap|الخامس ابتدائي|السنه الخامسه ابتدائي)/.test(source)) return "5AEP";
     if (/(6ap|السادس ابتدائي|السنه السادسه ابتدائي)/.test(source)) return "6AEP";
-    if (/(3apic|3ac|3eme|3eme annee college|الثالثه اعدادي|السنه الثالثه اعدادي)/.test(source)) return "3AC";
-    if (/(2apic|2ac|2eme|2eme annee college|الثانيه اعدادي|السنه الثانيه اعدادي)/.test(source)) return "2AC";
-    if (/(1apic|1ac|1ere|1ere annee college|الاولي اعدادي|اولي اعدادي|السنه الاولي اعدادي)/.test(source)) return "1AC";
-    if (/(tronc commun|جذع مشترك|\btc\b|\btcs\b)/.test(source)) return "Tronc Commun";
     if (/(1bac|1ere bac|اولي باك|الاولي بكالوريا)/.test(source)) return "1BAC";
     if (/(2bac|2eme bac|ثانيه باك|الثانيه بكالوريا|البكالوريا)/.test(source)) return "2BAC";
+    if (/(3apic|3ac|3eme annee college|الثالثه اعدادي|السنه الثالثه اعدادي)/.test(source)) return "3AC";
+    if (/(2apic|2ac|2eme annee college|الثانيه اعدادي|السنه الثانيه اعدادي)/.test(source)) return "2AC";
+    if (/(1apic|1ac|1ere annee college|الاولي اعدادي|اولي اعدادي|السنه الاولي اعدادي)/.test(source)) return "1AC";
+    if (/(tronc commun|جذع مشترك|\btc\b|\btcs\b)/.test(source)) return "Tronc Commun";
     return null;
   };
 
@@ -320,12 +321,20 @@ function isScopeCompatible(expected: ScopeMetadata, candidate: ScopeMetadata): b
   return true;
 }
 
-function getMainText($: ReturnType<typeof load>): string {
+function getMainText($: CheerioAPI): string {
   for (const selector of MAIN_CONTENT_SELECTORS) {
     const text = $(selector).first().text().replace(/\s+/g, " ").trim();
     if (text.length > 80) return text.slice(0, 5000);
   }
   return $("body").text().replace(/\s+/g, " ").trim().slice(0, 5000);
+}
+
+function hasSameOrigin(url: string, expectedOrigin: string): boolean {
+  try {
+    return new URL(url).origin === expectedOrigin;
+  } catch {
+    return false;
+  }
 }
 
 function isCandidatePageLink(params: {
@@ -337,7 +346,7 @@ function isCandidatePageLink(params: {
   isPagination: boolean;
 }): boolean {
   const { href, text, currentUrl, rootOrigin, rootScope, isPagination } = params;
-  if (!href.startsWith(rootOrigin)) return false;
+  if (!hasSameOrigin(href, rootOrigin)) return false;
   if (href === currentUrl || isAssetUrl(href) || isDirectPdfUrl(href)) return false;
 
   const normalized = normalizeMatchText(`${href} ${text}`);
@@ -428,7 +437,6 @@ export async function discoverPdfsFromInput(
     const startTime = Date.now();
     let pagesCrawled = 0;
     let rootPageTitle = "";
-    let rootPageContext = "";
     let rootScope = extractClassifyingMetadata(rootNormalized, topicFilter || "");
 
     while (queue.length > 0 && pdfEvidence.size < opts.maxPdfs) {
@@ -469,7 +477,6 @@ export async function discoverPdfsFromInput(
 
           if (item.depth === 0) {
             rootPageTitle = pageTitle;
-            rootPageContext = pageContext;
             rootScope = mergeScope(pageScope, rootScope);
           } else if (!isScopeCompatible(rootScope, pageScope)) {
             continue;
@@ -496,7 +503,7 @@ export async function discoverPdfsFromInput(
 
             const pdfScope = extractClassifyingMetadata(
               anchor.href,
-              `${anchor.text} ${pageContext} ${rootPageContext}`,
+              `${anchor.text} ${pageTitle}`,
             );
             if (!isScopeCompatible(rootScope, pdfScope)) continue;
 
@@ -572,7 +579,7 @@ export async function discoverPdfsFromInput(
     for (const pdfLink of uniquePdfLinks) {
       const evidence = pdfEvidence.get(pdfLink)!;
       const metadata = mergeScope(
-        extractClassifyingMetadata(pdfLink, `${evidence.context} ${rootPageContext}`),
+        extractClassifyingMetadata(pdfLink, evidence.context),
         rootScope,
       );
       const cleanTitle = formatLevelspaceReviewTitle(metadata);
